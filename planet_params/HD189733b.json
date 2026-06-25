@@ -1,0 +1,51 @@
+{
+  "_description": "HD 189733 b, canonical hot Jupiter, primary target for EXoPLORE development",
+  "_note_units": "Physical quantities stored in natural astronomical units; to_inp_dat() converts them to CGS/km as required by petitRADTRANS.",
+  "_references": [
+    "Triaud et al. 2010, A&A 524, A25 (orbital/stellar)",
+    "Bouchy et al. 2005, A&A 444, L15 (discovery)",
+    "Agol et al. 2010, ApJ 721, 1861 (T_0, period)",
+    "Baluev et al. 2015, MNRAS 450, 3101 (refined epoch)"
+  ],
+
+  "name": "HD189733b",
+
+  "_section_orbital": "--- Orbital parameters ---",
+  "orbital_period_days": 2.21857567,
+  "transit_epoch_bjd": 2454279.436714,
+  "semi_major_axis_au": 0.031000,
+  "inclination_deg": 85.510,
+  "eccentricity": 0.0,
+  "argument_of_periastron_deg": 90.0,
+
+  "_section_planet": "--- Planet parameters ---",
+  "planet_radius_rjup": 1.138,
+  "planet_mass_mjup": 1.150079,
+
+  "_section_star": "--- Stellar parameters ---",
+  "stellar_radius_rsun": 0.804769,
+  "stellar_mass_msun": 0.800040,
+  "stellar_teff_K": 5400.0,
+  "stellar_logg": 4.587,
+  "stellar_metallicity": -0.03,
+  "v_rotsini_kms": 3.5,
+
+  "_section_velocities": "--- Velocities ---",
+  "systemic_velocity_kms": -2.361,
+  "_note_kp": "Kp stored explicitly (derived from Ks=0.205 km/s and mass ratio, not from orbital geometry)",
+  "kp_kms": 149.44337665056617,
+  "stellar_rv_semiamplitude_kms": 0.205,
+
+  "_section_atmosphere": "--- Atmospheric / thermal ---",
+  "equilibrium_temperature_K": 1170.0,
+  "t_int_K": 200.0,
+  "kappa_ir": 0.01,
+  "gamma_guillot": 0.4,
+
+  "_section_limbdark": "--- Limb darkening (quadratic [u1, u2] for batman) ---",
+  "limb_darkening_coeffs": [0.5079, -0.2239],
+
+  "_section_coords": "--- Sky coordinates (degrees) ---",
+  "ra_deg": 300.1821223,
+  "dec_deg": 22.7097759
+}

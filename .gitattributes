@@ -1,0 +1,2 @@
+inputs/CARMENES_NIR/HD189733b/reference_night/sig.fits filter=lfs diff=lfs merge=lfs -text
+inputs/CARMENES_NIR/HD189733b/reference_night/snr.fits filter=lfs diff=lfs merge=lfs -text

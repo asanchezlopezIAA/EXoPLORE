@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "exoplore"
+version = "0.2.0"
+description = "High-resolution exoplanet atmosphere simulator"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "Alejandro Sánchez-López", email = "alexsl@iaa.es" }
+]
+keywords = ["exoplanets", "atmospheres", "spectroscopy", "high-resolution", "cross-correlation"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Astronomy",
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+]
+
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "astropy>=5.3",
+    "matplotlib>=3.7",
+    "numba>=0.57",
+    "tqdm>=4.65",
+]
+
+[project.optional-dependencies]
+prt = ["petitRADTRANS", "easychem"]
+retrieval = ["pymultinest", "emcee", "corner"]
+batman = ["batman-package"]
+skycalc = ["skycalc_ipy", "astroplan"]
+dev = ["pytest>=7", "pytest-cov", "ipdb"]
+all = ["exoplore[prt,retrieval,batman,skycalc,dev]"]
+
+[project.scripts]
+exoplore = "exoplore.core.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v"

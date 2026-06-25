@@ -1,0 +1,183 @@
+#!/usr/bin/env python3
+"""
+Convert CARMENES ETC table output to an EXoPLORE SNR FITS file.
+
+The CARMENES ETC (https://carmenes-etc.lsw.uni-heidelberg.de/) produces a
+per-order S/N table for both the NIR and VIS channels.  This script reads
+that table, selects the desired SNR column (max or median per order), and
+writes a FITS file with shape (n_orders, n_pixels) that EXoPLORE reads as
+the noise model for Mode A (fully synthetic, no reference night required).
+
+Usage
+-----
+1.  Run the CARMENES ETC for your target and exposure time.
+2.  Copy the per-channel table into a plain text file, one row per order,
+    space- or tab-separated, with the following columns (in order):
+
+        rel_order  diffr_order  wav_start  wav_end  wav_max  max_snr  median_snr
+
+    Lines beginning with '#' or that do not start with an integer are skipped.
+    Rows with '---' in the SNR columns (opaque orders) are set to SNR = 0.
+
+3.  Run this script:
+
+        python scripts/carmenes_etc_to_fits.py \\
+            --input_nir  etc_nir.txt \\
+            --input_vis  etc_vis.txt \\
+            --planet     HD189733b \\
+            --output_dir inputs/CARMENES_NIR/HD189733b/
+
+    This writes:
+        inputs/CARMENES_NIR/HD189733b/CARMENES_NIR_ETC_WAVE_SNR_HD189733b.fits
+        inputs/CARMENES_VIS/HD189733b/CARMENES_VIS_ETC_WAVE_SNR_HD189733b.fits
+
+    Pass only --input_nir or only --input_vis if you only need one channel.
+
+Output format
+-------------
+The output FITS file contains a single primary extension with a 2D float32
+array of shape (n_orders, n_pixels).  Each row holds the per-pixel S/N for
+that order (constant across pixels for a given order, broadcast from the
+ETC per-order value).  Opaque orders (ETC reports '---') are set to 0.
+
+Notes
+-----
+- n_pixels is 4080 for NIR and 4096 for VIS (CARMENES CARACAL standard).
+- The SNR values from the ETC correspond to a single exposure of the
+  duration you entered in the ETC.  EXoPLORE scales them per-exposure
+  using the noise model.
+- Use --snr_column max  to use the maximum per-order SNR instead of median.
+"""
+
+import argparse
+import os
+import sys
+
+import numpy as np
+from astropy.io import fits
+
+
+_CHANNEL_PARAMS = {
+    "NIR": {"n_orders": 28, "n_pixels": 4080},
+    "VIS": {"n_orders": 44, "n_pixels": 4096},
+}
+
+
+def _parse_etc_table(path: str, n_orders: int, snr_col: str) -> np.ndarray:
+    """Parse a CARMENES ETC table text file and return per-order SNR array.
+
+    Parameters
+    ----------
+    path : str
+        Path to the plain-text ETC table file.
+    n_orders : int
+        Expected number of orders (28 for NIR, 44 for VIS).
+    snr_col : str
+        Which SNR column to use: 'max' or 'median'.
+
+    Returns
+    -------
+    snr : ndarray, shape (n_orders,)
+        Per-order S/N values (0 for opaque orders).
+    """
+    snr = np.zeros(n_orders, dtype=np.float32)
+
+    with open(path) as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            parts = line.split()
+            # First column must be an integer (relative order index)
+            try:
+                order = int(parts[0])
+            except (ValueError, IndexError):
+                continue
+            if order >= n_orders:
+                continue
+
+            # columns: rel_order diffr_order wav_range(2) wav_max max_snr median_snr
+            # The ETC sometimes puts the wav_range as "XXXX - YYYY" (3 tokens)
+            # or "XXXX - YYYY" combined. We detect by checking token count.
+            # Robust: find the last two numeric-or-dash tokens as max_snr, median_snr.
+            numeric = []
+            for p in parts[1:]:
+                try:
+                    numeric.append(float(p))
+                except ValueError:
+                    numeric.append(None)   # '---' → None
+
+            # max_snr = second-to-last, median_snr = last
+            if len(numeric) < 2:
+                continue
+            max_snr_val    = numeric[-2]
+            median_snr_val = numeric[-1]
+
+            val = max_snr_val if snr_col == "max" else median_snr_val
+            snr[order] = float(val) if val is not None else 0.0
+
+    return snr
+
+
+def _write_fits(snr_1d: np.ndarray, n_pixels: int, out_path: str,
+                channel: str, planet: str, snr_col: str) -> None:
+    """Broadcast per-order SNR to (n_orders, n_pixels) and write FITS."""
+    # Broadcast: each order gets a constant SNR across all pixels
+    snr_2d = np.tile(snr_1d[:, np.newaxis], (1, n_pixels)).astype(np.float32)
+
+    hdu = fits.PrimaryHDU(snr_2d)
+    hdu.header["INSTRUME"] = f"CARMENES_{channel}"
+    hdu.header["PLANET"]   = planet
+    hdu.header["SNRCOL"]   = snr_col
+    hdu.header["NORDERS"]  = snr_1d.shape[0]
+    hdu.header["NPIXELS"]  = n_pixels
+    hdu.header["COMMENT"]  = "S/N per order broadcast to (n_orders, n_pixels)."
+    hdu.header["COMMENT"]  = "Generated by scripts/carmenes_etc_to_fits.py."
+
+    os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
+    hdu.writeto(out_path, overwrite=True)
+    print(f"  Written: {out_path}  shape={snr_2d.shape}  "
+          f"SNR range [{snr_1d[snr_1d>0].min():.1f}, {snr_1d.max():.1f}]  "
+          f"({(snr_1d==0).sum()} opaque orders set to 0)")
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Convert CARMENES ETC table to EXoPLORE SNR FITS.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=__doc__,
+    )
+    parser.add_argument("--input_nir",   default=None,
+                        help="Path to CARMENES NIR ETC table text file.")
+    parser.add_argument("--input_vis",   default=None,
+                        help="Path to CARMENES VIS ETC table text file.")
+    parser.add_argument("--planet",      required=True,
+                        help="Planet name used in the output filename (e.g. HD189733b).")
+    parser.add_argument("--output_dir",  default=".",
+                        help="Output directory (default: current directory).")
+    parser.add_argument("--snr_column",  choices=["max", "median"], default="median",
+                        help="Which ETC SNR column to use (default: median).")
+    args = parser.parse_args()
+
+    if args.input_nir is None and args.input_vis is None:
+        sys.exit("Provide at least one of --input_nir or --input_vis.")
+
+    for channel, input_file in [("NIR", args.input_nir), ("VIS", args.input_vis)]:
+        if input_file is None:
+            continue
+        params   = _CHANNEL_PARAMS[channel]
+        n_ord    = params["n_orders"]
+        n_pix    = params["n_pixels"]
+
+        print(f"\nProcessing CARMENES {channel} ({n_ord} orders, {n_pix} px/order)")
+        snr_1d = _parse_etc_table(input_file, n_ord, args.snr_column)
+
+        out_name = f"CARMENES_{channel}_ETC_WAVE_SNR_{args.planet}.fits"
+        out_path = os.path.join(args.output_dir, out_name)
+        _write_fits(snr_1d, n_pix, out_path, channel, args.planet, args.snr_column)
+
+    print("\nDone.")
+
+
+if __name__ == "__main__":
+    main()

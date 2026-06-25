@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# macOS
+.DS_Store
+
+# FITS files are large; excluded by default, with tracked exceptions
+*.fits
+!src/exoplore/instruments/data/*.fits
+!inputs/**/*.fits
+
+# User-generated outputs
+outputs/
+*.npz
+*.npy
+
+# petitRADTRANS opacity data (large)
+input_data/
+
+# Logs and temporary files
+*.log
+*.tmp
+site/
+
+# Large user-generated telluric / reference-night FITS
+inputs/**/Skycalc_*/
+inputs/*/tellurics/tell_ref_airmass_*.fits
+inputs/*/*/tellurics/tell_ref_airmass_*.fits
+inputs/CARMENES_NIR/HD189733b/reference_night/observations_*.fits
+inputs/CARMENES_NIR/HD189733b/reference_night/sig_*.fits
+inputs/CARMENES_NIR/HD189733b/reference_night/snr_*.fits
+
+# Sphinx build output
+docs/_build/

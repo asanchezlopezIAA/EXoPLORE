@@ -1,0 +1,49 @@
+{
+  "_description": "WASP-76 b, ultra-hot Jupiter with asymmetric iron absorption",
+  "_references": [
+    "West et al. 2016, A&A 585, A126 (discovery, orbital/stellar parameters)",
+    "Ehrenreich et al. 2020, Nature 580, 597 (iron detection, Vsys, Kp)",
+    "Fu et al. 2021, ApJ 911, L28 (updated ephemeris)"
+  ],
+
+  "name": "WASP-76b",
+
+  "_section_orbital": "--- Orbital parameters ---",
+  "orbital_period_days": 1.80988198,
+  "transit_epoch_bjd": 2458080.626165,
+  "semi_major_axis_au": 0.03300,
+  "inclination_deg": 88.98,
+  "eccentricity": 0.0,
+  "argument_of_periastron_deg": 90.0,
+
+  "_section_planet": "--- Planet parameters ---",
+  "planet_radius_rjup": 1.8540,
+  "planet_mass_mjup": 0.8940,
+
+  "_section_star": "--- Stellar parameters ---",
+  "stellar_radius_rsun": 1.7560,
+  "stellar_mass_msun": 1.4579,
+  "stellar_teff_K": 6329.0,
+  "stellar_logg": 4.22,
+  "stellar_metallicity": 0.23,
+  "_note_phoenix": "PHOENIX grid: lte06300-4.00+0.0 (Teff rounded to 6300K, logg to 4.0, [Fe/H] to 0.0)",
+  "v_rotsini_kms": 1.48,
+
+  "_section_velocities": "--- Velocities ---",
+  "systemic_velocity_kms": -1.152,
+  "kp_kms": 198.332,
+  "stellar_rv_semiamplitude_kms": 0.01438,
+
+  "_section_atmosphere": "--- Atmospheric / thermal ---",
+  "equilibrium_temperature_K": 2228.0,
+  "t_int_K": 200.0,
+  "kappa_ir": 0.01,
+  "gamma_guillot": 0.4,
+
+  "_section_limbdark": "--- Limb darkening (quadratic [u1, u2] for batman) ---",
+  "limb_darkening_coeffs": [0.393, 0.219],
+
+  "_section_coords": "--- Sky coordinates (degrees) ---",
+  "ra_deg": 26.63275,
+  "dec_deg": 2.70056
+}

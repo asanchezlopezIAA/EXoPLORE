@@ -1,0 +1,48 @@
+{
+  "_description": "HD 209458 b, the first transiting exoplanet, classic benchmark target",
+  "_references": [
+    "Charbonneau et al. 2000, ApJ 529, L45 (discovery)",
+    "Torres et al. 2008, ApJ 677, 1324 (system parameters)",
+    "Knutson et al. 2007, Nature 447, 183 (phase curve / T_eq)"
+  ],
+
+  "name": "HD209458b",
+
+  "_section_orbital": "--- Orbital parameters ---",
+  "orbital_period_days": 3.52474859,
+  "transit_epoch_bjd": 2452826.628521,
+  "semi_major_axis_au": 0.04747,
+  "inclination_deg": 86.71,
+  "eccentricity": 0.0,
+  "argument_of_periastron_deg": 90.0,
+
+  "_section_planet": "--- Planet parameters ---",
+  "planet_radius_rjup": 1.359,
+  "planet_mass_mjup": 0.685,
+
+  "_section_star": "--- Stellar parameters ---",
+  "stellar_radius_rsun": 1.155,
+  "stellar_mass_msun": 1.119,
+  "stellar_teff_K": 6117.0,
+  "stellar_logg": 4.361,
+  "stellar_metallicity": 0.0,
+  "v_rotsini_kms": 4.4,
+
+  "_section_velocities": "--- Velocities ---",
+  "systemic_velocity_kms": -14.7652,
+
+  "_note_kp": "Kp is computed automatically from orbital parameters if omitted",
+
+  "_section_atmosphere": "--- Atmospheric / thermal ---",
+  "equilibrium_temperature_K": 1449.0,
+  "t_int_K": 200.0,
+  "kappa_ir": 0.01,
+  "gamma_guillot": 0.4,
+
+  "_section_limbdark": "--- Limb darkening (quadratic [u1, u2] for batman) ---",
+  "limb_darkening_coeffs": [0.3300, 0.2400],
+
+  "_section_coords": "--- Sky coordinates (degrees) ---",
+  "ra_deg": 330.7953,
+  "dec_deg": 18.8843
+}

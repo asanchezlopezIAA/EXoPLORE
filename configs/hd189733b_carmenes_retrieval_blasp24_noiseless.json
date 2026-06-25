@@ -1,0 +1,417 @@
+{
+  "planet": {
+    "name": "HD189733b",
+    "parameter_file": "planet_params/HD189733b.json"
+  },
+  "instrument": {
+    "name": "CARMENES_NIR",
+    "observatory": "caha",
+    "pixels_per_resolution_element": 3.3,
+    "order_indices": [
+      23
+    ],
+    "split_detectors": false,
+    "convolve_to_resolution": true
+  },
+  "observation": {
+    "event_type": "transit",
+    "flag_event": "full_event",
+    "pre_event_hours": 0.0,
+    "post_event_hours": 0.0,
+    "n_nights": 1,
+    "different_nights": false,
+    "exposure_time_seconds": 198.0,
+    "readout_time_seconds": 20.0,
+    "overhead_time_seconds": 0.0,
+    "specific_event": true,
+    "specific_T0_bjd": 2458004.425264,
+    "use_real_data": false,
+    "noise_scaling_factor": 1.0,
+    "simulate_planet": true,
+    "external_planet_model": false,
+    "external_planet_model_file": "",
+    "signal_uses_light_curve": true,
+    "scale_injection": 1.0,
+    "significant_eccentricity": false,
+    "berv_kms": 0.0,
+    "noiseless": true,
+    "first_night_noiseless": false,
+    "add_throughput_variations": true,
+    "mask_v_rotsini": false
+  },
+  "noise": {
+    "noise_choice": "SNR",
+    "fixed_snr": null,
+    "use_mean_snr": false,
+    "snr_correction": 0.0,
+    "noise_seed": 12345
+  },
+  "atmosphere": {
+    "limb_asymmetries": false,
+    "cc_with_true_model": false,
+    "planet_model": {
+      "species": [
+        "H2",
+        "He",
+        "H2O",
+        "CH4",
+        "NH3",
+        "CO",
+        "H2S",
+        "HCN",
+        "Fe",
+        "Ca"
+      ],
+      "use_easychem": true,
+      "metallicity_wrt_solar": 0.53,
+      "carbon_to_oxygen_ratio": 0.41,
+      "mass_fractions": [
+        0.75,
+        0.2432,
+        0.001,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "mean_molecular_weight": 2.33,
+      "reference_pressure_bar": 0.01,
+      "cloud_pressure_bar": null,
+      "pressure_min_bar": 1e-06,
+      "pressure_max_bar": 100.0,
+      "pressure_grid_size": 100,
+      "isothermal": false,
+      "isothermal_temperature_K": null,
+      "equilibrium_temperature_K": 1170.0,
+      "kappa_ir": 0.01,
+      "gamma_guillot": 0.4,
+      "two_point": false,
+      "two_point_pressures_bar": [
+        1.2589254117941673,
+        0.001778279410038923
+      ],
+      "two_point_temperatures_K": [
+        1750.0,
+        520.0
+      ],
+      "wind_velocity_kms": 0.0
+    },
+    "ccf_template": {
+      "species": [
+        "H2",
+        "He",
+        "H2O"
+      ],
+      "use_easychem": true,
+      "metallicity_wrt_solar": 0.53,
+      "carbon_to_oxygen_ratio": 0.41,
+      "mass_fractions": [
+        0.75,
+        0.2432,
+        0.001,
+        0.0,
+        0.0
+      ],
+      "mean_molecular_weight": 2.33,
+      "reference_pressure_bar": 0.01,
+      "cloud_pressure_bar": null,
+      "pressure_min_bar": 1e-06,
+      "pressure_max_bar": 100.0,
+      "pressure_grid_size": 100,
+      "isothermal": false,
+      "isothermal_temperature_K": null,
+      "equilibrium_temperature_K": 1170.0,
+      "kappa_ir": 0.01,
+      "gamma_guillot": 0.4,
+      "two_point": false,
+      "two_point_pressures_bar": [
+        1.2589254117941673,
+        0.001778279410038923
+      ],
+      "two_point_temperatures_K": [
+        1750.0,
+        520.0
+      ],
+      "wind_velocity_kms": 0.0
+    },
+    "morning_day": {
+      "species": [
+        "H2",
+        "He",
+        "H2O",
+        "CH4",
+        "NH3",
+        "CO",
+        "H2S",
+        "HCN",
+        "Fe",
+        "Ca"
+      ],
+      "use_easychem": true,
+      "metallicity_wrt_solar": 0.53,
+      "carbon_to_oxygen_ratio": 0.41,
+      "mass_fractions": [
+        0.75,
+        0.2432,
+        0.0001,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "mean_molecular_weight": 2.4,
+      "reference_pressure_bar": 0.01,
+      "cloud_pressure_bar": null,
+      "pressure_min_bar": 1e-06,
+      "pressure_max_bar": 100.0,
+      "pressure_grid_size": 100,
+      "isothermal": false,
+      "isothermal_temperature_K": null,
+      "equilibrium_temperature_K": 1000.0,
+      "kappa_ir": 0.01,
+      "gamma_guillot": 0.4,
+      "two_point": false,
+      "two_point_pressures_bar": [
+        1.2589254117941673,
+        0.001778279410038923
+      ],
+      "two_point_temperatures_K": [
+        1750.0,
+        520.0
+      ],
+      "wind_velocity_kms": -3.9
+    },
+    "morning_night": {
+      "species": [
+        "H2",
+        "He",
+        "H2O",
+        "CH4",
+        "NH3",
+        "CO",
+        "H2S",
+        "HCN",
+        "Fe",
+        "Ca"
+      ],
+      "use_easychem": false,
+      "metallicity_wrt_solar": 0.53,
+      "carbon_to_oxygen_ratio": 0.41,
+      "mass_fractions": [
+        0.75,
+        0.2432,
+        1e-06,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "mean_molecular_weight": 2.4,
+      "reference_pressure_bar": 0.01,
+      "cloud_pressure_bar": null,
+      "pressure_min_bar": 1e-06,
+      "pressure_max_bar": 100.0,
+      "pressure_grid_size": 100,
+      "isothermal": false,
+      "isothermal_temperature_K": null,
+      "equilibrium_temperature_K": 1000.0,
+      "kappa_ir": 0.01,
+      "gamma_guillot": 0.4,
+      "two_point": false,
+      "two_point_pressures_bar": [
+        1.2589254117941673,
+        0.001778279410038923
+      ],
+      "two_point_temperatures_K": [
+        1750.0,
+        520.0
+      ],
+      "wind_velocity_kms": 0.0
+    },
+    "evening_day": {
+      "species": [
+        "H2",
+        "He",
+        "H2O",
+        "CH4",
+        "NH3",
+        "CO",
+        "H2S",
+        "HCN",
+        "Fe",
+        "Ca"
+      ],
+      "use_easychem": true,
+      "metallicity_wrt_solar": 0.53,
+      "carbon_to_oxygen_ratio": 0.41,
+      "mass_fractions": [
+        0.75,
+        0.2432,
+        0.01,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "mean_molecular_weight": 2.33,
+      "reference_pressure_bar": 0.01,
+      "cloud_pressure_bar": null,
+      "pressure_min_bar": 1e-06,
+      "pressure_max_bar": 100.0,
+      "pressure_grid_size": 100,
+      "isothermal": false,
+      "isothermal_temperature_K": null,
+      "equilibrium_temperature_K": 1300.0,
+      "kappa_ir": 0.01,
+      "gamma_guillot": 0.4,
+      "two_point": false,
+      "two_point_pressures_bar": [
+        1.2589254117941673,
+        0.001778279410038923
+      ],
+      "two_point_temperatures_K": [
+        1750.0,
+        520.0
+      ],
+      "wind_velocity_kms": -3.9
+    },
+    "evening_night": {
+      "species": [
+        "H2",
+        "He",
+        "H2O",
+        "CH4",
+        "NH3",
+        "CO",
+        "H2S",
+        "HCN",
+        "Fe",
+        "Ca"
+      ],
+      "use_easychem": false,
+      "metallicity_wrt_solar": 0.53,
+      "carbon_to_oxygen_ratio": 0.41,
+      "mass_fractions": [
+        0.75,
+        0.2432,
+        0.0001,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "mean_molecular_weight": 2.33,
+      "reference_pressure_bar": 0.01,
+      "cloud_pressure_bar": null,
+      "pressure_min_bar": 1e-06,
+      "pressure_max_bar": 100.0,
+      "pressure_grid_size": 100,
+      "isothermal": true,
+      "isothermal_temperature_K": null,
+      "equilibrium_temperature_K": 1300.0,
+      "kappa_ir": 0.01,
+      "gamma_guillot": 0.4,
+      "two_point": false,
+      "two_point_pressures_bar": [
+        1.2589254117941673,
+        0.001778279410038923
+      ],
+      "two_point_temperatures_K": [
+        1750.0,
+        520.0
+      ],
+      "wind_velocity_kms": 0.0
+    }
+  },
+  "tellurics": {
+    "include_tellurics": true,
+    "use_full_skycalc": false,
+    "use_accurate_airmass": true,
+    "airmass_evolution": "up_and_down",
+    "airmass_limits": [
+      1.2,
+      1.6
+    ],
+    "constant_pwv": true,
+    "pwv_mm": 10.0,
+    "reference_airmass": 1.0,
+    "reference_telluric_file": "inputs/CARMENES_NIR/HD189733b/tellurics/tell_ref_airmass_1.0.fits",
+    "mask_threshold": 0.2,
+    "safety_window_pixels": 7
+  },
+  "pipeline": {
+    "name": "BLASP24",
+    "sysrem_iterations": 4,
+    "snr_mask_threshold": 10.0,
+    "prepare_template": true,
+    "optimize_sysrem_order_by_order": false,
+    "optimize_criterion": "Maximum",
+    "kp_vrest_injection": [
+      0.0,
+      0.0
+    ],
+    "inject_scale_factor": 1.0,
+    "sysrem_robust_halt": false
+  },
+  "cross_correlation": {
+    "velocity_max_kms": 325.0,
+    "velocity_step_kms": 1.3,
+    "kp_max_kms": 320.0,
+    "noise_velocity_max_kms": 250.0,
+    "snr_exclude_kms": 25.0,
+    "in_trail_left_right": 2,
+    "normalized": true,
+    "use_inverse_variance_weighting": true,
+    "cc_metric": true,
+    "ccf_snr": true,
+    "welch_ttest": false,
+    "all_significance_metrics": false,
+    "ssim_metric": false,
+    "study_velocity_ranges": false,
+    "plot_ccf_xstep": 50.0,
+    "order_selection": [
+      23
+    ]
+  },
+  "retrieval": {
+    "enabled": true,
+    "sampler": "nested_sampling",
+    "log_likelihood": "BLASP24",
+    "dimensionality": "1D",
+    "retrieval_choice": 1,
+    "live_points": 200,
+    "constant_efficiency_mode": false
+  },
+  "statistics": {
+    "enabled": false,
+    "noise_study": false,
+    "noise_correlations": false,
+    "stack_group_size": null,
+    "detectability_maps": false
+  },
+  "paths": {
+    "output_root": "/path/to/output",
+    "planet_parameter_dir": "planet_params",
+    "prt_input_data": "/path/to/petitRADTRANS/input_data/",
+    "phoenix_wave_file": "/path/to/PHOENIX/WAVE_PHOENIX-ACES-AGSS-COND-2011.fits",
+    "phoenix_flux_file": "/path/to/PHOENIX/lte05000-4.50-0.0.PHOENIX-ACES-AGSS-COND-2011-HiRes.fits",
+    "skycalc_dir": "",
+    "inputs_dir": "inputs/CARMENES_NIR/HD189733b/"
+  },
+  "timing": true
+}
