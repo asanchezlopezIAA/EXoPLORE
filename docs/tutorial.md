@@ -21,7 +21,7 @@ Furthermore, the PHOENIX stellar model files must be placed on disk and the path
 
 ## Tutorial 1: Run the reference HD 189733 b ANDES simulation
 
-> **Approximate run time:** ~30 min on a Apple Mac Studio M2 Ultra (64 GB RAM) (measured: all 76 ANDES orders, one night, no retrieval; the petitRADTRANS forward model is 94% of the total). The times quoted in these tutorials are approximate and machine-dependent. With `timing: true` in the config, each run writes a `timing_report_<date>.txt` to its output directory with the exact per-block breakdown and total.
+> **Approximate run time:** ~32 min on an Apple Mac Studio M2 Ultra (64 GB RAM) (measured: all 76 ANDES orders, one night, no retrieval; the petitRADTRANS forward model is 95% of the total). The times quoted in these tutorials are approximate and machine-dependent. With `timing: true` in the config, each run writes a `timing_report_<date>.txt` to its output directory with the exact per-block breakdown and total.
 
 This is the reference case. It simulates one ANDES transit of HD 189733 b using a realistic multi-species atmosphere (H₂O, CO, CH₄, NH₃, H₂S, HCN, Fe, Ca) with limb asymmetries enabled, and a H₂O-only CCF template. In the following we describe each step in detail.
 
@@ -150,7 +150,7 @@ CCF matrix in the Earth rest frame, co-added over all 76 ANDES YJHK orders. The 
 :::{figure} figures/tutorial1_kpvsys_andes.png
 :width: 80%
 :align: center
-Cross-correlation S/N map as a function of the assumed planetary orbital velocity semi-amplitude K<sub>P</sub> and rest-frame planet velocity v<sub>rest</sub>, obtained from the reference HD 189733 b ANDES simulation (Tutorial 1). The colour scale gives the significance of the cross-correlation signal in units of the off-peak standard deviation. The red dashed lines indicate the expected position assuming a circular orbit and no net atmospheric wind (K<sub>P</sub> = 149.4 km s<sup>-1</sup> as configured; literature value 152.5 km s<sup>-1</sup>; v<sub>rest</sub> = 0 km s<sup>-1</sup>). The peak significance of ~56σ is recovered at the correct location across 76 spectral orders of ANDES YJHK in a single simulated transit; a non-zero v<sub>rest</sub> would indicate day-to-nightside atmospheric winds.
+Cross-correlation S/N map as a function of the assumed planetary orbital velocity semi-amplitude K<sub>P</sub> and rest-frame planet velocity v<sub>rest</sub>, obtained from the reference HD 189733 b ANDES simulation (Tutorial 1). The colour scale gives the significance of the cross-correlation signal in units of the off-peak standard deviation. The red dashed lines indicate the expected position assuming a circular orbit and no net atmospheric wind (K<sub>P</sub> = 149.4 km s<sup>-1</sup> as configured; literature value 152.5 km s<sup>-1</sup>; v<sub>rest</sub> = 0 km s<sup>-1</sup>). With BLASP24 preparation, the peak significance of ~43σ is recovered close to this position (K<sub>P</sub> = 143 km s<sup>-1</sup>, v<sub>rest</sub> = -4 km s<sup>-1</sup>) across the 76 ANDES YJHK orders in a single simulated transit; the small offset reflects noise and the K<sub>P</sub>-v<sub>rest</sub> degeneracy over one transit rather than a physical wind.
 :::
 
 :::{note}

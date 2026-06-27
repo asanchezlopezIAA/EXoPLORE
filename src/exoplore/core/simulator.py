@@ -136,8 +136,12 @@ def build_simulation_name(cfg: SimulationConfig) -> str:
     # Noise flag
     noise_flag = "noiseless" if obs.noiseless else "noisy"
 
-    # SYSREM optimisation flags
-    if pipe.optimize_sysrem_order_by_order:
+    # Detrending flags. Only SYSREM/PCA-based pipelines carry a detrending
+    # token in the run name. BL19 and BLASP24 are polynomial fitting pipelines
+    # and use neither SYSREM nor PCA, so they carry no such token.
+    if pipe.name not in {"ASL19", "Gibson22", "Cheverall26"}:
+        pca_flag = kp_flag = opt_flag = ""
+    elif pipe.optimize_sysrem_order_by_order:
         pca_flag = "SYSREMopt_"
         if pipe.optimize_criterion == "DeltaSigma":
             kp_flag  = "DeltaSigma_"
@@ -2039,7 +2043,14 @@ class ExoploreSimulator:
                         _U_sysrem = np.zeros((_nn, _max_sp_alloc, _si), float)
                     else:
                         _U_sysrem = np.zeros((_nn, n_spectra, _si), float)
-                    _sysrem_passes_per_order = np.full(n_orders, _si, int)
+                    # Only SYSREM/PCA pipelines have a per-order component count;
+                    # BL19 and BLASP24 are polynomial fitting pipelines (no SYSREM,
+                    # no PCA), so this stays None and is saved as an empty array.
+                    _sysrem_passes_per_order = (
+                        np.full(n_orders, _si, int)
+                        if cfg.pipeline.name in {"ASL19", "Gibson22", "Cheverall26"}
+                        else None
+                    )
                     _mask_store = np.full(
                         (_nn, n_orders, n_pixels), False, dtype=bool)
                     _useful_spectral_points_store = np.full(
@@ -3932,6 +3943,10 @@ class ExoploreSimulator:
             # Cheverall26-only α-scale detection mode (free Kp, V_rest, α on a
             # FIXED nominal model; the paper's §2.7 detection parameterisation).
             "1D_alpha":    ("BLASP24", "BL19"),
+            # Same fixed-model α detection, but with the G22 β noise-rescaling
+            # likelihood (free Kp, V_rest, α, β): β fits a single rescaling of the
+            # propagated per-channel sigma from the data.
+            "1D_alpha_G22": ("G22",),
         }
         _ret_dim = cfg.retrieval.dimensionality
         _logL    = cfg.retrieval.log_likelihood
@@ -3956,6 +3971,7 @@ class ExoploreSimulator:
             "2D": ["log(X$_{H_2O,\\,LL}$)", "log(X$_{H_2O,\\,TL}$)",
                    "$K_P$", "T$_{equ,\\,LL}$", "T$_{equ,\\,TL}$"],
             "1D_alpha": ["$K_P$", "V$_{rest}$", r"$\alpha$"],
+            "1D_alpha_G22": ["$K_P$", "V$_{rest}$", r"$\alpha$", r"$\beta$"],
         }
         # Prior bounds: use config values if provided, else built-in defaults.
         _cfg_pb = cfg.retrieval.prior_bounds or {}
@@ -3969,6 +3985,9 @@ class ExoploreSimulator:
             # K_p, V_rest, alpha  (alpha prior includes 0 so the posterior can
             # approach the null; config overrides for the target).
             "1D_alpha":    [(40., 100.), (-25., 25.), (0., 5.)],
+            # K_p, V_rest, alpha, beta  (beta = G22 noise-rescaling of the
+            # propagated σ; config overrides alpha for model/null).
+            "1D_alpha_G22": [(40., 100.), (-25., 25.), (0., 5.), (0.01, 100.)],
         }
         _PRIOR_BOUNDS_B9 = {
             dim: [tuple(b) for b in _cfg_pb.get(dim, _PRIOR_DEFAULTS_B9.get(dim, []))]
@@ -4000,7 +4019,7 @@ class ExoploreSimulator:
             _ret_dim_b9 = cfg.retrieval.dimensionality
             if _ret_dim_b9 in ("1D", "1D_G22"):
                 _mini_b7["species_ret"] = ["H2", "He", "H2O"]
-            elif _ret_dim_b9 == "1D_alpha":
+            elif _ret_dim_b9 in ("1D_alpha", "1D_alpha_G22"):
                 # Cheverall26 α-scale: nominal model uses the config's H2S
                 # opacity (the same line list as the CCF template).
                 _mini_b7["species_ret"] = [
@@ -4391,7 +4410,7 @@ class ExoploreSimulator:
             # 9i, 1D retrieval branch (lines 6091-8453)
             # ------------------------------------------------------------------
             if _mini_b7["Ret_dim"] in [
-                "1D", "1D_CtoO_met", "1D_G22", "1D_alpha"
+                "1D", "1D_CtoO_met", "1D_G22", "1D_alpha", "1D_alpha_G22"
             ]:
                 _mini_b7["Limb_asymmetries"] = False
 
@@ -4419,6 +4438,10 @@ class ExoploreSimulator:
                         # Cheverall26 α-scale detection: free K_p, V_rest, α on a
                         # FIXED nominal model (no pRT / abundance / T sampled).
                         K_p = cube[0]; v_wind = cube[1]; alpha = cube[2]
+                    elif _mini_b7["Ret_dim"] == "1D_alpha_G22":
+                        # Same fixed-model α detection + G22 β noise-rescaling.
+                        K_p = cube[0]; v_wind = cube[1]
+                        alpha = cube[2]; beta = cube[3]
 
                     log_likelihood = 0.
 
@@ -4447,7 +4470,7 @@ class ExoploreSimulator:
                         _emulator_ll = _ctx.get("prt_emulator")
                         for hh in range(_n_orders_b9):
                             atm_r = _atm_list[hh]
-                            if _mini_b7["Ret_dim"] == "1D_alpha":
+                            if _mini_b7["Ret_dim"] in ("1D_alpha", "1D_alpha_G22"):
                                 # FIXED nominal model (computed once, pre-sampler);
                                 # α scales its depth via Scale_inj below. No pRT.
                                 wave_pRT_r = _ctx["nominal_wave"][hh]
@@ -4525,10 +4548,11 @@ class ExoploreSimulator:
                                         _berv_ll, _mini_b7["V_sys"],
                                         _mini_b7["V_wind"])
 
-                            # 1D_alpha: α (cube[2]) scales the model depth via
+                            # 1D_alpha[_G22]: α scales the model depth via
                             # Scale_inj; all other modes keep the config value.
                             _smf_inp = (dict(_mini_b7, Scale_inj=alpha)
-                                        if _mini_b7["Ret_dim"] == "1D_alpha"
+                                        if _mini_b7["Ret_dim"] in
+                                           ("1D_alpha", "1D_alpha_G22")
                                         else _mini_b7)
                             model_mat[hh], _ = spec_to_mat_fraction(
                                 _smf_inp, _sjd_ll, _T0_ll, v_planet_r,
@@ -4784,8 +4808,10 @@ class ExoploreSimulator:
                             # (paper-faithful: σ_j = 1.4826·MAD over in-transit
                             # exposures per channel, time-independent) vs the
                             # default pipeline-propagated σ.  Cached per night.
-                            if (_mini_b7.get("ret_error_model") == "mad_residual"
-                                    and _mini_b7["preparing_pipeline"] == "Cheverall26"):
+                            _em9 = _mini_b7.get("ret_error_model")
+                            _chev9 = (_mini_b7["preparing_pipeline"] == "Cheverall26")
+                            if _em9 in ("mad_residual", "cov_acf", "cov_lsf") and _chev9:
+                                # per-channel MAD sigma (shared cache)
                                 _sk9 = f"_sigma_mad_{_night_index}"
                                 if _sk9 not in _ctx:
                                     _rr9 = _mat_res_ret[_night_index][
@@ -4795,12 +4821,38 @@ class ExoploreSimulator:
                                         np.abs(_rr9 - _md9), axis=0)
                                     _sg9[~np.isfinite(_sg9) | (_sg9 <= 0)] = np.inf
                                     _ctx[_sk9] = _sg9
-                                _sig9 = _ctx[_sk9][_up9]
-                                for n in with_signal_ret:
-                                    log_likelihood += -0.5 * np.sum(
-                                        ((_mat_res_ret[_night_index, n, _up9]
-                                          - model_mat_prepared[n, _up9])
-                                         / _sig9)**2)
+                                if _em9 == "mad_residual":
+                                    _sig9 = _ctx[_sk9][_up9]
+                                    for n in with_signal_ret:
+                                        log_likelihood += -0.5 * np.sum(
+                                            ((_mat_res_ret[_night_index, n, _up9]
+                                              - model_mat_prepared[n, _up9])
+                                             / _sig9)**2)
+                                else:
+                                    # banded block-diagonal noise covariance
+                                    # C = D R D (D=diag(sigma_MAD), R=short-range
+                                    # per-order correlation).  The determinant
+                                    # cancels in the model-vs-null Bayes factor,
+                                    # so only (r-m)^T C^-1 (r-m) is evaluated.
+                                    from exoplore.analysis import covnoise as _covn
+                                    _ckey = f"_covfac_{_night_index}_{_em9}"
+                                    if _ckey not in _ctx:
+                                        _resin = _mat_res_ret[_night_index][
+                                            np.asarray(with_signal_ret), :]
+                                        _ctx[_ckey] = _covn.build_factors(
+                                            _resin, _ctx[_sk9],
+                                            useful_spectral_points_ret[
+                                                _night_index, :],
+                                            _n_px_b9, _n_orders_b9,
+                                            kernel=("acf" if _em9 == "cov_acf"
+                                                    else "lsf"),
+                                            kmax=8, fwhm=3.3)
+                                    _fac9 = _ctx[_ckey]
+                                    for n in with_signal_ret:
+                                        _diff9 = (_mat_res_ret[_night_index, n, :]
+                                                  - model_mat_prepared[n, :])
+                                        log_likelihood += -0.5 * _covn.quad_form(
+                                            _fac9, _diff9)
                             else:
                                 for n in with_signal_ret:
                                     log_likelihood += -0.5 * np.sum(
@@ -4809,8 +4861,11 @@ class ExoploreSimulator:
                                          / _propag_ret[_night_index, n, _up9])**2)
 
                     elif _mini_b7["logL_choice"] == "G22":
-                        # Enforce beta prior (reads from prior_bounds config)
-                        _beta_lo, _beta_hi = _PRIOR_BOUNDS_B9["1D_G22"][4]
+                        # Enforce beta prior (reads from prior_bounds config).
+                        # beta is the last sampled parameter: index 4 for 1D_G22,
+                        # index 3 for 1D_alpha_G22.
+                        _beta_lo, _beta_hi = _PRIOR_BOUNDS_B9[
+                            _mini_b7["Ret_dim"]][-1]
                         if not (_beta_lo <= beta <= _beta_hi):
                             return -np.inf
                         if _mini_b7["Different_nights"]:
@@ -4874,6 +4929,11 @@ class ExoploreSimulator:
                     elif _mini_b7["Ret_dim"] == "1D_G22":
                         log10_X1 = cube[0]; K_p = cube[1]
                         T_equ = cube[2]; v_wind = cube[3]; beta = cube[4]
+                    elif _mini_b7["Ret_dim"] == "1D_alpha":
+                        K_p = cube[0]; v_wind = cube[1]; alpha = cube[2]
+                    elif _mini_b7["Ret_dim"] == "1D_alpha_G22":
+                        K_p = cube[0]; v_wind = cube[1]
+                        alpha = cube[2]; beta = cube[3]
 
                     log_likelihood = 0.
 
@@ -5187,7 +5247,8 @@ class ExoploreSimulator:
                                          )**2)
 
                         elif _mini_b7["logL_choice"] == "G22":
-                            _beta_lo2, _beta_hi2 = _PRIOR_BOUNDS_B9["1D_G22"][4]
+                            _beta_lo2, _beta_hi2 = _PRIOR_BOUNDS_B9[
+                                _mini_b7["Ret_dim"]][-1]
                             if not (_beta_lo2 <= beta <= _beta_hi2):
                                 return -np.inf
                             if _mini_b7["Different_nights"]:
@@ -5602,7 +5663,7 @@ class ExoploreSimulator:
                         # model ONCE per order (no pRT inside the sampler; α just
                         # scales its depth).  Nominal abundance/T = the CCF
                         # template (the paper's nominal model).
-                        if (_mini_b7["Ret_dim"] == "1D_alpha"
+                        if (_mini_b7["Ret_dim"] in ("1D_alpha", "1D_alpha_G22")
                                 and _ctx.get("nominal_spec") is None
                                 and _Radtrans is not None):
                             _nom_ab = np.asarray([

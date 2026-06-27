@@ -456,7 +456,7 @@ def call_easyCHEM(inp_dat, metallicity, C_to_O, pressures, t, species,
         exo.co = C_to_O
         exo.solve(pressures, t)
         mass_fractions = exo.result_mass()
-        mass_fracs = {sp: mass_fractions[sp] for sp in species}
+        mass_fracs = {sp: mass_fractions[easychem_molecule(sp)] for sp in species}
         MMW_tot = exo.mmw
     else:
         exo = ec.ExoAtmos()
@@ -482,7 +482,7 @@ def call_easyCHEM(inp_dat, metallicity, C_to_O, pressures, t, species,
         exo.updateAtomAbunds(modif_abundances)
         exo.solve(pressures, t)
         mass_fractions = exo.result_mass()
-        mass_fracs = {sp: mass_fractions[sp] for sp in species}
+        mass_fracs = {sp: mass_fractions[easychem_molecule(sp)] for sp in species}
         MMW_tot = exo.mmw
 
     return mass_fracs, MMW_tot
