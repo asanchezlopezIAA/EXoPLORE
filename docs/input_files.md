@@ -109,10 +109,10 @@ You need two files:
 | `WAVE_PHOENIX-ACES-AGSS-COND-2011.fits` | `phoenix_wave_file` | Wavelength grid, shared across all PHOENIX models. ~1.57 million wavelength points, 500 to 55,000 Å (0.05 to 5.5 µm). |
 | `lte{Teff:05d}-{logg:.2f}-{met:.1f}.PHOENIX-ACES-AGSS-COND-2011-HiRes.fits` | `phoenix_flux_file` | Flux spectrum for the specific stellar parameters. |
 
-**How to select the right flux file:** round `stellar_teff_K` to the nearest 100 K, `stellar_logg` to the nearest 0.5, and `stellar_metallicity` to the nearest 0.5. For HD189733 (Teff=5400 K, logg=4.587, [Fe/H]=-0.03) the correct file is:
+**How to select the right flux file:** round `stellar_teff_K` to the nearest 100 K, `stellar_logg` to the nearest 0.5, and `stellar_metallicity` to the nearest 0.5. For HD189733 (Teff=5052 K, logg=4.587, [Fe/H]=-0.03) the nearest grid file is:
 
 ```
-lte05400-4.50-0.0.PHOENIX-ACES-AGSS-COND-2011-HiRes.fits
+lte05000-4.50-0.0.PHOENIX-ACES-AGSS-COND-2011-HiRes.fits
 ```
 
 **Downloading:** From the PHOENIX library at the Göttingen observatory:
@@ -361,7 +361,7 @@ The telluric multiplication step is skipped entirely, producing a clean absence 
 | `ANDES_ETC_WAVE_SNR_YJHK_HD189733b.fits` | ✓ in `inputs/ANDES/HD189733b/` |
 | `tellurics/tell_ref_airmass_1.0.fits` | ✓ in `inputs/ANDES/HD189733b/tellurics/` |
 | `WAVE_PHOENIX-ACES-AGSS-COND-2011.fits` | ✗ download from PHOENIX library |
-| `lte05400-4.50-0.0.PHOENIX-ACES-AGSS-COND-2011-HiRes.fits` | ✗ download from PHOENIX library |
+| `lte05000-4.50-0.0.PHOENIX-ACES-AGSS-COND-2011-HiRes.fits` | ✗ download from PHOENIX library |
 | petitRADTRANS `input_data/` | ✗ installed with petitRADTRANS |
 
 *No reference-night files are needed for simulated ANDES observations. `different_nights: true` is supported, see the section below.*

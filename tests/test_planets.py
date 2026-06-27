@@ -282,9 +282,8 @@ def test_load_hd189733b_bundled():
     planet = load_planet(json_path)
     assert planet.name == "HD189733b"
     assert abs(planet.orbital_period_days - 2.21857567) < 1e-4
-    # stellar_teff_K uses 5400 K (the reference value), not the
-    # published observational value (5052 K), to reproduce the reference results.
-    assert planet.stellar_teff_K == 5400.0
+    # stellar_teff_K is the literature value for HD 189733 (Stassun et al. 2017).
+    assert planet.stellar_teff_K == 5052.0
     assert planet.kp_kms is not None
     assert planet.transit_duration_hours is not None
     assert planet.limb_darkening_coeffs == [0.5079, -0.2239]

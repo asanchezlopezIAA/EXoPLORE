@@ -25,7 +25,7 @@
   "_section_star": "--- Stellar parameters ---",
   "stellar_radius_rsun": 0.804769,
   "stellar_mass_msun": 0.800040,
-  "stellar_teff_K": 5400.0,
+  "stellar_teff_K": 5052.0,
   "stellar_logg": 4.587,
   "stellar_metallicity": -0.03,
   "v_rotsini_kms": 3.5,
