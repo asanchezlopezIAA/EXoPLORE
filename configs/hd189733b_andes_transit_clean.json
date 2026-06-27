@@ -354,7 +354,7 @@
     "safety_window_pixels": 7
   },
   "pipeline": {
-    "name": "BL19",
+    "name": "BLASP24",
     "sysrem_iterations": 4,
     "snr_mask_threshold": 10.0,
     "prepare_template": true,

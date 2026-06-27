@@ -58,12 +58,12 @@ Open `configs/hd189733b_andes_transit_clean.json`. The key scientific choices ar
     "use_easychem": true
   }
 },
-"pipeline":  { "name": "BL19" }
+"pipeline":  { "name": "BLASP24" }
 ```
 
 The atmosphere block defines **two separate petitRADTRANS models**: the injected planet atmosphere (`planet_model` + limb sub-blocks) and the CCF template (`ccf_template`). Because `cc_with_true_model: false`, the simulator uses H₂O-only as the cross-correlation template while injecting the full 10-species atmosphere. This mimics the typical observational strategy: when searching for signal in real data, the exact injected chemistry is not known a priori, and therefore a simpler template is used to cross-correlate. We note that setting `cc_with_true_model: true` would use the full injected model as the template, generally yielding higher S/N but corresponding to an idealised scenario not achievable in practice.
 
-The `"pipeline": "BL19"` entry selects the BL19 preparation pipeline as the default. BL19 normalises each spectrum by its brightest pixels and applies a polynomial telluric correction using the median spectrum as a reference (without SYSREM). This makes it the appropriate choice for injection-recovery tests and pipeline bias assessments.
+The `"pipeline": "BLASP24"` entry selects the BLASP24 preparation pipeline (Blain, Sánchez-López & Mollière 2024). BLASP24 first removes the instrumental throughput and blaze by dividing each exposure by a second-order polynomial fit over wavelength, and then removes the telluric absorption by fitting a second-order polynomial to the logarithm of the flux as a function of airmass (the log-transmittance of the Earth's atmosphere is, to first order, linear in airmass) and dividing by the resulting fit. Wavelength channels where the fitted telluric transmittance falls below 0.8 are masked, to exclude regions too strongly affected by telluric absorption.
 
 :::{important}
 **Preparing pipeline and retrieval consistency**
@@ -136,7 +136,7 @@ Consecutively, the simulator will:
 5. Build the stellar continuum matrix from the PHOENIX model
 6. Simulate the full observing sequence (~390 exposures at 30 s, ~3.3 h baseline + 1.94 h transit)
 7. For each of the 76 orders: apply telluric contamination, inject the planetary signal with a limb-weighted BATMAN light curve, add photon noise from the ANDES ETC
-8. Apply the BL19 pipeline (telluric mask, normalisation, SNR-column masking)
+8. Apply the BLASP24 pipeline (polynomial throughput removal, airmass-based telluric removal, telluric and SNR-column masking)
 9. Compute the inverse-variance weighted CCF against the H₂O template
 10. Build the Kp-Vsys S/N detection map
 11. Save all spectral matrices, mask files, CCF products, and diagnostic plots
@@ -161,15 +161,17 @@ The map is constructed by co-adding the cross-correlation function (CCF) over al
 The characteristic elongated shape (a vertical streak rather than a point) reflects a partial degeneracy between K<sub>P</sub> and v<sub>rest</sub> over a single transit: a slightly wrong K<sub>P</sub> shifts the peak in v<sub>rest</sub> rather than completely destroying it. This degeneracy can in principle be lifted by combining multiple transits at different orbital phases.
 
 A non-zero v<sub>rest</sub> at the peak indicates that the absorbing gas has a net velocity relative to the planet's Keplerian rest frame. In tidally locked hot Jupiters, a **blueshift** (negative v<sub>rest</sub>) is commonly observed and attributed to day-to-nightside winds: high-altitude gas flows from the hot dayside towards the cooler nightside, and at the terminator this flow has a line-of-sight component pointing towards the observer on both the leading and trailing limbs. For HD 189733 b, multiple studies consistently measure a blueshift of -3.9 to -5.5 km s<sup>-1</sup> (Alonso-Floriano et al. 2019; Sánchez-López et al. 2019; Blain et al. 2024).
+
+A measured v<sub>rest</sub> offset is most commonly interpreted as a day-to-nightside wind, but it is not uniquely diagnostic. Planetary rotation, an offset dayside hotspot, or species-dependent dynamics can produce comparable shifts (Brogi et al. 2023; Smith et al. 2024), as can residual uncertainties in the velocity solution or the wavelength calibration. Such an offset should therefore always be cross-checked against independent indicators before being attributed to winds.
 :::
 
-The peak S/N and its position depend on the noise seed (`noise.noise_seed`, default `12345`); changing it draws a different noise realisation. Setting `cc_with_true_model: true` would use the full injected model as the CCF template, generally giving a higher S/N and a peak closer to the true Kp, but at the cost of an idealised scenario not realisable with real data. Fully-masked orders (deep telluric bands) are skipped and reported in `<run_name>/warnings/fully_masked_orders_<run_name>.txt`. The simulation takes approximately 30 minutes on an Apple Mac Studio M2 Ultra (64 GB RAM) with all 76 orders and limb asymmetries enabled; runtimes will scale with the number of CPU cores and memory bandwidth of the host machine.
+The peak S/N and its position depend on the noise seed (`noise.noise_seed`, default `12345`); changing it draws a different noise realisation. Fully-masked orders (deep telluric bands) are skipped and reported in `<run_name>/warnings/fully_masked_orders_<run_name>.txt`.
 
 ### Step 5: Check the outputs
 
 Outputs are written under:
 ```
-output_root/HD189733b/ANDES_YJHK/transit/BL19_withsignal_1nights_SNR_comb1_simdata_noisy_stdnoisex1/
+output_root/HD189733b/ANDES_YJHK/transit/BLASP24_withsignal_1nights_SNR_comb1_simdata_noisy_stdnoisex1/
 ```
 
 Everything for this run lives in that single folder:
