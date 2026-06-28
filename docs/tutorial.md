@@ -187,7 +187,7 @@ See [docs/outputs.md](outputs.md) for a complete guide to every output file and 
 
 > **Approximate run time:** ~25 to 35 min (full ANDES simulation, one night, no retrieval; comparable to Tutorial 1).
 
-WASP-76 b is an ultra-hot Jupiter where the extreme day-to-night temperature contrast is thought to produce strong chemical asymmetries between the morning and evening limbs. The key observational signature is a neutral iron signal that grows from ingress to egress and appears predominantly blueshifted, consistent with iron condensing on the cooler morning terminator and remaining in gas phase on the hotter evening terminator (Ehrenreich et al. 2020). This tutorial runs the reference WASP-76 b simulation: ANDES UBV (0.35 to 0.63 µm, 62 orders, R = 100,000) with limb asymmetries enabled and a Fe-only CCF template.
+WASP-76 b is an ultra-hot Jupiter where the extreme day-to-night temperature contrast produces strong chemical asymmetries between the morning and evening limbs. The key observational signature is a neutral iron signal that strengthens from ingress to egress and progressively blueshifts. At ingress the morning (leading) terminator is in view, where its rotation and the day-to-nightside wind partly compensate and contribute a component near zero rest-frame velocity. As the transit proceeds the morning terminator rotates out of view and, because iron has condensed out of the cooler nightside, contributes no further signal; the near-zero velocity component therefore disappears and only the hotter evening (trailing) terminator is observed, where rotation and wind add towards the observer and produce the net blueshift (Ehrenreich et al. 2020). This tutorial runs the reference WASP-76 b simulation: ANDES UBV (0.35 to 0.63 µm, 62 orders, R = 100,000) with limb asymmetries enabled and a Fe-only CCF template.
 
 A ready-to-run config is provided at `configs/wasp76b_andes_ubv_limbasym.json`. The planet parameter file is at `planet_params/WASP-76b.json`. In the following we describe the key differences from Tutorial 1 and the additional steps required.
 
@@ -217,6 +217,10 @@ ANDES UBV covers the optical range (0.35 to 0.63 µm). This range is not include
 The bundled telluric reference covers the NIR (∼0.95 to 2.5 µm). When the simulator loads it for an optical instrument it finds no data at those wavelengths, causing all orders to appear fully masked and the simulation to complete without producing any signal. Whenever you use an instrument arm outside the NIR (such as ANDES UBV, RIZ, or CARMENES VIS) you must generate a telluric reference file covering the appropriate wavelength range.
 
 In the optical (0.35 to 0.63 µm), the dominant telluric absorption is from broad O₃ Chappuis bands (smooth, broadband, mostly removed by the polynomial preparation pipeline) and from weak O₂ features near the band edges. With `mask_threshold: 0.2`, no pixels are masked in this range under typical Paranal conditions.
+:::
+
+:::{tip}
+If you do not need to tune the precipitable water vapour, the observatory site, or the other SkyCalc parameters for a specific test, a convenient shortcut is to generate a single wide telluric reference covering all the wavelength bands you intend to use (for example the full optical-to-NIR range), and point each instrument config at it. This avoids regenerating a separate reference per instrument arm.
 :::
 
 Generate the optical reference file with the `--ref-only` flag, which queries SkyCalc once at the reference airmass (1.0 by default) and writes `tell_ref_airmass_1.0.fits` without generating per-exposure files:

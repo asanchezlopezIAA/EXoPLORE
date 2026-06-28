@@ -7,7 +7,8 @@ retrieving atmospheric parameters using Bayesian inference. It is designed for
 feasibility studies, pipeline development, and retrieval validation for
 current and next-generation ground-based spectrographs.
 
-.. note::
+.. admonition:: Note
+   :class: danger
 
    This is an early public release. The documentation is actively being
    expanded; feedback and suggestions are welcome via the
