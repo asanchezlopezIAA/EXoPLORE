@@ -9,8 +9,8 @@ import pytest
 
 from exoplore.retrieval.likelihood import (
     log_likelihood_bl19,
-    log_likelihood_blasp24,
-    log_likelihood_g22,
+    log_likelihood_blain24,
+    log_likelihood_gibson22,
     compute_log_likelihood,
 )
 from exoplore.retrieval.priors import (
@@ -47,7 +47,7 @@ class TestLogLikelihoodBL19:
         assert math.isfinite(log_likelihood_bl19(self.data, self.model))
 
 
-class TestLogLikelihoodBLASP24:
+class TestLogLikelihoodBlain24:
     def setup_method(self):
         rng = np.random.default_rng(1)
         self.n, self.p = 8, 40
@@ -56,17 +56,17 @@ class TestLogLikelihoodBLASP24:
         self.sigma = 0.5 * np.ones((self.n, self.p))
 
     def test_returns_scalar(self):
-        val = log_likelihood_blasp24(self.data, self.model, self.sigma)
+        val = log_likelihood_blain24(self.data, self.model, self.sigma)
         assert isinstance(val, float)
 
     def test_closer_model_is_higher(self):
         far_model = self.data + 10.0
-        logL_close = log_likelihood_blasp24(self.data, self.model, self.sigma)
-        logL_far = log_likelihood_blasp24(self.data, far_model, self.sigma)
+        logL_close = log_likelihood_blain24(self.data, self.model, self.sigma)
+        logL_far = log_likelihood_blain24(self.data, far_model, self.sigma)
         assert logL_close > logL_far
 
 
-class TestLogLikelihoodG22:
+class TestLogLikelihoodGibson22:
     def setup_method(self):
         rng = np.random.default_rng(2)
         self.n, self.p = 8, 40
@@ -75,16 +75,16 @@ class TestLogLikelihoodG22:
         self.sigma = np.ones((self.n, self.p))
 
     def test_returns_scalar(self):
-        val = log_likelihood_g22(self.data, self.model, self.sigma, beta=1.0)
+        val = log_likelihood_gibson22(self.data, self.model, self.sigma, beta=1.0)
         assert isinstance(val, float)
 
     def test_out_of_range_beta_returns_neginf(self):
-        val = log_likelihood_g22(self.data, self.model, self.sigma, beta=0.001)
+        val = log_likelihood_gibson22(self.data, self.model, self.sigma, beta=0.001)
         assert val == -np.inf
 
     def test_beta_above_1_penalised(self):
-        logL_1 = log_likelihood_g22(self.data, self.model, self.sigma, beta=1.0)
-        logL_5 = log_likelihood_g22(self.data, self.model, self.sigma, beta=5.0)
+        logL_1 = log_likelihood_gibson22(self.data, self.model, self.sigma, beta=1.0)
+        logL_5 = log_likelihood_gibson22(self.data, self.model, self.sigma, beta=5.0)
         # Large beta inflates uncertainties and adds a penalty term
         assert logL_1 > logL_5
 
@@ -104,11 +104,11 @@ class TestComputeLogLikelihood:
         with pytest.raises(ValueError, match="Unknown log-likelihood"):
             compute_log_likelihood("XYZ", data, data)
 
-    def test_blasp24_requires_uncertainties(self):
+    def test_blain24_requires_uncertainties(self):
         rng = np.random.default_rng(5)
         data = rng.normal(0, 1, (5, 30))
         with pytest.raises(ValueError, match="uncertainties must be provided"):
-            compute_log_likelihood("BLASP24", data, data)
+            compute_log_likelihood("Blain24", data, data)
 
 
 # ---------------------------------------------------------------------------

@@ -58,17 +58,17 @@ Open `configs/hd189733b_andes_transit_clean.json`. The key scientific choices ar
     "use_easychem": true
   }
 },
-"pipeline":  { "name": "BLASP24" }
+"pipeline":  { "name": "Blain24" }
 ```
 
 The atmosphere block defines **two separate petitRADTRANS models**: the injected planet atmosphere (`planet_model` + limb sub-blocks) and the CCF template (`ccf_template`). Because `cc_with_true_model: false`, the simulator uses H₂O-only as the cross-correlation template while injecting the full 10-species atmosphere. This mimics the typical observational strategy: when searching for signal in real data, the exact injected chemistry is not known a priori, and therefore a simpler template is used to cross-correlate. We note that setting `cc_with_true_model: true` would use the full injected model as the template, generally yielding higher S/N but corresponding to an idealised scenario not achievable in practice.
 
-The `"pipeline": "BLASP24"` entry selects the BLASP24 preparation pipeline (Blain, Sánchez-López & Mollière 2024). BLASP24 first removes the instrumental throughput and blaze by dividing each exposure by a second-order polynomial fit over wavelength, and then removes the telluric absorption by fitting a second-order polynomial to the logarithm of the flux as a function of airmass (the log-transmittance of the Earth's atmosphere is, to first order, linear in airmass) and dividing by the resulting fit. Wavelength channels where the fitted telluric transmittance falls below 0.8 are masked, to exclude regions too strongly affected by telluric absorption.
+The `"pipeline": "Blain24"` entry selects the Blain24 preparation pipeline (Blain, Sánchez-López & Mollière 2024). Blain24 first removes the instrumental throughput and blaze by dividing each exposure by a second-order polynomial fit over wavelength, and then removes the telluric absorption by fitting a second-order polynomial to the logarithm of the flux as a function of airmass (the log-transmittance of the Earth's atmosphere is, to first order, linear in airmass) and dividing by the resulting fit. Wavelength channels where the fitted telluric transmittance falls below 0.8 are masked, to exclude regions too strongly affected by telluric absorption.
 
 :::{important}
 **Preparing pipeline and retrieval consistency**
 
-The preparing pipeline acts on the data matrix in a way that also affects the buried planet signal. For retrieval to be unbiased, the forward model must undergo the same transformation as the data at every likelihood evaluation. For polynomial-based pipelines (BL19, BLASP24), the preparation operator is linear and analytically known, so the same polynomial can be applied directly to the Doppler-shifted model; Blain, Sánchez-López & Mollière (2024) formally prove unbiasedness under this condition. For SYSREM-based pipelines (ASL19, Gibson22), Gibson et al. (2022) showed that SYSREM can be represented as a linear projection using the eigenvectors of the data matrix, so the filtered model is obtained efficiently by a single matrix multiplication (M_filt = M - P · M) rather than by iterating SYSREM on every likelihood call.
+The preparing pipeline acts on the data matrix in a way that also affects the buried planet signal. For retrieval to be unbiased, the forward model must undergo the same transformation as the data at every likelihood evaluation. For polynomial-based pipelines (BL19, Blain24), the preparation operator is linear and analytically known, so the same polynomial can be applied directly to the Doppler-shifted model; Blain, Sánchez-López & Mollière (2024) formally prove unbiasedness under this condition. For SYSREM-based pipelines (ASL19, Gibson22), Gibson et al. (2022) showed that SYSREM can be represented as a linear projection using the eigenvectors of the data matrix, so the filtered model is obtained efficiently by a single matrix multiplication (M_filt = M - P · M) rather than by iterating SYSREM on every likelihood call.
 :::
 
 ### Step 2: Update your machine-specific paths
@@ -136,7 +136,7 @@ Consecutively, the simulator will:
 5. Build the stellar continuum matrix from the PHOENIX model
 6. Simulate the full observing sequence (~390 exposures at 30 s, ~3.3 h baseline + 1.94 h transit)
 7. For each of the 76 orders: apply telluric contamination, inject the planetary signal with a limb-weighted BATMAN light curve, add photon noise from the ANDES ETC
-8. Apply the BLASP24 pipeline (polynomial throughput removal, airmass-based telluric removal, telluric and SNR-column masking)
+8. Apply the Blain24 pipeline (polynomial throughput removal, airmass-based telluric removal, telluric and SNR-column masking)
 9. Compute the inverse-variance weighted CCF against the H₂O template
 10. Build the Kp-Vsys S/N detection map
 11. Save all spectral matrices, mask files, CCF products, and diagnostic plots
@@ -150,7 +150,7 @@ CCF matrix in the Earth rest frame, co-added over all 76 ANDES YJHK orders. The 
 :::{figure} figures/tutorial1_kpvsys_andes.png
 :width: 80%
 :align: center
-Cross-correlation S/N map as a function of the assumed planetary orbital velocity semi-amplitude K<sub>P</sub> and rest-frame planet velocity v<sub>rest</sub>, obtained from the reference HD 189733 b ANDES simulation (Tutorial 1). The colour scale gives the significance of the cross-correlation signal in units of the off-peak standard deviation. The red dashed lines indicate the expected position assuming a circular orbit and no net atmospheric wind (K<sub>P</sub> = 149.4 km s<sup>-1</sup> as configured; literature value 152.5 km s<sup>-1</sup>; v<sub>rest</sub> = 0 km s<sup>-1</sup>). With BLASP24 preparation, the peak significance of ~43σ is recovered close to this position (K<sub>P</sub> = 143 km s<sup>-1</sup>, v<sub>rest</sub> = -4 km s<sup>-1</sup>) across the 76 ANDES YJHK orders in a single simulated transit; the small offset reflects noise and the K<sub>P</sub>-v<sub>rest</sub> degeneracy over one transit rather than a physical wind.
+Cross-correlation S/N map as a function of the assumed planetary orbital velocity semi-amplitude K<sub>P</sub> and rest-frame planet velocity v<sub>rest</sub>, obtained from the reference HD 189733 b ANDES simulation (Tutorial 1). The colour scale gives the significance of the cross-correlation signal in units of the off-peak standard deviation. The red dashed lines indicate the expected position assuming a circular orbit and no net atmospheric wind (K<sub>P</sub> = 149.4 km s<sup>-1</sup> as configured; literature value 152.5 km s<sup>-1</sup>; v<sub>rest</sub> = 0 km s<sup>-1</sup>). With Blain24 preparation, the peak significance of ~43σ is recovered close to this position (K<sub>P</sub> = 143 km s<sup>-1</sup>, v<sub>rest</sub> = -4 km s<sup>-1</sup>) across the 76 ANDES YJHK orders in a single simulated transit; the small offset reflects noise and the K<sub>P</sub>-v<sub>rest</sub> degeneracy over one transit rather than a physical wind.
 :::
 
 :::{note}
@@ -171,7 +171,7 @@ The peak S/N and its position depend on the noise seed (`noise.noise_seed`, defa
 
 Outputs are written under:
 ```
-output_root/HD189733b/ANDES_YJHK/transit/BLASP24_withsignal_1nights_SNR_comb1_simdata_noisy_stdnoisex1/
+output_root/HD189733b/ANDES_YJHK/transit/Blain24_withsignal_1nights_SNR_comb1_simdata_noisy_stdnoisex1/
 ```
 
 Everything for this run lives in that single folder:
@@ -236,7 +236,7 @@ This requires an internet connection and the `skycalc_ipy` package (`pip install
 python -u scripts/run_exoplore.py configs/wasp76b_andes_ubv_limbasym.json --run
 ```
 
-The simulation uses 62 UBV orders and a Fe-only CCF template, prepared with the same BLASP24 polynomial pipeline as Tutorial 1. Limb asymmetries are enabled with `limb_divisions: asymmetric`, appropriate for the extreme day-to-night contrast of WASP-76 b: the morning limb is modelled at T = 2800 K (isothermal) and the evening limb at T = 3500 K (isothermal), with a day-to-nightside wind of -8 km s<sup>-1</sup> at both limbs (following Ehrenreich et al. 2020; Wardenier et al. 2021; Beltz et al. 2023). Exposure time is 90 s (matching the ANDES ETC files provided). Since telluric features in the optical are broadband and weak, no pixels are expected to be fully masked by the telluric threshold.
+The simulation uses 62 UBV orders and a Fe-only CCF template, prepared with the same Blain24 polynomial pipeline as Tutorial 1. Limb asymmetries are enabled with `limb_divisions: asymmetric`, appropriate for the extreme day-to-night contrast of WASP-76 b: the morning limb is modelled at T = 2800 K (isothermal) and the evening limb at T = 3500 K (isothermal), with a day-to-nightside wind of -8 km s<sup>-1</sup> at both limbs (following Ehrenreich et al. 2020; Wardenier et al. 2021; Beltz et al. 2023). Exposure time is 90 s (matching the ANDES ETC files provided). Since telluric features in the optical are broadband and weak, no pixels are expected to be fully masked by the telluric threshold.
 
 :::{figure} figures/tutorial2_ccf_erf_wasp76b.png
 :width: 80%
@@ -653,18 +653,18 @@ A peak in the Kp-Vsys map tells you that a molecular species is present and give
 
 In the retrieval framework, the forward model (petitRADTRANS spectrum at a given set of parameters) is Doppler-shifted, run through the same preparation pipeline as the data, and compared to the data via a log-likelihood function. A nested sampler (MultiNest) or MCMC (emcee) explores the parameter space and maps the posterior. The critical requirement is that the forward model is prepared identically to the data (this is the pipeline bias problem discussed above).
 
-The log-likelihood formulations available in EXoPLORE (BL19, BLASP24, G22) differ in how they treat per-pixel noise and model amplitude scaling. For polynomial-based pipelines with reliable per-pixel uncertainties, the BLASP24 formulation provides a natural default, although the most suitable choice depends on the dataset (see the [Concepts primer](concepts.md#5-from-cross-correlation-to-a-likelihood)).
+The log-likelihood formulations available in EXoPLORE (BL19, Blain24, Gibson22) differ in how they treat per-pixel noise and model amplitude scaling. For polynomial-based pipelines with reliable per-pixel uncertainties, the Blain24 formulation provides a natural default, although the most suitable choice depends on the dataset (see the [Concepts primer](concepts.md#5-from-cross-correlation-to-a-likelihood)).
 :::
 
 After verifying a detection in the forward-model run, the Bayesian retrieval can be enabled within the **same simulation** by setting `retrieval.enabled: true`. The retrieval runs at the end of the simulation, after all matrices have been built and the CCF has been computed. Therefore, it does not require a separate run or re-loading of saved files.
 
-The example below uses `"log_likelihood": "BLASP24"`, which is the log-likelihood formulation from Blain, Sánchez-López & Mollière (2024, AJ, 167, 179). BLASP24 accounts for per-order noise scaling and is the recommended choice for most retrieval configurations in EXoPLORE.
+The example below uses `"log_likelihood": "Blain24"`, which is the log-likelihood formulation from Blain, Sánchez-López & Mollière (2024, AJ, 167, 179). Blain24 accounts for per-order noise scaling and is the recommended choice for most retrieval configurations in EXoPLORE.
 
 ```json
 "retrieval": {
   "enabled": true,
   "sampler": "nested_sampling",
-  "log_likelihood": "BLASP24",
+  "log_likelihood": "Blain24",
   "dimensionality": "1D_CtoO_met",
   "live_points": 200
 }
@@ -672,18 +672,18 @@ The example below uses `"log_likelihood": "BLASP24"`, which is the log-likelihoo
 
 The `live_points` parameter controls the number of active sample points that MultiNest maintains during nested sampling. Higher values produce more accurate posteriors and more reliable evidence estimates, but runtime scales roughly linearly with `live_points`. A value of 200 is a reasonable starting point for a 4-parameter retrieval; increase to 500 to 1000 for publication-quality results.
 
-This configuration retrieves the C/O ratio and metallicity using the BLASP24 log-likelihood. The four supported retrieval modes and their required likelihood are:
+This configuration retrieves the C/O ratio and metallicity using the Blain24 log-likelihood. The four supported retrieval modes and their required likelihood are:
 
 | `dimensionality` | `log_likelihood` | Free parameters |
 |---|---|---|
-| `"1D"` | `"BL19"` or `"BLASP24"` | log(VMR), Kp, T_eq, v_wind |
-| `"1D_G22"` | `"G22"` **only** | log(VMR), Kp, T_eq, v_wind, β |
-| `"1D_CtoO_met"` | `"BL19"` or `"BLASP24"` | C/O, metallicity (EasyChem) |
-| `"1D_extended"` | `"BL19"` or `"BLASP24"` | log(VMR) × 6 species, Kp, T_eq, v_wind |
-| `"1D_extended_fast"` | `"BL19"` or `"BLASP24"` | log(VMR) × 6 species, T_eq (Kp/v_wind fixed) |
-| `"2D"` | `"BL19"` or `"BLASP24"` | morning/evening VMR + T_eq |
+| `"1D"` | `"BL19"` or `"Blain24"` | log(VMR), Kp, T_eq, v_wind |
+| `"1D_Gibson22"` | `"Gibson22"` **only** | log(VMR), Kp, T_eq, v_wind, β |
+| `"1D_CtoO_met"` | `"BL19"` or `"Blain24"` | C/O, metallicity (EasyChem) |
+| `"1D_extended"` | `"BL19"` or `"Blain24"` | log(VMR) × 6 species, Kp, T_eq, v_wind |
+| `"1D_extended_fast"` | `"BL19"` or `"Blain24"` | log(VMR) × 6 species, T_eq (Kp/v_wind fixed) |
+| `"2D"` | `"BL19"` or `"Blain24"` | morning/evening VMR + T_eq |
 
-> **`1D_G22` must be paired with `G22` only.** The β parameter is the noise-scaling degree of freedom that makes G22 physically meaningful (using it with BLASP24 or BL19 samples β but never uses it, producing a meaningless posterior). The simulator raises a `ValueError` on invalid combinations.
+> **`1D_Gibson22` must be paired with `Gibson22` only.** The β parameter is the noise-scaling degree of freedom that makes Gibson22 physically meaningful (using it with Blain24 or BL19 samples β but never uses it, producing a meaningless posterior). The simulator raises a `ValueError` on invalid combinations.
 
 Retrieval dependencies must be installed to that end:
 
@@ -699,7 +699,7 @@ Typical run time: 1 to 4 hours depending on `live_points`, number of orders, and
 
 **Retrieval output:** MultiNest chain files are written to `<run_name>/matrices/matrices_<run_name>/` and the corner plot PDF to `<run_name>/plots/`. See [docs/outputs.md](outputs.md#retrieval-outputs) for how to read and plot the posteriors.
 
-A ready-made config for this tutorial (CARMENES NIR, order 23, noiseless, BLASP24 pipeline and log-likelihood, `1D_CtoO_met` dimensionality) is provided:
+A ready-made config for this tutorial (CARMENES NIR, order 23, noiseless, Blain24 pipeline and log-likelihood, `1D_CtoO_met` dimensionality) is provided:
 
 ```bash
 python -u scripts/run_exoplore.py configs/hd189733b_carmenes_retrieval_cto_met.json --run
@@ -711,7 +711,7 @@ The retrieval produces a corner plot of the marginal and joint posterior distrib
 :width: 75%
 :align: center
 
-Posterior distributions from a BLASP24 retrieval of a single noiseless CARMENES NIR order of HD 189733 b. The diagonal panels show the marginal distribution of each parameter and the off-diagonal panels the pairwise joint distributions, with contours at the 68 and 95 per cent credible levels. Dashed lines mark the injected truth values.
+Posterior distributions from a Blain24 retrieval of a single noiseless CARMENES NIR order of HD 189733 b. The diagonal panels show the marginal distribution of each parameter and the off-diagonal panels the pairwise joint distributions, with contours at the 68 and 95 per cent credible levels. Dashed lines mark the injected truth values.
 ```
 
 ---
@@ -730,7 +730,7 @@ A retrieval pipeline is *unbiased* if, when the forward model used in the likeli
 
 In order to isolate pure pipeline systematics, the test should be run with `noiseless: true`, which removes the stochastic noise floor. With perfect noiseless data and the correct forward model, the likelihood should peak sharply at the injected truth. Any offset is consequently pure pipeline bias, not noise. With noisy data, biases can be hidden inside the noise uncertainty and require many injection-recovery realisations to detect.
 
-> **We note that** SYSREM-based pipelines (ASL19, Gibson22) may be problematic with noiseless data, as SYSREM can over-subtract signal in the absence of noise. BL19 and BLASP24 are the recommended choices for noiseless bias testing. Gibson22 with a β prior pinned near 1 (see below) is under evaluation.
+> **We note that** SYSREM-based pipelines (ASL19, Gibson22) may be problematic with noiseless data, as SYSREM can over-subtract signal in the absence of noise. BL19 and Blain24 are the recommended choices for noiseless bias testing. Gibson22 with a β prior pinned near 1 (see below) is under evaluation.
 
 ### Step 1: Configure the test
 
@@ -762,7 +762,7 @@ To keep the retrieval fast (minutes rather than hours), we restrict the simulati
   "retrieval": {
     "enabled": true,
     "sampler": "nested_sampling",
-    "log_likelihood": "BLASP24",
+    "log_likelihood": "Blain24",
     "dimensionality": "1D",
     "live_points": 200,
     "constant_efficiency_mode": false
@@ -776,11 +776,11 @@ Ready-made configs are provided for each pipeline. Run the three retrievals sequ
 # Brogi & Line (2019), BL19 preparation pipeline, BL19 log-likelihood
 python -u scripts/run_exoplore.py configs/hd189733b_carmenes_retrieval_bl19_noiseless.json --run
 
-# Blain et al. (2024), BLASP24 preparation pipeline, BLASP24 log-likelihood
-python -u scripts/run_exoplore.py configs/hd189733b_carmenes_retrieval_blasp24_noiseless.json --run
+# Blain et al. (2024), Blain24 preparation pipeline, Blain24 log-likelihood
+python -u scripts/run_exoplore.py configs/hd189733b_carmenes_retrieval_blain24_noiseless.json --run
 
-# Gibson et al. (2022), Gibson22 preparation pipeline, G22 log-likelihood, β pinned near 1
-python -u scripts/run_exoplore.py configs/hd189733b_carmenes_retrieval_g22_noiseless.json --run
+# Gibson et al. (2022), Gibson22 preparation pipeline, Gibson22 log-likelihood, β pinned near 1
+python -u scripts/run_exoplore.py configs/hd189733b_carmenes_retrieval_gibson22_noiseless.json --run
 ```
 
 Each run takes a few minutes with 400 live points and one order.
@@ -825,7 +825,7 @@ Once you have run the three retrievals, the overlay corner plot can be generated
 python scripts/plot_corner_overlay.py \\
   --output-root /path/to/EXoPLORE_clean_run/HD189733b/CARMENES_NIR/transit \\
   --runs  BL19_withsignal_1nights_SNR_comb1_simdata_noiseless_stdnoisex1 \\
-          BLASP24_withsignal_1nights_SNR_comb1_simdata_noiseless_stdnoisex1 \\
+          Blain24_withsignal_1nights_SNR_comb1_simdata_noiseless_stdnoisex1 \\
           Gibson22_withsignal_1nights_SNR_comb1_simdata_noiseless_stdnoisex1 \\
   --labels "Brogi & Line (2019)" "Blain et al. (2024)" "Gibson et al. (2022)" \\
   --truths -3.0 149.4 1170.0 0.0 \\
@@ -850,8 +850,8 @@ The noiseless case above demonstrates bias in the absence of noise. To verify th
 # BL19, noisy, ANDES YJHK, order 35
 python -u scripts/run_exoplore.py configs/hd189733b_andes_retrieval_bl19_noisy.json --run
 
-# BLASP24, noisy, ANDES YJHK, order 35
-python -u scripts/run_exoplore.py configs/hd189733b_andes_retrieval_blasp24_noisy.json --run
+# Blain24, noisy, ANDES YJHK, order 35
+python -u scripts/run_exoplore.py configs/hd189733b_andes_retrieval_blain24_noisy.json --run
 
 # Gibson22, noisy, ANDES YJHK, order 35 (β free; β prior [0.9, 1.1] avoids divergence)
 python -u scripts/run_exoplore.py configs/hd189733b_andes_retrieval_gibson22_noisy.json --run
@@ -871,7 +871,7 @@ The overlay corner plot is generated with:
 python scripts/plot_corner_overlay.py \\
   --output-root /path/to/EXoPLORE_clean_run/HD189733b/ANDES_YJHK/transit \\
   --runs  BL19_withsignal_1nights_SNR_comb1_simdata_noisy_stdnoisex1 \\
-          BLASP24_withsignal_1nights_SNR_comb1_simdata_noisy_stdnoisex1 \\
+          Blain24_withsignal_1nights_SNR_comb1_simdata_noisy_stdnoisex1 \\
           Gibson22_withsignal_1nights_SNR_comb1_simdata_noisy_stdnoisex1 \\
   --labels "Brogi & Line (2019)" "Blain et al. (2024)" "Gibson et al. (2022)" \\
   --truths -3.0 149.4 1170.0 0.0 \\
@@ -931,24 +931,24 @@ of that particular test rather than a general limitation of the method.
 | Preparing pipeline | Log-likelihood | Works noiseless? | Notes |
 |---|---|---|---|
 | BL19 | BL19 | Yes | Matched filter, noise-independent |
-| BL19 | BLASP24 | Yes | Chi-squared with propagated noise |
-| BLASP24 | BLASP24 | Yes | Polynomial throughput + telluric removal |
-| Gibson22 | G22 (β pinned) | **Yes** | Set `prior_bounds` to pin β ∈ [0.999, 1.001]; see below |
+| BL19 | Blain24 | Yes | Chi-squared with propagated noise |
+| Blain24 | Blain24 | Yes | Polynomial throughput + telluric removal |
+| Gibson22 | Gibson22 (β pinned) | **Yes** | Set `prior_bounds` to pin β ∈ [0.999, 1.001]; see below |
 | ASL19 | any | **TBD** | SYSREM may over-subtract noiseless data; not yet evaluated |
-| any | G22 (β free) | **No** | β diverges when noise → 0 regardless of preparing pipeline |
+| any | Gibson22 (β free) | **No** | β diverges when noise → 0 regardless of preparing pipeline |
 
 For ASL19, `noiseless: false` with realistic noise is the safe choice. Gibson22 with a pinned β prior works correctly on noiseless data, as demonstrated by the corner plot above.
 
-#### Testing G22 noiseless with a pinned β prior
+#### Testing Gibson22 noiseless with a pinned β prior
 
-There is a principled way to run a G22 noiseless bias test: use an informative prior that pins β near 1. To do so, set a very narrow prior range in the config:
+There is a principled way to run a Gibson22 noiseless bias test: use an informative prior that pins β near 1. To do so, set a very narrow prior range in the config:
 
 ```json
 "retrieval": {
-  "dimensionality": "1D_G22",
-  "log_likelihood": "G22",
+  "dimensionality": "1D_Gibson22",
+  "log_likelihood": "Gibson22",
   "prior_bounds": {
-    "1D_G22": [[-8.0, 0.0], [85.0, 200.0], [400.0, 1500.0],
+    "1D_Gibson22": [[-8.0, 0.0], [85.0, 200.0], [400.0, 1500.0],
                [-25.0, 25.0], [0.999, 1.001]]
   }
 }
@@ -1039,7 +1039,7 @@ Coverage (p-p) plots from 300 simulations. Left: a well-specified inference (the
 
 This diagnostic is the calibration counterpart of the precision-versus-accuracy problem (Concepts primer, [Section 7](concepts.md#7-precision-is-not-accuracy)): a 1D retrieval of an inhomogeneous atmosphere can produce tight posteriors that do not cover the truth at the stated rate, which a p-p plot exposes directly.
 
-**The real retrieval version.** A true p-p plot requires running the retrieval on every realisation, so it is expensive. The example here uses the well-specified case: a one-dimensional atmosphere is injected and a one-dimensional BLASP24 retrieval is performed (`configs/hd189733b_andes_retrieval_blasp24_noisy.json`, a single ANDES order). Because the retrieval model matches the injected truth, the coverage curve should follow the diagonal, confirming that the BLASP24 one-dimensional retrieval returns statistically calibrated uncertainties. We stress that this is a check of the inference machinery, not a scientific result: when the model matches the truth by construction, calibration is expected, and a diagonal coverage curve confirms only that the sampler and likelihood are statistically self-consistent. The scientifically relevant miscalibration arises from model mismatch, in particular from fitting a one-dimensional model to an atmosphere that is in reality multi-dimensional, and is not captured by this test. The well-specified p-p plot serves as a reference: it shows what a calibrated coverage curve looks like on real retrievals, and provides the baseline against which a genuine miscalibration would stand out.
+**The real retrieval version.** A true p-p plot requires running the retrieval on every realisation, so it is expensive. The example here uses the well-specified case: a one-dimensional atmosphere is injected and a one-dimensional Blain24 retrieval is performed (`configs/hd189733b_andes_retrieval_blain24_noisy.json`, a single ANDES order). Because the retrieval model matches the injected truth, the coverage curve should follow the diagonal, confirming that the Blain24 one-dimensional retrieval returns statistically calibrated uncertainties. We stress that this is a check of the inference machinery, not a scientific result: when the model matches the truth by construction, calibration is expected, and a diagonal coverage curve confirms only that the sampler and likelihood are statistically self-consistent. The scientifically relevant miscalibration arises from model mismatch, in particular from fitting a one-dimensional model to an atmosphere that is in reality multi-dimensional, and is not captured by this test. The well-specified p-p plot serves as a reference: it shows what a calibrated coverage curve looks like on real retrievals, and provides the baseline against which a genuine miscalibration would stand out.
 
 A p-p plot requires a single truth per parameter to compute the coverage. An inhomogeneous (pseudo-2D) injection has no single truth for, say, the H₂O abundance, since the two limbs differ, so the coverage of a one-dimensional retrieval against such an injection is not well defined. The bias of a one-dimensional retrieval on an inhomogeneous atmosphere is therefore better shown by comparing the retrieved value with the injected limb values directly (in the manner of the corner plots in Tutorial 7), rather than through a p-p plot.
 
@@ -1047,7 +1047,7 @@ The driver `scripts/run_pp_calibration.py` automates the calibration test: it ru
 
 ```bash
 python scripts/run_pp_calibration.py \
-  --config configs/hd189733b_andes_retrieval_blasp24_noisy.json \
+  --config configs/hd189733b_andes_retrieval_blain24_noisy.json \
   --n 30 --base-seed 1000 --live-points 100 \
   --output-root /path/to/pp_calibration \
   --truths -3.0 149.4 1170.0 0.0 \
@@ -1061,7 +1061,7 @@ To rebuild the figure from whatever realisations have finished, without running 
 :width: 75%
 :align: center
 
-Coverage (p-p) plot from 30 real BLASP24 retrievals of HD 189733 b (ANDES, single order), one per independent noise realisation. The dynamical and thermal parameters (K_P, T_eq) lie close to the diagonal, while the H₂O abundance runs below it (over-confident) and the wind velocity slightly above it. The grey bands are the 1σ and 2σ ranges expected for 30 simulations. The curves are stepped because only 30 realisations were used.
+Coverage (p-p) plot from 30 real Blain24 retrievals of HD 189733 b (ANDES, single order), one per independent noise realisation. The dynamical and thermal parameters (K_P, T_eq) lie close to the diagonal, while the H₂O abundance runs below it (over-confident) and the wind velocity slightly above it. The grey bands are the 1σ and 2σ ranges expected for 30 simulations. The curves are stepped because only 30 realisations were used.
 ```
 
 This result is instructive precisely because it is **not** a clean diagonal. The example was set up to look well specified (a one-dimensional retrieval of a one-dimensional injection), but injection and retrieval are not in fact the same model, and the p-p plot, which is far more sensitive to model mismatch than a corner plot, exposes it. The atmosphere is injected with EasyChem equilibrium chemistry and the full set of opacity species, whereas the retrieval fits a single, pressure-independent H₂O abundance. A free constant abundance cannot reproduce an EasyChem profile, for several reasons that act together:
@@ -1094,6 +1094,6 @@ The dynamical and thermal parameters are recovered with calibrated uncertainties
 
 **Simulation running all orders when you only want one**, `cross_correlation.order_selection` is a CCF-only filter. To restrict the entire simulation (Blocks 3 to 9) to a specific set of orders, use `instrument.order_indices`. For a single-order retrieval test: `"instrument": { "order_indices": [23] }`. We caution that forgetting this will run all orders through the forward model and make the retrieval far slower than necessary.
 
-**Retrieval posterior is completely flat / log Z ≈ 0**, This means the log-likelihood function is returning the same value for every parameter combination. The run log should be checked for Python `Traceback` or `KeyError` lines printed before the MultiNest output, these are exceptions silently swallowed inside the Fortran/Python interface that cause pymultinest to return a default constant value. Common causes are: i) a missing key in the configuration dict passed to `preparing_pipeline` or `call_pRT` (check that `instrument.order_indices` is set and the config is otherwise valid); ii) using a SYSREM-based pipeline with `noiseless: true` without a pinned β prior (over-subtraction may render data identically zero for all models, use BL19 or BLASP24, or Gibson22 with `prior_bounds` pinning β near 1).
+**Retrieval posterior is completely flat / log Z ≈ 0**, This means the log-likelihood function is returning the same value for every parameter combination. The run log should be checked for Python `Traceback` or `KeyError` lines printed before the MultiNest output, these are exceptions silently swallowed inside the Fortran/Python interface that cause pymultinest to return a default constant value. Common causes are: i) a missing key in the configuration dict passed to `preparing_pipeline` or `call_pRT` (check that `instrument.order_indices` is set and the config is otherwise valid); ii) using a SYSREM-based pipeline with `noiseless: true` without a pinned β prior (over-subtraction may render data identically zero for all models, use BL19 or Blain24, or Gibson22 with `prior_bounds` pinning β near 1).
 
-**Retrieval corner plot shows `Too few points to create valid contours`**, The posterior is effectively flat (all 200 equal-weight samples uniformly cover the prior). See the point above. We caution that when using the G22 likelihood with `noiseless: true`, the β hyperparameter diverges and the posterior cannot be constrained, switching to BL19 or BLASP24 resolves this.
+**Retrieval corner plot shows `Too few points to create valid contours`**, The posterior is effectively flat (all 200 equal-weight samples uniformly cover the prior). See the point above. We caution that when using the Gibson22 likelihood with `noiseless: true`, the β hyperparameter diverges and the posterior cannot be constrained, switching to BL19 or Blain24 resolves this.

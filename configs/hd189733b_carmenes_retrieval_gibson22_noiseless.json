@@ -355,7 +355,7 @@
     "safety_window_pixels": 7
   },
   "pipeline": {
-    "name": "BLASP24",
+    "name": "Gibson22",
     "sysrem_iterations": 4,
     "snr_mask_threshold": 10.0,
     "prepare_template": true,
@@ -391,11 +391,35 @@
   "retrieval": {
     "enabled": true,
     "sampler": "nested_sampling",
-    "log_likelihood": "BLASP24",
-    "dimensionality": "1D",
+    "log_likelihood": "Gibson22",
+    "dimensionality": "1D_Gibson22",
     "retrieval_choice": 1,
-    "live_points": 200,
-    "constant_efficiency_mode": false
+    "live_points": 400,
+    "constant_efficiency_mode": false,
+    "prior_bounds": {
+      "1D_Gibson22": [
+        [
+          -8.0,
+          0.0
+        ],
+        [
+          85.0,
+          200.0
+        ],
+        [
+          400.0,
+          1500.0
+        ],
+        [
+          -25.0,
+          25.0
+        ],
+        [
+          0.999,
+          1.001
+        ]
+      ]
+    }
   },
   "statistics": {
     "enabled": false,
@@ -405,11 +429,11 @@
     "detectability_maps": false
   },
   "paths": {
-    "output_root": "/path/to/output",
+    "output_root": "/Users/alexsl/Documents/Simulador/EXoPLORE_clean_run",
     "planet_parameter_dir": "planet_params",
-    "prt_input_data": "/path/to/petitRADTRANS/input_data/",
-    "phoenix_wave_file": "/path/to/PHOENIX/WAVE_PHOENIX-ACES-AGSS-COND-2011.fits",
-    "phoenix_flux_file": "/path/to/PHOENIX/lte05000-4.50-0.0.PHOENIX-ACES-AGSS-COND-2011-HiRes.fits",
+    "prt_input_data": "/Users/alexsl/Documents/petitRADTRANS/input_data/",
+    "phoenix_wave_file": "/Users/alexsl/Documents/Simulador/ANDES/HD189733b/transit/inputs/WAVE_PHOENIX-ACES-AGSS-COND-2011.fits",
+    "phoenix_flux_file": "/Users/alexsl/Documents/Simulador/ANDES/HD189733b/transit/inputs/lte05000-4.50-0.0.PHOENIX-ACES-AGSS-COND-2011-HiRes.fits",
     "skycalc_dir": "",
     "inputs_dir": "inputs/CARMENES_NIR/HD189733b/"
   },

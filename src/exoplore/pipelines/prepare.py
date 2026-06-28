@@ -7,7 +7,7 @@ Main pipeline orchestrator and injection utilities.
 This module provides:
 
 - :func:`preparing_pipeline`, the main data-preparation dispatcher that
-  selects and runs the correct pipeline (BL19, BLASP24, ASL19, Gibson22)
+  selects and runs the correct pipeline (BL19, Blain24, ASL19, Gibson22)
   based on ``inp_dat['preparing_pipeline']``.
 
 - :func:`injection`, injects a synthetic planetary signal into the
@@ -37,7 +37,7 @@ def preparing_pipeline(
         masks=True, correct_uncertainties=True,
         retrieval=False, mask_inter_retrieval=None,
         useful_spectral_points_inter_retrieval=None,
-        tell_mask_threshold_BLASP24=0.8,
+        tell_mask_threshold_Blain24=0.8,
         sysrem_division=False,
 ):
     """Prepare pipeline.
@@ -46,7 +46,7 @@ def preparing_pipeline(
     ``inp_dat['preparing_pipeline']``:
 
     - ``'BL19'``, Brogi & Line (2019)
-    - ``'BLASP24'``, Blain, Sánchez-López & Mollière (2024)
+    - ``'Blain24'``, Blain, Sánchez-López & Mollière (2024)
     - ``'ASL19'``, ASL 2019 (BL19 normalisation + SYSREM)
     - ``'Gibson22'``, Gibson 2022 (normalisation + SYSREM)
 
@@ -93,8 +93,8 @@ def preparing_pipeline(
         Mask to apply when ``retrieval=True``.
     useful_spectral_points_inter_retrieval : ndarray or None
         Good-pixel indices to apply when ``retrieval=True``.
-    tell_mask_threshold_BLASP24 : float, optional
-        Telluric transmittance threshold used in the BLASP24 branch when
+    tell_mask_threshold_Blain24 : float, optional
+        Telluric transmittance threshold used in the Blain24 branch when
         masking telluric lines.  A wavelength column is masked if the fitted
         telluric transmittance ``exp T(t, lambda)`` drops below this value in
         any exposure.  Default is ``0.8`` (Blain, Sanchez-Lopez & Molliere
@@ -119,7 +119,7 @@ def preparing_pipeline(
         chev26_normalise_maxima,
         chev26_normalise_polyfit,
     )
-    from exoplore.pipelines.blasp24 import (
+    from exoplore.pipelines.blain24 import (
         remove_throughput_fit, remove_telluric_lines_fit,
     )
     from exoplore.pipelines.masking import (
@@ -197,7 +197,7 @@ def preparing_pipeline(
             cor = None
             U = None
 
-        elif _pipeline == 'BLASP24':
+        elif _pipeline == 'Blain24':
 
             # Step 1: throughput removal (polynomial over wavelength)
             # Step 2: telluric removal (polynomial over airmass on ln(F_X))
@@ -217,7 +217,7 @@ def preparing_pipeline(
                         data_prepared, airmass, mask, useful_spectral_points,
                         True, uncertainties=propag_noise,
                         masking=True,
-                        mask_threshold=tell_mask_threshold_BLASP24,
+                        mask_threshold=tell_mask_threshold_Blain24,
                         polynomial_fit_degree=2,
                         uncertainties_as_weights=False
                     )
@@ -233,7 +233,7 @@ def preparing_pipeline(
                     data_prepared, airmass, mask, useful_spectral_points,
                     False, uncertainties=None,
                     masking=False,
-                    mask_threshold=tell_mask_threshold_BLASP24,
+                    mask_threshold=tell_mask_threshold_Blain24,
                     polynomial_fit_degree=2,
                     uncertainties_as_weights=False
                 )
@@ -242,7 +242,7 @@ def preparing_pipeline(
             if mask.shape != (0,):
                 data_prepared[:, mask] = 1
 
-            # BLASP24 has a single combined masking step, the intermediate
+            # Blain24 has a single combined masking step, the intermediate
             # and final masks are identical.
             inter_mask   = np.copy(mask)
             inter_useful = np.copy(useful_spectral_points)
@@ -645,7 +645,7 @@ def preparing_pipeline(
                 )
 
                 # Intermediate mask/useful-point snapshot (post-telluric-
-                # masking), mirroring the BL19/BLASP24/ASL19 branches so the
+                # masking), mirroring the BL19/Blain24/ASL19 branches so the
                 # 9-value return signature is satisfied (inter_mask, inter_useful)
                 # and is reused later for model reprocessing / retrievals.
                 inter_mask   = np.copy(mask)
@@ -754,7 +754,7 @@ def preparing_pipeline(
         else:
             raise ValueError(
                 f"Unknown pipeline '{_pipeline}'. "
-                "Valid values: 'BL19', 'BLASP24', 'ASL19', 'Gibson22'."
+                "Valid values: 'BL19', 'Blain24', 'ASL19', 'Gibson22'."
             )
 
         # n_passes_used: actual SYSREM iterations consumed (slot 4).

@@ -88,7 +88,7 @@ For each order with absolute index `K` (from the instrument's `order_selection` 
 | `std_noise_order_{K}_{run_name}.npz` | `(n_spectra, n_pixels)` | Standard noise estimate (σ). |
 | `mat_back_order_{K}_{run_name}.npz` | `(n_spectra, n_pixels)` | Background stellar matrix (the modelled stellar spectrum after pipeline processing, without planet signal). |
 | `mat_noise_order_{K}_{run_name}.npz` | `(n_spectra, n_pixels)` | Noise-only matrix (random noise component). |
-| `mat_cc_order_{K}_{run_name}.npz` | `(n_spectra, n_pixels)` | CCF-ready matrix (BL19/BLASP24 pipelines only). The matrix as passed to the CCF kernel. |
+| `mat_cc_order_{K}_{run_name}.npz` | `(n_spectra, n_pixels)` | CCF-ready matrix (BL19/Blain24 pipelines only). The matrix as passed to the CCF kernel. |
 | `ccf_store_order_{K}_{run_name}.npz` | `(n_nights, n_vel, n_spectra)` | Per-order CCF: CCF value at each velocity lag and each exposure, for all nights. |
 
 ### Global mask arrays

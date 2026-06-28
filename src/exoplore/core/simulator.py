@@ -137,7 +137,7 @@ def build_simulation_name(cfg: SimulationConfig) -> str:
     noise_flag = "noiseless" if obs.noiseless else "noisy"
 
     # Detrending flags. Only SYSREM/PCA-based pipelines carry a detrending
-    # token in the run name. BL19 and BLASP24 are polynomial fitting pipelines
+    # token in the run name. BL19 and Blain24 are polynomial fitting pipelines
     # and use neither SYSREM nor PCA, so they carry no such token.
     if pipe.name not in {"ASL19", "Gibson22", "Cheverall26"}:
         pca_flag = kp_flag = opt_flag = ""
@@ -198,7 +198,7 @@ class SimulationSummary:
     # Pipeline citation strings
     _PIPELINE_REFS = {
         "BL19":         "BL19          (Brogi & Line 2019, AJ, 157, 114)",
-        "BLASP24":      "BLASP24       (Blain, Sanchez-Lopez & Molliere 2024, AJ, 167, 179)",
+        "Blain24":      "Blain24       (Blain, Sanchez-Lopez & Molliere 2024, AJ, 167, 179)",
         "ASL19":        "ASL19         (Sanchez-Lopez et al. 2019, A&A, 630, A53)",
         "Gibson22":     "Gibson22      (Gibson et al. 2022, MNRAS, 512, 4618)",
         "Cheverall26":  "Cheverall26   (Cheverall et al. 2026, MNRAS, IGRINS pipeline)",
@@ -2044,7 +2044,7 @@ class ExoploreSimulator:
                     else:
                         _U_sysrem = np.zeros((_nn, n_spectra, _si), float)
                     # Only SYSREM/PCA pipelines have a per-order component count;
-                    # BL19 and BLASP24 are polynomial fitting pipelines (no SYSREM,
+                    # BL19 and Blain24 are polynomial fitting pipelines (no SYSREM,
                     # no PCA), so this stays None and is saved as an empty array.
                     _sysrem_passes_per_order = (
                         np.full(n_orders, _si, int)
@@ -2208,7 +2208,7 @@ class ExoploreSimulator:
                     _std_noise_b5[b, _sl], wave_ins,
                     _useful_snr, _mask_snr_1d, airmass, phase,
                     without_signal, None, _inj_slice_b5,
-                    tell_mask_threshold_BLASP24=0.8,
+                    tell_mask_threshold_Blain24=0.8,
                     max_fit_BL19=False, sysrem_division=False,
                     masks=True, correct_uncertainties=True,
                 )
@@ -2300,7 +2300,7 @@ class ExoploreSimulator:
                                 # (Gibson et al. 2022, Eq. 7) to apply the same
                                 # SYSREM filter to the template without running
                                 # SYSREM on it directly (which would destroy it).
-                                # BL19/BLASP24: run preparing_pipeline as normal.
+                                # BL19/Blain24: run preparing_pipeline as normal.
                                 if cfg.pipeline.name in ("ASL19", "Gibson22"):
                                     # Use actual passes for this order (may be
                                     # < _si when DeltaSigma halting was active).
@@ -2340,7 +2340,7 @@ class ExoploreSimulator:
                                         _mask_b5, airmass, phase,
                                         without_signal, _sysrem_pass_b5,
                                         None,
-                                        tell_mask_threshold_BLASP24=0.8,
+                                        tell_mask_threshold_Blain24=0.8,
                                         max_fit_BL19=False,
                                         sysrem_division=False,
                                         masks=False,
@@ -2446,7 +2446,7 @@ class ExoploreSimulator:
                                     _useful_spectral_points_b5,
                                     _mask_b5, airmass, phase,
                                     without_signal, _sysrem_pass_b5, None,
-                                    tell_mask_threshold_BLASP24=0.8,
+                                    tell_mask_threshold_Blain24=0.8,
                                     max_fit_BL19=False,
                                     sysrem_division=False,
                                     masks=False,
@@ -3932,21 +3932,21 @@ class ExoploreSimulator:
         # ======================================================================
 
         # Coupling validation: logL_choice and Ret_dim must be compatible.
-        # The beta noise-scaling parameter is only part of '1D_G22', using G22
+        # The beta noise-scaling parameter is only part of '1D_Gibson22', using Gibson22
         # likelihood with any other dimensionality is undefined, and using
-        # BLASP24/BL19 with '1D_G22' samples beta but never uses it.
+        # Blain24/BL19 with '1D_Gibson22' samples beta but never uses it.
         _VALID_LL_FOR_DIM = {
-            "1D":          ("BL19", "BLASP24"),
-            "1D_G22":      ("G22",),
-            "1D_CtoO_met": ("BL19", "BLASP24"),
-            "2D":          ("BL19", "BLASP24"),
+            "1D":          ("BL19", "Blain24"),
+            "1D_Gibson22":      ("Gibson22",),
+            "1D_CtoO_met": ("BL19", "Blain24"),
+            "2D":          ("BL19", "Blain24"),
             # Cheverall26-only α-scale detection mode (free Kp, V_rest, α on a
             # FIXED nominal model; the paper's §2.7 detection parameterisation).
-            "1D_alpha":    ("BLASP24", "BL19"),
-            # Same fixed-model α detection, but with the G22 β noise-rescaling
+            "1D_alpha":    ("Blain24", "BL19"),
+            # Same fixed-model α detection, but with the Gibson22 β noise-rescaling
             # likelihood (free Kp, V_rest, α, β): β fits a single rescaling of the
             # propagated per-channel sigma from the data.
-            "1D_alpha_G22": ("G22",),
+            "1D_alpha_Gibson22": ("Gibson22",),
         }
         _ret_dim = cfg.retrieval.dimensionality
         _logL    = cfg.retrieval.log_likelihood
@@ -3958,26 +3958,26 @@ class ExoploreSimulator:
                     f"log_likelihood in {_VALID_LL_FOR_DIM[_ret_dim]}, "
                     f"got '{_logL}'. "
                     f"The beta noise-scaling parameter is only sampled in "
-                    f"'1D_G22', combining it with BLASP24/BL19 produces "
-                    f"meaningless posteriors. Use '1D_G22' only with G22."
+                    f"'1D_Gibson22', combining it with Blain24/BL19 produces "
+                    f"meaningless posteriors. Use '1D_Gibson22' only with Gibson22."
                 )
 
         # -- Parameter labels per Ret_dim --
         _RET_PARAM_LABELS_B9 = {
             "1D":   ["log(X$_{H_2O}$)", "$K_P$", "T$_{equ}$", "V$_{rest}$"],
-            "1D_G22": ["log(X$_{H_2O}$)", "$K_P$", "T$_{equ}$", "V$_{rest}$",
+            "1D_Gibson22": ["log(X$_{H_2O}$)", "$K_P$", "T$_{equ}$", "V$_{rest}$",
                        r"$\beta$"],
             "1D_CtoO_met": ["C/O", "[(C+O)/H]"],
             "2D": ["log(X$_{H_2O,\\,LL}$)", "log(X$_{H_2O,\\,TL}$)",
                    "$K_P$", "T$_{equ,\\,LL}$", "T$_{equ,\\,TL}$"],
             "1D_alpha": ["$K_P$", "V$_{rest}$", r"$\alpha$"],
-            "1D_alpha_G22": ["$K_P$", "V$_{rest}$", r"$\alpha$", r"$\beta$"],
+            "1D_alpha_Gibson22": ["$K_P$", "V$_{rest}$", r"$\alpha$", r"$\beta$"],
         }
         # Prior bounds: use config values if provided, else built-in defaults.
         _cfg_pb = cfg.retrieval.prior_bounds or {}
         _PRIOR_DEFAULTS_B9 = {
             "1D":          [(-8., 0.), (85., 200.), (400., 1500.), (-25., 25.)],
-            "1D_G22":      [(-8., 0.), (85., 200.), (400., 1500.), (-25., 25.),
+            "1D_Gibson22":      [(-8., 0.), (85., 200.), (400., 1500.), (-25., 25.),
                             (0.01, 100.)],
             "1D_CtoO_met": [(0., 2.), (-2.5, 2.5)],
             "2D":          [(-8., 0.), (-8., 0.), (85., 200.), (400., 1500.),
@@ -3985,9 +3985,9 @@ class ExoploreSimulator:
             # K_p, V_rest, alpha  (alpha prior includes 0 so the posterior can
             # approach the null; config overrides for the target).
             "1D_alpha":    [(40., 100.), (-25., 25.), (0., 5.)],
-            # K_p, V_rest, alpha, beta  (beta = G22 noise-rescaling of the
+            # K_p, V_rest, alpha, beta  (beta = Gibson22 noise-rescaling of the
             # propagated σ; config overrides alpha for model/null).
-            "1D_alpha_G22": [(40., 100.), (-25., 25.), (0., 5.), (0.01, 100.)],
+            "1D_alpha_Gibson22": [(40., 100.), (-25., 25.), (0., 5.), (0.01, 100.)],
         }
         _PRIOR_BOUNDS_B9 = {
             dim: [tuple(b) for b in _cfg_pb.get(dim, _PRIOR_DEFAULTS_B9.get(dim, []))]
@@ -4017,9 +4017,9 @@ class ExoploreSimulator:
             # each loglike function.  This is set explicitly per ret_dim;
             # our code defaulted to all planet species → len mismatch in pRT.
             _ret_dim_b9 = cfg.retrieval.dimensionality
-            if _ret_dim_b9 in ("1D", "1D_G22"):
+            if _ret_dim_b9 in ("1D", "1D_Gibson22"):
                 _mini_b7["species_ret"] = ["H2", "He", "H2O"]
-            elif _ret_dim_b9 in ("1D_alpha", "1D_alpha_G22"):
+            elif _ret_dim_b9 in ("1D_alpha", "1D_alpha_Gibson22"):
                 # Cheverall26 α-scale: nominal model uses the config's H2S
                 # opacity (the same line list as the CCF template).
                 _mini_b7["species_ret"] = [
@@ -4410,7 +4410,7 @@ class ExoploreSimulator:
             # 9i, 1D retrieval branch (lines 6091-8453)
             # ------------------------------------------------------------------
             if _mini_b7["Ret_dim"] in [
-                "1D", "1D_CtoO_met", "1D_G22", "1D_alpha", "1D_alpha_G22"
+                "1D", "1D_CtoO_met", "1D_Gibson22", "1D_alpha", "1D_alpha_Gibson22"
             ]:
                 _mini_b7["Limb_asymmetries"] = False
 
@@ -4431,22 +4431,22 @@ class ExoploreSimulator:
                         T_equ = cube[2]; v_wind = cube[3]
                     elif _mini_b7["Ret_dim"] == "1D_CtoO_met":
                         c_to_o = cube[0]; met = cube[1]
-                    elif _mini_b7["Ret_dim"] == "1D_G22":
+                    elif _mini_b7["Ret_dim"] == "1D_Gibson22":
                         log10_X1 = cube[0]; K_p = cube[1]
                         T_equ = cube[2]; v_wind = cube[3]; beta = cube[4]
                     elif _mini_b7["Ret_dim"] == "1D_alpha":
                         # Cheverall26 α-scale detection: free K_p, V_rest, α on a
                         # FIXED nominal model (no pRT / abundance / T sampled).
                         K_p = cube[0]; v_wind = cube[1]; alpha = cube[2]
-                    elif _mini_b7["Ret_dim"] == "1D_alpha_G22":
-                        # Same fixed-model α detection + G22 β noise-rescaling.
+                    elif _mini_b7["Ret_dim"] == "1D_alpha_Gibson22":
+                        # Same fixed-model α detection + Gibson22 β noise-rescaling.
                         K_p = cube[0]; v_wind = cube[1]
                         alpha = cube[2]; beta = cube[3]
 
                     log_likelihood = 0.
 
                     # ---- abundances ----
-                    if _mini_b7["Ret_dim"] in ["1D", "1D_G22"]:
+                    if _mini_b7["Ret_dim"] in ["1D", "1D_Gibson22"]:
                         abundances = np.asarray(
                             [_mini_b7["vmr"][0], _mini_b7["vmr"][1], 10.**log10_X1])
                     else:
@@ -4470,7 +4470,7 @@ class ExoploreSimulator:
                         _emulator_ll = _ctx.get("prt_emulator")
                         for hh in range(_n_orders_b9):
                             atm_r = _atm_list[hh]
-                            if _mini_b7["Ret_dim"] in ("1D_alpha", "1D_alpha_G22"):
+                            if _mini_b7["Ret_dim"] in ("1D_alpha", "1D_alpha_Gibson22"):
                                 # FIXED nominal model (computed once, pre-sampler);
                                 # α scales its depth via Scale_inj below. No pRT.
                                 wave_pRT_r = _ctx["nominal_wave"][hh]
@@ -4548,11 +4548,11 @@ class ExoploreSimulator:
                                         _berv_ll, _mini_b7["V_sys"],
                                         _mini_b7["V_wind"])
 
-                            # 1D_alpha[_G22]: α scales the model depth via
+                            # 1D_alpha[_Gibson22]: α scales the model depth via
                             # Scale_inj; all other modes keep the config value.
                             _smf_inp = (dict(_mini_b7, Scale_inj=alpha)
                                         if _mini_b7["Ret_dim"] in
-                                           ("1D_alpha", "1D_alpha_G22")
+                                           ("1D_alpha", "1D_alpha_Gibson22")
                                         else _mini_b7)
                             model_mat[hh], _ = spec_to_mat_fraction(
                                 _smf_inp, _sjd_ll, _T0_ll, v_planet_r,
@@ -4584,7 +4584,7 @@ class ExoploreSimulator:
                                                     _night_index, hh, :])[0],
                                             _frac_ll, _ph_ll, _wout_ll,
                                             _sysrem_pass, None,
-                                            tell_mask_threshold_BLASP24=0.8,
+                                            tell_mask_threshold_Blain24=0.8,
                                             max_fit_BL19=False,
                                             sysrem_division=False,
                                             masks=False,
@@ -4704,7 +4704,7 @@ class ExoploreSimulator:
                                                     _night_index, hh, :])[0],
                                             _frac_ll, _ph_ll, _wout_ll,
                                             _sysrem_pass, None,
-                                            tell_mask_threshold_BLASP24=0.8,
+                                            tell_mask_threshold_Blain24=0.8,
                                             max_fit_BL19=False,
                                             sysrem_division=False,
                                             masks=False,
@@ -4791,7 +4791,7 @@ class ExoploreSimulator:
                                     -(len(_d) / 2.)
                                     * np.log(sf2 - 2.*R + sg2))
 
-                    elif _mini_b7["logL_choice"] == "BLASP24":
+                    elif _mini_b7["logL_choice"] == "Blain24":
                         if _mini_b7["Different_nights"]:
                             for n in with_signal_ret:
                                 log_likelihood += -0.5 * np.sum(
@@ -4860,10 +4860,10 @@ class ExoploreSimulator:
                                           - model_mat_prepared[n, _up9])
                                          / _propag_ret[_night_index, n, _up9])**2)
 
-                    elif _mini_b7["logL_choice"] == "G22":
+                    elif _mini_b7["logL_choice"] == "Gibson22":
                         # Enforce beta prior (reads from prior_bounds config).
-                        # beta is the last sampled parameter: index 4 for 1D_G22,
-                        # index 3 for 1D_alpha_G22.
+                        # beta is the last sampled parameter: index 4 for 1D_Gibson22,
+                        # index 3 for 1D_alpha_Gibson22.
                         _beta_lo, _beta_hi = _PRIOR_BOUNDS_B9[
                             _mini_b7["Ret_dim"]][-1]
                         if not (_beta_lo <= beta <= _beta_hi):
@@ -4926,18 +4926,18 @@ class ExoploreSimulator:
                         T_equ = cube[2]; v_wind = cube[3]
                     elif _mini_b7["Ret_dim"] == "1D_CtoO_met":
                         c_to_o = cube[0]; met = cube[1]
-                    elif _mini_b7["Ret_dim"] == "1D_G22":
+                    elif _mini_b7["Ret_dim"] == "1D_Gibson22":
                         log10_X1 = cube[0]; K_p = cube[1]
                         T_equ = cube[2]; v_wind = cube[3]; beta = cube[4]
                     elif _mini_b7["Ret_dim"] == "1D_alpha":
                         K_p = cube[0]; v_wind = cube[1]; alpha = cube[2]
-                    elif _mini_b7["Ret_dim"] == "1D_alpha_G22":
+                    elif _mini_b7["Ret_dim"] == "1D_alpha_Gibson22":
                         K_p = cube[0]; v_wind = cube[1]
                         alpha = cube[2]; beta = cube[3]
 
                     log_likelihood = 0.
 
-                    if _mini_b7["Ret_dim"] in ["1D", "1D_G22"]:
+                    if _mini_b7["Ret_dim"] in ["1D", "1D_Gibson22"]:
                         abundances = np.asarray(
                             [_mini_b7["vmr"][0], _mini_b7["vmr"][1], 10.**log10_X1])
                     else:
@@ -5032,7 +5032,7 @@ class ExoploreSimulator:
                                                         jj, hh, :])[0],
                                                 _frac_c, _ph_c, _wout_c,
                                                 _sysrem_pass, None,
-                                                tell_mask_threshold_BLASP24=0.8,
+                                                tell_mask_threshold_Blain24=0.8,
                                                 max_fit_BL19=False,
                                                 sysrem_division=False,
                                                 masks=False,
@@ -5142,7 +5142,7 @@ class ExoploreSimulator:
                                                         jj, hh, :])[0],
                                                 fraction, phase, without_signal,
                                                 _sysrem_pass, None,
-                                                tell_mask_threshold_BLASP24=0.8,
+                                                tell_mask_threshold_Blain24=0.8,
                                                 max_fit_BL19=False,
                                                 sysrem_division=False,
                                                 masks=False,
@@ -5224,7 +5224,7 @@ class ExoploreSimulator:
                                     log_likelihood += (
                                         -(len(_d)/2.) * np.log(sf2-2.*R+sg2))
 
-                        elif _mini_b7["logL_choice"] == "BLASP24":
+                        elif _mini_b7["logL_choice"] == "Blain24":
                             if _mini_b7["Different_nights"]:
                                 for n in with_signal_ret:
                                     log_likelihood += -0.5 * np.sum(
@@ -5246,7 +5246,7 @@ class ExoploreSimulator:
                                            useful_spectral_points_ret[_night_index,:]]
                                          )**2)
 
-                        elif _mini_b7["logL_choice"] == "G22":
+                        elif _mini_b7["logL_choice"] == "Gibson22":
                             _beta_lo2, _beta_hi2 = _PRIOR_BOUNDS_B9[
                                 _mini_b7["Ret_dim"]][-1]
                             if not (_beta_lo2 <= beta <= _beta_hi2):
@@ -5473,7 +5473,7 @@ class ExoploreSimulator:
                                     color="k", truth_color="firebrick",
                                     label_kwargs={"fontsize": 18},
                                     title_kwargs={"fontsize": 18})
-                            elif _mini_b7["Ret_dim"] in ["1D_G22", "BLASP24_beta"]:
+                            elif _mini_b7["Ret_dim"] in ["1D_Gibson22", "Blain24_beta"]:
                                 _fig9 = _corner.corner(
                                     _dat9[_mask9, :],
                                     weights=_wts9[_mask9],
@@ -5539,7 +5539,7 @@ class ExoploreSimulator:
                             _PNAMES9 = {
                                 "1D": [r"$\log_{10}X_1$", r"$K_p$",
                                        r"$T_{\rm eq}$", r"$v_{\rm wind}$"],
-                                "1D_G22": [r"$\log_{10}X_1$", r"$K_p$",
+                                "1D_Gibson22": [r"$\log_{10}X_1$", r"$K_p$",
                                            r"$T_{\rm eq}$", r"$v_{\rm wind}$",
                                            r"$\beta$"],
                             }
@@ -5555,7 +5555,7 @@ class ExoploreSimulator:
                                 "1D": [np.log10(_mini_b7["vmr"][2]),
                                        _mini_b7["K_p"], _mini_b7["T_equ"],
                                        _mini_b7["V_wind"]],
-                                "1D_G22": [np.log10(_mini_b7["vmr"][2]),
+                                "1D_Gibson22": [np.log10(_mini_b7["vmr"][2]),
                                            _mini_b7["K_p"], _mini_b7["T_equ"],
                                            _mini_b7["V_wind"], 1.0],
                             }.get(_mini_b7["Ret_dim"])
@@ -5663,7 +5663,7 @@ class ExoploreSimulator:
                         # model ONCE per order (no pRT inside the sampler; α just
                         # scales its depth).  Nominal abundance/T = the CCF
                         # template (the paper's nominal model).
-                        if (_mini_b7["Ret_dim"] in ("1D_alpha", "1D_alpha_G22")
+                        if (_mini_b7["Ret_dim"] in ("1D_alpha", "1D_alpha_Gibson22")
                                 and _ctx.get("nominal_spec") is None
                                 and _Radtrans is not None):
                             _nom_ab = np.asarray([
@@ -5968,7 +5968,7 @@ class ExoploreSimulator:
                                                 _night_index, hh, :])[0],
                                         airmass, phase, without_signal,
                                         _sysrem_pass, None,
-                                        tell_mask_threshold_BLASP24=0.8,
+                                        tell_mask_threshold_Blain24=0.8,
                                         max_fit_BL19=False,
                                         sysrem_division=False, masks=False,
                                         correct_uncertainties=False,
@@ -6285,7 +6285,7 @@ class ExoploreSimulator:
                             "+ rotation kernels). Block 4: stellar matrix + Doppler "
                             "shift + BATMAN transit fraction. Block 5: telluric "
                             "transmittances + noise injection. Block 6: preparing "
-                            "pipeline (SYSREM / BL19 / BLASP24) + CCF computation "
+                            "pipeline (SYSREM / BL19 / Blain24) + CCF computation "
                             "per order per night.",
                         "Block 7, CCF statistics, Kp-Vsys maps":
                             "Assemble CCF across orders and nights. Compute "

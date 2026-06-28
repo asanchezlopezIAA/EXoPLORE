@@ -15,13 +15,13 @@ differently:
     residuals themselves (its log-likelihood is -N/2 ln of the mean squared
     residual).  There is no per-pixel sigma anywhere in the formula.
 
-  * BLASP24 uses the KNOWN per-pixel uncertainty sigma(n), so each pixel is
+  * Blain24 uses the KNOWN per-pixel uncertainty sigma(n), so each pixel is
     weighted by 1/sigma(n)^2.
 
 With UNIFORM (homoscedastic) noise the two are almost identical.  When the
 noise varies pixel-to-pixel (heteroscedastic, as is frequently the case in
 real spectra, where telluric absorption and the blaze raise sigma in some
-channels) the per-pixel weighting of BLASP24 may yield a tighter constraint:
+channels) the per-pixel weighting of Blain24 may yield a tighter constraint:
 it down-weights the noisy pixels and retains the signal in the clean ones,
 whereas BL19's single self-estimated noise level is raised by the noisy
 minority, which dilutes the signal in the clean majority.  This reflects the
@@ -86,7 +86,7 @@ def lnL_bl19(data: np.ndarray, model: np.ndarray) -> float:
     return -0.5 * n * np.log(sf2 - 2.0 * R + sg2)
 
 
-def lnL_blasp24(data: np.ndarray, model: np.ndarray, sigma: np.ndarray) -> float:
+def lnL_blain24(data: np.ndarray, model: np.ndarray, sigma: np.ndarray) -> float:
     """Blain et al. (2024): -1/2 sum ((d - m) / sigma)^2 with known sigma(n)."""
     return -0.5 * np.sum(((data - model) / sigma) ** 2)
 
@@ -120,7 +120,7 @@ def make_figure(output: str, seed: int = 12345) -> None:
 
     def curves(data, sigma):
         bl19 = np.array([lnL_bl19(data, template(a)) for a in alphas])
-        blasp = np.array([lnL_blasp24(data, template(a), sigma) for a in alphas])
+        blasp = np.array([lnL_blain24(data, template(a), sigma) for a in alphas])
         return bl19 - bl19.max(), blasp - blasp.max()
 
     bl19_u, blasp_u = curves(f_uniform, sig_uniform)
@@ -145,7 +145,7 @@ def make_figure(output: str, seed: int = 12345) -> None:
         w_bl19 = _one_sigma_width(alphas, bl19)
         w_blasp = _one_sigma_width(alphas, blasp)
         ax.text(0.04, 0.06,
-                f"1$\\sigma$ width\nBL19  = {w_bl19:.2f}\nBLASP24 = {w_blasp:.2f}\n"
+                f"1$\\sigma$ width\nBL19  = {w_bl19:.2f}\nBlain24 = {w_blasp:.2f}\n"
                 f"ratio = {w_bl19 / w_blasp:.1f}$\\times$",
                 transform=ax.transAxes, fontsize=10, va="bottom",
                 bbox=dict(boxstyle="round", fc="white", ec="0.7"))
@@ -157,9 +157,9 @@ def make_figure(output: str, seed: int = 12345) -> None:
     fig.tight_layout()
     fig.savefig(output, dpi=180, bbox_inches="tight", facecolor="white")
     print(f"Saved: {output}")
-    print(f"  Uniform:        BL19/BLASP24 1-sigma width ratio = "
+    print(f"  Uniform:        BL19/Blain24 1-sigma width ratio = "
           f"{_one_sigma_width(alphas, bl19_u) / _one_sigma_width(alphas, blasp_u):.1f}x")
-    print(f"  Heteroscedastic: BL19/BLASP24 1-sigma width ratio = "
+    print(f"  Heteroscedastic: BL19/Blain24 1-sigma width ratio = "
           f"{_one_sigma_width(alphas, bl19_h) / _one_sigma_width(alphas, blasp_h):.1f}x")
 
 

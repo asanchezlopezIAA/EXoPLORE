@@ -204,7 +204,7 @@ src/exoplore/
 ├── atmosphere/     Atmospheric physics (petitRADTRANS wrappers, winds, chemistry)
 ├── instruments/    Instrument models (ANDES, CARMENES, CRIRES+)
 ├── observation/    Observing geometry (phase, timing, velocity, noise)
-├── pipelines/      Data preparation (BL19, BLASP24, ASL19, Gibson22, SYSREM)
+├── pipelines/      Data preparation (BL19, Blain24, ASL19, Gibson22, SYSREM)
 ├── ccf/            Cross-correlation framework (CCF kernels, Kp-Vsys maps)
 ├── plotting/       Diagnostic figures (Kp-Vsys maps, pipeline-steps, CCF trail)
 └── io/             File I/O utilities

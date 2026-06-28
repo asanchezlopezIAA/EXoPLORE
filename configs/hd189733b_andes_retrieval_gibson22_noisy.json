@@ -389,8 +389,8 @@
   "retrieval": {
     "enabled": true,
     "sampler": "nested_sampling",
-    "log_likelihood": "G22",
-    "dimensionality": "1D_G22",
+    "log_likelihood": "Gibson22",
+    "dimensionality": "1D_Gibson22",
     "retrieval_choice": 1,
     "live_points": 200,
     "constant_efficiency_mode": false

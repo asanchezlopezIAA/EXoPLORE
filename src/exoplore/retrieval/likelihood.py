@@ -13,12 +13,12 @@ Four log-likelihood formulations are implemented, selected by the
     cross-covariance between data and model.
     Suitable when absolute flux calibration is unknown.
 
-``BLASP24``
+``Blain24``
     Blain, Sánchez-López & Mollière (2024): chi-squared log-likelihood
     using propagated per-pixel uncertainties.
     Requires well-calibrated uncertainties.
 
-``G22``
+``Gibson22``
     Gibson et al. (2022)-style: chi-squared with a global noise-scaling
     parameter β, plus a β penalty term ``-N ln β``.
     Accounts for under/over-estimated uncertainties.
@@ -93,11 +93,11 @@ def log_likelihood_bl19(
 
 
 # ---------------------------------------------------------------------------
-# BLASP24 log-likelihood
+# Blain24 log-likelihood
 # ---------------------------------------------------------------------------
 
 
-def log_likelihood_blasp24(
+def log_likelihood_blain24(
     data_matrix: np.ndarray,
     model_matrix: np.ndarray,
     uncertainties: np.ndarray,
@@ -133,11 +133,11 @@ def log_likelihood_blasp24(
 
 
 # ---------------------------------------------------------------------------
-# G22 log-likelihood (noise-scaling β)
+# Gibson22 log-likelihood (noise-scaling β)
 # ---------------------------------------------------------------------------
 
 
-def log_likelihood_g22(
+def log_likelihood_gibson22(
     data_matrix: np.ndarray,
     model_matrix: np.ndarray,
     uncertainties: np.ndarray,
@@ -202,8 +202,8 @@ def log_likelihood_g22(
 #: Mapping from string name to likelihood function.
 LIKELIHOOD_REGISTRY: dict = {
     "BL19": log_likelihood_bl19,
-    "BLASP24": log_likelihood_blasp24,
-    "G22": log_likelihood_g22,
+    "Blain24": log_likelihood_blain24,
+    "Gibson22": log_likelihood_gibson22,
 }
 
 
@@ -219,15 +219,15 @@ def compute_log_likelihood(
     Parameters
     ----------
     choice:
-        One of ``"BL19"``, ``"BLASP24"``, ``"G22"``.
+        One of ``"BL19"``, ``"Blain24"``, ``"Gibson22"``.
     data_matrix:
         Residual data, shape ``(n_in_transit, n_good_pixels)``.
     model_matrix:
         Template model, same shape.
     uncertainties:
-        Per-pixel σ.  Required for ``"BLASP24"`` and ``"G22"``; ignored for ``"BL19"``.
+        Per-pixel σ.  Required for ``"Blain24"`` and ``"Gibson22"``; ignored for ``"BL19"``.
     beta:
-        Noise scaling.  Used only for ``"G22"``.
+        Noise scaling.  Used only for ``"Gibson22"``.
 
     Returns
     -------
@@ -247,11 +247,11 @@ def compute_log_likelihood(
         )
     if choice == "BL19":
         return log_likelihood_bl19(data_matrix, model_matrix)
-    if choice == "BLASP24":
+    if choice == "Blain24":
         if uncertainties is None:
-            raise ValueError("uncertainties must be provided for BLASP24.")
-        return log_likelihood_blasp24(data_matrix, model_matrix, uncertainties)
-    if choice == "G22":
+            raise ValueError("uncertainties must be provided for Blain24.")
+        return log_likelihood_blain24(data_matrix, model_matrix, uncertainties)
+    if choice == "Gibson22":
         if uncertainties is None:
             raise ValueError(f"uncertainties must be provided for {choice}.")
         fn = LIKELIHOOD_REGISTRY[choice]

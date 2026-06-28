@@ -10,7 +10,7 @@ Usage
 python scripts/plot_corner_overlay.py \\
     --output-root /path/to/EXoPLORE_clean_run/HD189733b/CARMENES_NIR/transit \\
     --runs  BL19_withsignal_1nights_SNR_comb1_simdata_noiseless_stdnoisex1 \\
-            BLASP24_withsignal_1nights_SNR_comb1_simdata_noiseless_stdnoisex1 \\
+            Blain24_withsignal_1nights_SNR_comb1_simdata_noiseless_stdnoisex1 \\
             Gibson22_withsignal_1nights_SNR_comb1_simdata_noiseless_stdnoisex1 \\
     --labels "Brogi & Line (2019)" "Blain et al. (2024)" "Gibson et al. (2022)" \\
     --truths -3.0 149.4 1170.0 0.0 \\

@@ -17,11 +17,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
 # ── Run directories ────────────────────────────────────────────────────────────
 ROOT = "/Users/alexsl/Documents/Simulador/EXoPLORE_clean_run/HD189733b/CARMENES_NIR/transit"
-RUN_PRT  = os.path.join(ROOT, "BLASP24_withsignal_1nights_SNR_comb1_simdata_noiseless_stdnoisex1")
+RUN_PRT  = os.path.join(ROOT, "Blain24_withsignal_1nights_SNR_comb1_simdata_noiseless_stdnoisex1")
 RUN_EMUL = RUN_PRT   # emulator writes to same sim_name, stats.dat will be overwritten
 
 # Log files
-LOG_PRT  = "run_log_carmenes_retrieval_blasp24pipe_blasp24.txt"
+LOG_PRT  = "run_log_carmenes_retrieval_blain24pipe_blain24.txt"
 LOG_EMUL = "run_log_carmenes_emulator.txt"
 
 # Truth values (HD 189733 b, 1D: [log10_X_H2O, Kp, T_eq, Vrest])
@@ -110,9 +110,9 @@ def main():
     stats_emul = _parse_stats(stats_emul_path)
 
     # Fall back to previously-known pRT values (from session memory)
-    # BLASP24 pp + loglike, noiseless, order 23, pRT:
+    # Blain24 pp + loglike, noiseless, order 23, pRT:
     #   Kp=149.9, Teq=1186, Vrest=-0.06, log10X~-3
-    #   ln Z = -10.8  (from run_log_carmenes_retrieval_blasp24pipe_blasp24.txt)
+    #   ln Z = -10.8  (from run_log_carmenes_retrieval_blain24pipe_blain24.txt)
     prt_known = {
         "lnZ":    -10.8,
         "lnZ_err": 0.18,
@@ -141,7 +141,7 @@ def main():
     # ── Print comparison table ────────────────────────────────────────────────
     print("\n" + "="*70)
     print("  EMULATOR vs pRT, Full Retrieval Comparison")
-    print("  CARMENES NIR order 23 · noiseless · BLASP24 pp + loglike · 1D")
+    print("  CARMENES NIR order 23 · noiseless · Blain24 pp + loglike · 1D")
     print("="*70)
 
     print(f"\n{'':30s}  {'pRT (true)':>18s}  {'Emulator':>18s}")

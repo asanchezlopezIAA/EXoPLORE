@@ -415,7 +415,7 @@ class PipelineConfig:
     ----------
     name:
         Named reduction recipe: ``"BL19"``, ``"ASL19"``,
-        ``"BLASP24"``, ``"Gibson22"``.
+        ``"Blain24"``, ``"Gibson22"``.
     sysrem_iterations:
         Number of SYSREM (PCA-like) passes.
     snr_mask_threshold:
@@ -583,14 +583,14 @@ class RetrievalConfig:
         ``"nested_sampling"`` (MultiNest) or ``"mcmc"`` (emcee).
     log_likelihood:
         Log-likelihood formulation: ``"BL19"`` (matched filter, noise-free),
-        ``"BLASP24"`` (chi-squared with propagated uncertainties),
-        ``"G22"`` (chi-squared with noise hyperparameter β; requires
-        ``dimensionality="1D_G22"``).
+        ``"Blain24"`` (chi-squared with propagated uncertainties),
+        ``"Gibson22"`` (chi-squared with noise hyperparameter β; requires
+        ``dimensionality="1D_Gibson22"``).
     dimensionality:
         Retrieval parameter space.  Supported values and free parameters:
 
-        ``"1D"``, log10(X_H2O), Kp, T_eq, v_wind  [use with BL19/BLASP24]
-        ``"1D_G22"``, same + β noise scaling           [use with G22 only]
+        ``"1D"``, log10(X_H2O), Kp, T_eq, v_wind  [use with BL19/Blain24]
+        ``"1D_Gibson22"``, same + β noise scaling           [use with Gibson22 only]
         ``"1D_CtoO_met"``, C/O ratio, log10(Z/Z☉) via easyCHEM
         ``"1D_extended"``, log10(X_H2O,CH4,NH3,CO,CO2,HCN) + Kp + T_eq + v_wind + β
         ``"1D_extended_fast"``, same abundances + T_eq only (Kp/v_wind fixed)
@@ -641,7 +641,7 @@ class RetrievalConfig:
     """
     enabled: bool = False
     sampler: str = "nested_sampling"
-    log_likelihood: str = "BLASP24"
+    log_likelihood: str = "Blain24"
     dimensionality: str = "1D_CtoO_met"
     retrieval_choice: int = 1
     time_resolution: bool = False
@@ -662,7 +662,7 @@ class RetrievalConfig:
     prior_bounds: Dict[str, List[Any]] = field(default_factory=lambda: {
         "1D":               [[-8.0, 0.0], [85.0, 200.0],
                              [400.0, 1500.0], [-25.0, 25.0]],
-        "1D_G22":           [[-8.0, 0.0], [85.0, 200.0],
+        "1D_Gibson22":           [[-8.0, 0.0], [85.0, 200.0],
                              [400.0, 1500.0], [-25.0, 25.0], [0.01, 100.0]],
         "1D_CtoO_met":      [[0.0, 2.0], [-2.5, 2.5]],
         "1D_extended":      [[-8.0, 0.0], [-8.0, 0.0], [-8.0, 0.0],
@@ -677,7 +677,7 @@ class RetrievalConfig:
 
     # ── Spectrum emulator (EXPERIMENTAL, see src/exoplore/retrieval/emulator.py) ──
     # Replaces call_pRT with a PCA+MLP surrogate trained on pre-computed spectra.
-    # Benchmarked on CARMENES NIR order 23, noiseless, BLASP24, 1D:
+    # Benchmarked on CARMENES NIR order 23, noiseless, Blain24, 1D:
     #   speedup 1.9× (Block 9: 11.65 min vs 22.33 min), but posteriors 2-3×
     #   broader and T_eq biased. NOT recommended for scientific retrievals.
     use_emulator: bool = False

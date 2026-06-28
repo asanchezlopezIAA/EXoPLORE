@@ -159,7 +159,7 @@ inhomogeneous truth, which is exactly what the forward model is for.
 
 To expose the moving planet signal we must remove the stationary telluric and
 stellar contributions. EXoPLORE implements several literature recipes
-(`pipeline.name`: BL19, BLASP24, ASL19, Gibson22), all of which share the same
+(`pipeline.name`: BL19, Blain24, ASL19, Gibson22), all of which share the same
 logic:
 
 1. **Normalise** each spectrum to remove the blaze and broadband throughput,
@@ -303,18 +303,18 @@ intervals (their test statistic follows a χ² distribution). Estimating the noi
 from the data itself is a well-motivated choice when reliable per-pixel
 uncertainties are not readily available.
 
-**Blain, Sánchez-López & Mollière (2024, AJ, 167, 179), `BLASP24`.** This uses
+**Blain, Sánchez-López & Mollière (2024, AJ, 167, 179), `Blain24`.** This uses
 the **known** per-pixel uncertainty `σ(n)`, propagated through the preparation
 pipeline, in a chi-square:
 
 ```
-ln L_BLASP24 = -(1/2) · Σ_n [ (d(n) - m(n)) / σ(n) ]².
+ln L_Blain24 = -(1/2) · Σ_n [ (d(n) - m(n)) / σ(n) ]².
 ```
 
 Each pixel is weighted by `1/σ(n)²`. The formulation derives from the framework
 of Gibson et al. (2020, MNRAS, 493, 2215).
 
-**Gibson et al. (2022, MNRAS, 512, 4618), `G22`.** The same chi-square with a
+**Gibson et al. (2022, MNRAS, 512, 4618), `Gibson22`.** The same chi-square with a
 global scale factor `β` multiplying the uncertainties, plus a `-N ln β` penalty.
 `β` absorbs a uniform under- or over-estimate of the noise. It is identifiable
 on noisy data but diverges on noiseless data (the residuals vanish, so the
@@ -323,7 +323,7 @@ likelihood is maximised by `β → 0`); for noiseless bias tests `β` is pinned 
 
 ### Whether the difference matters depends on the noise structure
 
-The per-pixel weighting of BLASP24 is not always the better approach. The script
+The per-pixel weighting of Blain24 is not always the better approach. The script
 `scripts/illustrate_likelihood_weighting.py` examines this on a toy absorption
 spectrum, comparing how tightly each likelihood constrains the line depth under
 two noise structures of **identical total variance**:
@@ -344,17 +344,17 @@ Brogi & Line (2019) in this particular toy case. Generated with
 - With **uniform** noise the two agree to within ten per cent. The per-pixel
   weighting has nothing to redistribute.
 - With **heteroscedastic** noise (the same noise budget concentrated in a
-  minority of pixels) the BLASP24 constraint is roughly five times tighter in
+  minority of pixels) the Blain24 constraint is roughly five times tighter in
   this configuration.
 
 The mechanism follows from the formulas. The `s_f²` term of BL19 is a single
 number for the whole spectrum, so a noisy minority of pixels inflates that
-estimate and dilutes the signal carried by the clean majority. BLASP24 uses
+estimate and dilutes the signal carried by the clean majority. Blain24 uses
 `σ(n)` directly and assigns the noisy pixels little weight, preserving the
 signal in the clean ones. Real spectra are frequently heteroscedastic (telluric
 cores, blaze edges, and channels near deep lines all carry elevated noise), so
 for datasets with strong per-pixel noise variation, such as the single noisy
-ANDES order considered later in this documentation, the BLASP24 and G22
+ANDES order considered later in this documentation, the Blain24 and Gibson22
 formulations may yield tighter posteriors. This does not imply that BL19 is less
 accurate: when the noise among the retained pixels is uniform the two converge,
 and BL19 remains a sensible choice when reliable per-pixel uncertainties are not

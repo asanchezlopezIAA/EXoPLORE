@@ -16,7 +16,7 @@ Numba is used internally.
 References
 ----------
 Brogi & Line 2019 (BL19), likelihood-based CCF framework
-Blain et al. 2024 (BLASP24), improved CCF weighting scheme
+Blain et al. 2024 (Blain24), improved CCF weighting scheme
 """
 
 from __future__ import annotations

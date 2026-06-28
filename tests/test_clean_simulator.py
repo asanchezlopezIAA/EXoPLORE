@@ -20,5 +20,5 @@ def test_clean_simulator_summary():
     assert summary.instrument == "ANDES_YJHK"
     assert summary.event_type == "transit"      # clean name
     assert summary.n_nights == 1
-    assert summary.pipeline == "BLASP24"
+    assert summary.pipeline == "Blain24"
     assert summary.retrieval_enabled is False

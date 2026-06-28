@@ -4,7 +4,7 @@
    **HIGHLY EXPERIMENTAL, NOT VALIDATED FOR SCIENTIFIC USE.**
 
    This emulator was benchmarked against the true pRT retrieval on a
-   noiseless CARMENES NIR order-23 1D retrieval (HD 189733 b, BLASP24
+   noiseless CARMENES NIR order-23 1D retrieval (HD 189733 b, Blain24
    pipeline and loglike).  The emulator was trained on 100 000 spectra
    with a narrowed prior (log₁₀X ∈ [-5, -1], T_eq ∈ [600, 1800] K),
    achieving CCF agreement of 0.9995 (min 0.9988) on held-out test

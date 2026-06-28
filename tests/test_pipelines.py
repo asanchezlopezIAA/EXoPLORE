@@ -1,5 +1,5 @@
 """
-Tests for exoplore.pipelines, masking, SYSREM, BL19, BLASP24.
+Tests for exoplore.pipelines, masking, SYSREM, BL19, Blain24.
 """
 
 import numpy as np
@@ -14,7 +14,7 @@ from exoplore.pipelines.masking import (
 )
 from exoplore.pipelines.sysrem import sysrem_iteration, apply_sysrem
 from exoplore.pipelines.bl19 import bl19_normalise, bl19_telluric_correct, run_bl19_pipeline
-from exoplore.pipelines.blasp24 import blasp24_normalise, run_blasp24_pipeline
+from exoplore.pipelines.blain24 import blain24_normalise, run_blain24_pipeline
 
 
 # ---------------------------------------------------------------------------
@@ -137,10 +137,10 @@ class TestBL19:
 
 
 # ---------------------------------------------------------------------------
-# BLASP24 pipeline
+# Blain24 pipeline
 # ---------------------------------------------------------------------------
 
-class TestBLASP24:
+class TestBlain24:
     def setup_method(self):
         rng = np.random.default_rng(99)
         self.n_spec, self.n_pix = 15, 60
@@ -150,18 +150,18 @@ class TestBLASP24:
         self.good = np.arange(self.n_pix)
 
     def test_normalise_output_shape(self):
-        out, err, mask, gp = blasp24_normalise(self.wave, self.data, self.unc, self.good)
+        out, err, mask, gp = blain24_normalise(self.wave, self.data, self.unc, self.good)
         assert out.shape == self.data.shape
         assert err.shape == self.data.shape
 
     def test_normalise_with_mask(self):
         # Mark first 5 pixels as bad
         good = np.arange(5, self.n_pix)
-        out, err, mask, gp = blasp24_normalise(self.wave, self.data, self.unc, good)
+        out, err, mask, gp = blain24_normalise(self.wave, self.data, self.unc, good)
         assert 0 in mask  # masked pixels still masked
 
     def test_run_pipeline_shape(self):
-        out, err, mask, gp = run_blasp24_pipeline(self.wave, self.data, self.unc, self.good)
+        out, err, mask, gp = run_blain24_pipeline(self.wave, self.data, self.unc, self.good)
         assert out.shape == self.data.shape
 
 
@@ -317,7 +317,7 @@ class TestRemoveTelluricLinesFitOg:
 # ---------------------------------------------------------------------------
 
 class TestComputeKSigma:
-    """Smoke tests for exoplore.pipelines.blasp24.compute_k_sigma.
+    """Smoke tests for exoplore.pipelines.blain24.compute_k_sigma.
 
     The function requires .npz files on disk, so we only test that it
     imports and has the correct signature; the actual computation is
@@ -325,12 +325,12 @@ class TestComputeKSigma:
     """
 
     def test_importable(self):
-        from exoplore.pipelines.blasp24 import compute_k_sigma
+        from exoplore.pipelines.blain24 import compute_k_sigma
         assert callable(compute_k_sigma)
 
     def test_signature(self):
         import inspect
-        from exoplore.pipelines.blasp24 import compute_k_sigma
+        from exoplore.pipelines.blain24 import compute_k_sigma
         sig = inspect.signature(compute_k_sigma)
         params = list(sig.parameters.keys())
         assert "data_dir" in params
@@ -341,7 +341,7 @@ class TestComputeKSigma:
         assert "return_per_night" in params
 
     def test_missing_file_raises(self, tmp_path):
-        from exoplore.pipelines.blasp24 import compute_k_sigma
+        from exoplore.pipelines.blain24 import compute_k_sigma
         orig_orders = np.array([0])
         order_selection = [np.array([0])]
         n_spectra_store = np.array([3])

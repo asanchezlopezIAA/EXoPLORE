@@ -32,7 +32,7 @@ Usage
 Run 30 realisations and build the plot::
 
     python scripts/run_pp_calibration.py \
-        --config configs/hd189733b_andes_retrieval_blasp24_noisy.json \
+        --config configs/hd189733b_andes_retrieval_blain24_noisy.json \
         --n 30 --base-seed 1000 --live-points 100 \
         --output-root /path/to/pp_calibration \
         --truths -3.0 149.4 1170.0 0.0 \

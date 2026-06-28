@@ -22,7 +22,7 @@ the function body and (b) fully described in the docstring.  No
 scientific logic changed; no legacy code touched.
 
 pipelines/prepare.py:
-  preparing_pipeline — remove tell_mask_threshold_BLASP24 (BLASP24 branch
+  preparing_pipeline — remove tell_mask_threshold_Blain24 (Blain24 branch
     hardcodes 1e-16, never reads the passed value) and sysrem_division
     (never referenced anywhere in the body); add full descriptions to
     remaining optional parameters.
@@ -38,8 +38,8 @@ pipelines/masking.py:
     template shape for the safety-window expansion loop.
   All internal merge_masks call sites updated to 2-argument form.
 
-pipelines/blasp24.py:
-  pipeline_BLASP24_tellcorr — add full NumPy-style Parameters section
+pipelines/blain24.py:
+  pipeline_Blain24_tellcorr — add full NumPy-style Parameters section
     (was previously bare: "Returns" only).
 
 ccf/statistics.py:

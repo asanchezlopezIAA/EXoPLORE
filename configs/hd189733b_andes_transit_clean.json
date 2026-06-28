@@ -354,7 +354,7 @@
     "safety_window_pixels": 7
   },
   "pipeline": {
-    "name": "BLASP24",
+    "name": "Blain24",
     "sysrem_iterations": 4,
     "snr_mask_threshold": 10.0,
     "prepare_template": true,
@@ -387,7 +387,7 @@
   "retrieval": {
     "enabled": false,
     "sampler": "nested_sampling",
-    "log_likelihood": "BLASP24",
+    "log_likelihood": "Blain24",
     "dimensionality": "1D_CtoO_met",
     "retrieval_choice": 1,
     "time_resolution": false,

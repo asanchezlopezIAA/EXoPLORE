@@ -16,7 +16,7 @@ sysrem
     SYSREM systematic noise removal (Tamuz et al. 2005).
 bl19
     Brogi & Line (2019) normalisation + telluric correction.
-blasp24
+blain24
     Blain, Sánchez-López & Mollière (2024) polynomial pipeline.
 tellurics
     Telluric transmittance loading and fixed-telluric pipeline.
@@ -62,11 +62,11 @@ from exoplore.pipelines.bl19 import (
     pipeline_BL19_norm,
     pipeline_BL19_tellcorr,
 )
-from exoplore.pipelines.blasp24 import (
+from exoplore.pipelines.blain24 import (
     # clean API
-    blasp24_normalise,
-    blasp24_telluric_correct,
-    run_blasp24_pipeline,
+    blain24_normalise,
+    blain24_telluric_correct,
+    run_blain24_pipeline,
     # public API
     remove_telluric_lines_fit,
     remove_throughput_fit,
@@ -118,11 +118,11 @@ __all__ = [
     # ---- BL19 ----
     "pipeline_BL19_norm",
     "pipeline_BL19_tellcorr",
-    # ---- clean BLASP24 ----
-    "blasp24_normalise",
-    "blasp24_telluric_correct",
-    "run_blasp24_pipeline",
-    # ---- BLASP24 ----
+    # ---- clean Blain24 ----
+    "blain24_normalise",
+    "blain24_telluric_correct",
+    "run_blain24_pipeline",
+    # ---- Blain24 ----
     "remove_telluric_lines_fit",
     "remove_throughput_fit",
     "compute_k_sigma",

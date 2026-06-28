@@ -1,11 +1,11 @@
 """
-exoplore.pipelines.blasp24
+exoplore.pipelines.blain24
 ==========================
 
 Blain, Sánchez-López & Mollière (2024) data-preparation pipeline for
 high-resolution spectroscopic time series.
 
-The BLASP24 pipeline (Blain, Sánchez-López & Mollière 2024, AJ)
+The Blain24 pipeline (Blain, Sánchez-López & Mollière 2024, AJ)
 normalises and optionally telluric-corrects each spectrum using a
 weighted polynomial fit.  Unlike BL19, it propagates uncertainties
 through the fit, accounting for degrees of freedom lost in the
@@ -33,7 +33,7 @@ import numpy as np
 # ---------------------------------------------------------------------------
 
 
-def blasp24_normalise(
+def blain24_normalise(
     wavelengths: np.ndarray,
     data: np.ndarray,
     uncertainties: np.ndarray,
@@ -43,7 +43,7 @@ def blasp24_normalise(
     mask_threshold: float = 1e-16,
     propagate_uncertainties: bool = True,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """BLASP24 normalisation: divide each spectrum by a polynomial fit.
+    """Blain24 normalisation: divide each spectrum by a polynomial fit.
 
     A polynomial of degree ``polynomial_degree`` is fitted to each
     spectrum over ``good_pixels`` using optional inverse-variance weights,
@@ -147,7 +147,7 @@ def blasp24_normalise(
 # ---------------------------------------------------------------------------
 
 
-def blasp24_telluric_correct(
+def blain24_telluric_correct(
     data: np.ndarray,
     uncertainties: np.ndarray,
     good_pixels: np.ndarray,
@@ -157,7 +157,7 @@ def blasp24_telluric_correct(
     polynomial_degree: int = 2,
     propagate_uncertainties: bool = True,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """BLASP24 telluric correction: airmass-based polynomial fit.
+    """Blain24 telluric correction: airmass-based polynomial fit.
 
     For each spectral pixel in ``good_pixels``, fits a polynomial in
     airmass and divides to correct for telluric absorption variation.
@@ -229,11 +229,11 @@ def blasp24_telluric_correct(
 
 
 # ---------------------------------------------------------------------------
-# Convenience: run full BLASP24 pipeline in one call
+# Convenience: run full Blain24 pipeline in one call
 # ---------------------------------------------------------------------------
 
 
-def run_blasp24_pipeline(
+def run_blain24_pipeline(
     wavelengths: np.ndarray,
     data: np.ndarray,
     uncertainties: np.ndarray,
@@ -244,7 +244,7 @@ def run_blasp24_pipeline(
     apply_telluric_correction: bool = False,
     telluric_mask_threshold: float = 0.8,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """Run the full BLASP24 normalisation (+ optional telluric) pipeline.
+    """Run the full Blain24 normalisation (+ optional telluric) pipeline.
 
     Parameters
     ----------
@@ -273,7 +273,7 @@ def run_blasp24_pipeline(
     -------
     data_prepared, uncertainties_prepared, mask, good_pixels.
     """
-    data_norm, unc_norm, mask, gp = blasp24_normalise(
+    data_norm, unc_norm, mask, gp = blain24_normalise(
         wavelengths, data, uncertainties, good_pixels,
         weights=weights,
         polynomial_degree=polynomial_degree,
@@ -283,7 +283,7 @@ def run_blasp24_pipeline(
             raise ValueError(
                 "airmass must be provided when apply_telluric_correction=True."
             )
-        return blasp24_telluric_correct(
+        return blain24_telluric_correct(
             data_norm, unc_norm, gp, airmass,
             weights=weights,
             mask_threshold=telluric_mask_threshold,

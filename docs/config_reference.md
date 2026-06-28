@@ -368,14 +368,14 @@ where `T_ref` is the reference transmission at airmass `X_ref` and `X` is the ai
 
 Four pipeline recipes are available. They fall into two groups depending on whether they use SYSREM for systematics removal:
 
-**No SYSREM**, `"BL19"`, `"BLASP24"`: systematics are removed by telluric correction and spectral fitting, not by iterative SYSREM. The `sysrem_iterations` field is ignored for these pipelines.
+**No SYSREM**, `"BL19"`, `"Blain24"`: systematics are removed by telluric correction and spectral fitting, not by iterative SYSREM. The `sysrem_iterations` field is ignored for these pipelines.
 
 **SYSREM-based**, `"ASL19"`, `"Gibson22"`: systematics removal relies on SYSREM iterations. The `sysrem_iterations` field controls how many iterations are applied.
 
 | Field | Valid values | Description |
 |---|---|---|
-| `name` | `"BL19"`, `"BLASP24"`, `"ASL19"`, `"Gibson22"` | Data reduction pipeline to use. `"BL19"`: Brogi & Line (2019)-style pipeline, normalisation, telluric mask, telluric correction, noisy-column masking. No SYSREM. `"BLASP24"`: Blain, Sánchez-López & Mollière (2024, AJ, 167, 179), throughput fit removal and telluric fit removal. No SYSREM. `"ASL19"`: Sánchez-López et al. (2019), BL19 normalisation + telluric-window mask + SYSREM iterations. `"Gibson22"`: Gibson et al. (2022), out-of-transit normalisation + SYSREM (blaze correction disabled by default). |
-| `sysrem_iterations` | int ≥ 1 | Number of SYSREM iterations. Only used by `"ASL19"` and `"Gibson22"`. Ignored for `"BL19"` and `"BLASP24"`. More iterations remove more correlated systematics but also attenuate the planet signal. Typical range: 2 to 8. Start with 4 and optimise. |
+| `name` | `"BL19"`, `"Blain24"`, `"ASL19"`, `"Gibson22"` | Data reduction pipeline to use. `"BL19"`: Brogi & Line (2019)-style pipeline, normalisation, telluric mask, telluric correction, noisy-column masking. No SYSREM. `"Blain24"`: Blain, Sánchez-López & Mollière (2024, AJ, 167, 179), throughput fit removal and telluric fit removal. No SYSREM. `"ASL19"`: Sánchez-López et al. (2019), BL19 normalisation + telluric-window mask + SYSREM iterations. `"Gibson22"`: Gibson et al. (2022), out-of-transit normalisation + SYSREM (blaze correction disabled by default). |
+| `sysrem_iterations` | int ≥ 1 | Number of SYSREM iterations. Only used by `"ASL19"` and `"Gibson22"`. Ignored for `"BL19"` and `"Blain24"`. More iterations remove more correlated systematics but also attenuate the planet signal. Typical range: 2 to 8. Start with 4 and optimise. |
 | `snr_mask_threshold` | float > 0 | SNR threshold below which columns (wavelength channels) are masked before SYSREM. Pixels with SNR < threshold are excluded. Typical: 10. |
 | `prepare_template` | `true`, `false` | If `true`, apply the same filtering to the CCF template as was applied to the data, so that the template correctly represents the distorted planetary signal seen in the residuals. **Always set `true` for rigorous CCF computation and retrievals.** How the template is filtered depends on the pipeline, see the note below. |
 | `optimize_sysrem_order_by_order` | `true`, `false` | If `true`, choose the optimal number of SYSREM iterations independently for each spectral order based on `optimize_criterion`. Slower but can improve sensitivity. |
@@ -389,7 +389,7 @@ Four pipeline recipes are available. They fall into two groups depending on whet
 
 When SYSREM is applied to the data it does not merely remove telluric and stellar systematics, it also distorts the underlying planetary signal in a time- and wavelength-dependent way. A CCF template that does not account for this distortion will be mismatched to the residual data, reducing detection significance and preventing accurate retrievals. Therefore, **`prepare_template: true` is strongly recommended for all pipelines.** The implementation differs by pipeline:
 
-- **`BL19` / `BLASP24`**, the template is normalised and continuum-corrected in the same way as the data (polynomial fits, telluric correction). No SYSREM is involved, so the template retains full spectral line structure.
+- **`BL19` / `Blain24`**, the template is normalised and continuum-corrected in the same way as the data (polynomial fits, telluric correction). No SYSREM is involved, so the template retains full spectral line structure.
 
 - **`ASL19` / `Gibson22`**, the template must be filtered to match what SYSREM does to the data, but running SYSREM directly on the template would destroy its time-varying in-transit structure. To that end, EXoPLORE uses the fast model-filtering technique of Gibson et al. (2022, MNRAS 512, 4618 to 4638): during the SYSREM run on the data, the time-eigenvectors **U** (one per iteration) are stored. The projection matrix
 
@@ -449,7 +449,7 @@ When SYSREM is applied to the data it does not merely remove telluric and stella
 "retrieval": {
   "enabled": false,
   "sampler": "nested_sampling",
-  "log_likelihood": "BLASP24",
+  "log_likelihood": "Blain24",
   "dimensionality": "1D_CtoO_met",
   "retrieval_choice": 1,
   "time_resolution": false,
@@ -473,8 +473,8 @@ When SYSREM is applied to the data it does not merely remove telluric and stella
 |---|---|---|
 | `enabled` | `true`, `false` | Master switch. Set to `false` to skip retrieval entirely (default for exploration runs). When `true`, the retrieval runs at the **end of the same simulation** using the spectral matrices built in memory, it does not re-load previously saved files. To re-run the retrieval on old data you must re-run the full simulation. |
 | `sampler` | `"nested_sampling"`, `"mcmc"` | Bayesian sampler. `"nested_sampling"`: MultiNest via PyMultiNest (faster, better for multimodal posteriors). `"mcmc"`: emcee ensemble sampler. |
-| `log_likelihood` | `"BLASP24"`, `"BL19"`, `"G22"` | Log-likelihood function. **Coupled to `dimensionality`, see below.** `"BLASP24"`: Blain, Sánchez-López & Mollière (2024, AJ, 167, 179), per-order noise scaling; use with `"1D"`, `"1D_CtoO_met"`, or `"2D"`. `"BL19"`: Brogi & Line (2019), analytic marginalisation over signal scaling; use with `"1D"`, `"1D_CtoO_met"`, or `"2D"`. `"G22"`: Gibson et al. (2022), chi-squared with free β noise-scaling; **must be used exclusively with `"1D_G22"`**. Any invalid combination raises a `ValueError` at runtime. |
-| `dimensionality` | `"1D"`, `"1D_G22"`, `"1D_CtoO_met"`, `"1D_extended"`, `"1D_extended_fast"`, `"2D"` | Retrieval parameter space. **Coupled to `log_likelihood`, see above.** `"1D"`: single VMR (H₂O), Kp, T_eq, wind velocity (4 params), use with BL19 or BLASP24. `"1D_G22"`: same plus β noise-scaling parameter (5 params), **use only with G22 likelihood**. `"1D_CtoO_met"`: C/O ratio and metallicity via EasyChem (2 params, Kp and V_wind fixed to planet values), use with BL19 or BLASP24. `"1D_extended"`: log₁₀(VMR) for H₂O, CH₄, NH₃, CO, CO₂, HCN plus Kp, T_eq, and wind velocity (9 params), multi-species retrieval; use with BL19 or BLASP24. `"1D_extended_fast"`: same species plus T_eq only (Kp and wind velocity fixed; 7 params). `"2D"`: morning and evening limb VMR and T_eq independently (limb asymmetry retrieval), use with BL19 or BLASP24. |
+| `log_likelihood` | `"Blain24"`, `"BL19"`, `"Gibson22"` | Log-likelihood function. **Coupled to `dimensionality`, see below.** `"Blain24"`: Blain, Sánchez-López & Mollière (2024, AJ, 167, 179), per-order noise scaling; use with `"1D"`, `"1D_CtoO_met"`, or `"2D"`. `"BL19"`: Brogi & Line (2019), analytic marginalisation over signal scaling; use with `"1D"`, `"1D_CtoO_met"`, or `"2D"`. `"Gibson22"`: Gibson et al. (2022), chi-squared with free β noise-scaling; **must be used exclusively with `"1D_Gibson22"`**. Any invalid combination raises a `ValueError` at runtime. |
+| `dimensionality` | `"1D"`, `"1D_Gibson22"`, `"1D_CtoO_met"`, `"1D_extended"`, `"1D_extended_fast"`, `"2D"` | Retrieval parameter space. **Coupled to `log_likelihood`, see above.** `"1D"`: single VMR (H₂O), Kp, T_eq, wind velocity (4 params), use with BL19 or Blain24. `"1D_Gibson22"`: same plus β noise-scaling parameter (5 params), **use only with Gibson22 likelihood**. `"1D_CtoO_met"`: C/O ratio and metallicity via EasyChem (2 params, Kp and V_wind fixed to planet values), use with BL19 or Blain24. `"1D_extended"`: log₁₀(VMR) for H₂O, CH₄, NH₃, CO, CO₂, HCN plus Kp, T_eq, and wind velocity (9 params), multi-species retrieval; use with BL19 or Blain24. `"1D_extended_fast"`: same species plus T_eq only (Kp and wind velocity fixed; 7 params). `"2D"`: morning and evening limb VMR and T_eq independently (limb asymmetry retrieval), use with BL19 or Blain24. |
 | `retrieval_choice` | int | Selects the specific retrieval configuration within a dimensionality class. See the retrieval module documentation. |
 | `time_resolution` | `true`, `false` | If `true`, perform a time-resolved retrieval splitting the transit into time bins. |
 | `time_resolution_step` | int | Number of exposures per time bin for time-resolved retrieval. |

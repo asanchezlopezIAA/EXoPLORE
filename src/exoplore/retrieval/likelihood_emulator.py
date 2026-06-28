@@ -7,7 +7,7 @@
    parameters θ directly to logL(θ | data), bypassing petitRADTRANS and the
    CCF/BL19 pipeline at inference time.  Both implemented variants were
    benchmarked against the true pRT retrieval on a noiseless CARMENES NIR
-   order-23 1D retrieval (HD 189733 b, BLASP24 pipeline and loglike) and
+   order-23 1D retrieval (HD 189733 b, Blain24 pipeline and loglike) and
    **neither performs acceptably**:
 
    Single-round emulator (3 000 uniform samples, 18 min training)

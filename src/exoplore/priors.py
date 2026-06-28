@@ -248,7 +248,7 @@ def standard_1d_prior_set(
     beta_range:
         (min, max) for the noise scaling β.
     include_beta:
-        If True, add a beta parameter (for G22 log-likelihood).
+        If True, add a beta parameter (for Gibson22 log-likelihood).
 
     Returns
     -------
