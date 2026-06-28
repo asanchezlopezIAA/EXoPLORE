@@ -510,7 +510,7 @@ def preparing_pipeline(
             _n_used = _n_sysrem
 
             # Continuum-normalisation estimator:
-            #   "cm2024"  (default), Cheverall & Madhusudhan 2024 §2.2: sliding
+            #   "cm2024"  (default), following Cheverall & Madhusudhan 2024: sliding
             #             31-px 95th-percentile envelope + 2nd-order fit (the
             #             recipe Cheverall+26 inherit).
             #   "maxima", ASL19 80-bin maxima + 2nd-order fit.

@@ -174,7 +174,7 @@ def chev26_normalise(
     percentile: float = 95.0,
     degree: int = 2,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Pseudo-continuum normalisation, Cheverall & Madhusudhan (2024) §2.2.
+    """Pseudo-continuum normalisation following Cheverall & Madhusudhan (2024).
 
     This is the exact recipe Cheverall et al. (2026) inherit ("normalized
     using a second-order polynomial fit to the continuum … following the
@@ -372,7 +372,7 @@ def chev26_duration_map(ccf_exp, v_ccf, phase, berv, kp, vsys,
     At fixed Kp, shift each exposure's order-summed matched-filter CCF to the
     planet rest frame (``vp = Kp sin(2π φ) + Vsys - BERV``), order the exposures
     by proximity to mid-transit, and co-add the N_in most-central ones with
-    equal weight (paper Sec. 3.2).  S/N uses the §2.4 'point' normalisation
+    equal weight.  S/N uses the 'point' normalisation
     (per-velocity std of co-add values >``exclude`` km/s away), identical to
     the main Kp-Vsys map.
 
@@ -411,7 +411,7 @@ def chev26_duration_map(ccf_exp, v_ccf, phase, berv, kp, vsys,
         np.interp(vp[i] + v_rest, v_ccf, ccf_exp[:, i], left=np.nan, right=np.nan)
         for i in range(n_exp)])
     order = np.argsort(np.abs(phase))
-    # Noise normalisation = Cheverall+26 §2.4 'point' convention, IDENTICAL to
+    # Noise normalisation = 'point' convention, IDENTICAL to
     # the main Kp-Vsys map (get_max_CCF_peak): for each velocity the noise is the
     # mean/std of the co-add values MORE than `exclude` km/s from THAT velocity
     # (the trail under test), via a sliding window, NOT the std around the

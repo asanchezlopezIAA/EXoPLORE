@@ -2278,7 +2278,7 @@ class ExoploreSimulator:
                             _mat_cc_b5   = np.zeros(
                                 (n_spectra, n_pixels), float)
                             _mat_back_b5 = np.zeros_like(_mat_cc_b5)
-                            # Cheverall+26 §2.6: build the template for ALL
+                            # Build the template for ALL
                             # exposures (no lightcurve weighting) so out-of-
                             # transit columns carry the fixed template and give
                             # real-noise CCFs for the duration test.  Other
@@ -2369,7 +2369,7 @@ class ExoploreSimulator:
                                 _t_norm, _ = _normfn_t(
                                     wave_ins, _t_norm, _dummy_n, _gp_t)
                                 _syn_mat_res_b5 = _t_norm
-                                # Cheverall26 §2.6: do NOT flatten out-of-transit
+                                # Do NOT flatten out-of-transit
                                 #, keep the fixed (chev26-normalised) template on
                                 # every exposure so the duration test gets real
                                 # out-of-transit noise CCFs.
@@ -3940,8 +3940,8 @@ class ExoploreSimulator:
             "1D_Gibson22":      ("Gibson22",),
             "1D_CtoO_met": ("BL19", "Blain24"),
             "2D":          ("BL19", "Blain24"),
-            # Cheverall26-only α-scale detection mode (free Kp, V_rest, α on a
-            # FIXED nominal model; the paper's §2.7 detection parameterisation).
+            # Amplitude-scaling retrieval: free Kp, V_rest, α on a fixed
+            # nominal model (no pRT / abundance / T sampled).
             "1D_alpha":    ("Blain24", "BL19"),
             # Same fixed-model α detection, but with the Gibson22 β noise-rescaling
             # likelihood (free Kp, V_rest, α, β): β fits a single rescaling of the
@@ -4020,7 +4020,7 @@ class ExoploreSimulator:
             if _ret_dim_b9 in ("1D", "1D_Gibson22"):
                 _mini_b7["species_ret"] = ["H2", "He", "H2O"]
             elif _ret_dim_b9 in ("1D_alpha", "1D_alpha_Gibson22"):
-                # Cheverall26 α-scale: nominal model uses the config's H2S
+                # Amplitude scaling: nominal model uses the config's species
                 # opacity (the same line list as the CCF template).
                 _mini_b7["species_ret"] = [
                     "H2", "He", cfg.atmosphere.ccf_template.species[-1]]
@@ -4435,8 +4435,8 @@ class ExoploreSimulator:
                         log10_X1 = cube[0]; K_p = cube[1]
                         T_equ = cube[2]; v_wind = cube[3]; beta = cube[4]
                     elif _mini_b7["Ret_dim"] == "1D_alpha":
-                        # Cheverall26 α-scale detection: free K_p, V_rest, α on a
-                        # FIXED nominal model (no pRT / abundance / T sampled).
+                        # Amplitude scaling: free K_p, V_rest, α on a fixed
+                        # nominal model (no pRT / abundance / T sampled).
                         K_p = cube[0]; v_wind = cube[1]; alpha = cube[2]
                     elif _mini_b7["Ret_dim"] == "1D_alpha_Gibson22":
                         # Same fixed-model α detection + Gibson22 β noise-rescaling.
@@ -5659,10 +5659,9 @@ class ExoploreSimulator:
                                         )
                                         _ctx["atmosphere_ret_list"].append(_atm9)
 
-                        # Cheverall26 1D_alpha: precompute the FIXED nominal H2S
-                        # model ONCE per order (no pRT inside the sampler; α just
-                        # scales its depth).  Nominal abundance/T = the CCF
-                        # template (the paper's nominal model).
+                        # 1D_alpha: precompute the fixed nominal model ONCE per
+                        # order (no pRT inside the sampler; α just scales its
+                        # depth).  Nominal abundance/T = the CCF template.
                         if (_mini_b7["Ret_dim"] in ("1D_alpha", "1D_alpha_Gibson22")
                                 and _ctx.get("nominal_spec") is None
                                 and _Radtrans is not None):
