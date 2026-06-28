@@ -342,7 +342,7 @@
     "safety_window_pixels": 7
   },
   "pipeline": {
-    "name": "BL19",
+    "name": "BLASP24",
     "sysrem_iterations": 4,
     "snr_mask_threshold": 10.0,
     "prepare_template": true,
@@ -398,7 +398,7 @@
     "planet_parameter_dir": "planet_params",
     "prt_input_data": "/path/to/petitRADTRANS/input_data/",
     "phoenix_wave_file": "/path/to/PHOENIX/WAVE_PHOENIX-ACES-AGSS-COND-2011.fits",
-    "phoenix_flux_file": "/path/to/PHOENIX/lte06300-4.00+0.0.PHOENIX-ACES-AGSS-COND-2011-HiRes.fits",
+    "phoenix_flux_file": "/path/to/PHOENIX/lte06300-4.00-0.0.PHOENIX-ACES-AGSS-COND-2011-HiRes.fits",
     "skycalc_dir": "",
     "inputs_dir": "inputs/ANDES/WASP76b/"
   },

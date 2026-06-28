@@ -200,12 +200,12 @@ Edit `configs/wasp76b_andes_ubv_limbasym.json` and set your local paths under `p
   "output_root":       "/your/output/directory",
   "prt_input_data":    "/path/to/petitRADTRANS/input_data/",
   "phoenix_wave_file": "/path/to/WAVE_PHOENIX-ACES-AGSS-COND-2011.fits",
-  "phoenix_flux_file": "/path/to/lte06300-4.00+0.0.PHOENIX-ACES-AGSS-COND-2011-HiRes.fits",
+  "phoenix_flux_file": "/path/to/lte06300-4.00-0.0.PHOENIX-ACES-AGSS-COND-2011-HiRes.fits",
   "inputs_dir":        "inputs/ANDES/WASP76b/"
 }
 ```
 
-WASP-76 is an F7 star (T<sub>eff</sub> ≈ 6329 K). The nearest PHOENIX grid point is `lte06300-4.00+0.0` (6300 K, logg 4.0, [Fe/H] 0.0).
+WASP-76 is an F7 star (T<sub>eff</sub> ≈ 6329 K). The nearest PHOENIX grid point is `lte06300-4.00-0.0` (6300 K, logg 4.0, [Fe/H] 0.0).
 
 ### Step 2: Generate the telluric reference spectrum
 
@@ -236,7 +236,7 @@ This requires an internet connection and the `skycalc_ipy` package (`pip install
 python -u scripts/run_exoplore.py configs/wasp76b_andes_ubv_limbasym.json --run
 ```
 
-The simulation uses 62 UBV orders and a Fe-only CCF template. Limb asymmetries are enabled with `limb_divisions: asymmetric`, appropriate for the extreme day-to-night contrast of WASP-76 b: the morning limb is modelled at T = 2800 K (isothermal) and the evening limb at T = 3500 K (isothermal), with a day-to-nightside wind of -8 km s<sup>-1</sup> at both limbs (following Ehrenreich et al. 2020; Wardenier et al. 2021; Beltz et al. 2023). Exposure time is 90 s (matching the ANDES ETC files provided). Since telluric features in the optical are broadband and weak, no pixels are expected to be fully masked by the telluric threshold.
+The simulation uses 62 UBV orders and a Fe-only CCF template, prepared with the same BLASP24 polynomial pipeline as Tutorial 1. Limb asymmetries are enabled with `limb_divisions: asymmetric`, appropriate for the extreme day-to-night contrast of WASP-76 b: the morning limb is modelled at T = 2800 K (isothermal) and the evening limb at T = 3500 K (isothermal), with a day-to-nightside wind of -8 km s<sup>-1</sup> at both limbs (following Ehrenreich et al. 2020; Wardenier et al. 2021; Beltz et al. 2023). Exposure time is 90 s (matching the ANDES ETC files provided). Since telluric features in the optical are broadband and weak, no pixels are expected to be fully masked by the telluric threshold.
 
 :::{figure} figures/tutorial2_ccf_erf_wasp76b.png
 :width: 80%

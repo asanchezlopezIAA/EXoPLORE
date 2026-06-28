@@ -409,6 +409,12 @@ def convolve_velocity(delta_v, spec, res, central_wavelength):
 # ExoMol/opacity isotopologue string -> easyCHEM chemical-species name.
 _EASYCHEM_MOLECULE = {
     "H2": "H2", "He": "He",
+    # easyCHEM keys by molecule and does not care about the line list, so every
+    # spelling of a species resolves to the same chemical key. Both the plain
+    # name and any isotopologue/opacity form are hardcoded here: e.g. "H2S" and
+    # "1H2-32S__AYT2..." (or "1H2-32S__HITRAN...") all map to "H2S".
+    "H2S": "H2S", "H2O": "H2O", "CH4": "CH4", "NH3": "NH3",
+    "CO": "CO", "CO2": "CO2", "SO2": "SO2",
     "1H2-32S": "H2S", "1H2-16O": "H2O", "12C-1H4": "CH4",
     "14N-1H3": "NH3", "12C-16O": "CO", "12C-16O2": "CO2", "32S-16O2": "SO2",
 }
