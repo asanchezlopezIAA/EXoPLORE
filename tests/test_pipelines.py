@@ -13,8 +13,6 @@ from exoplore.pipelines.masking import (
     good_pixel_indices,
 )
 from exoplore.pipelines.sysrem import sysrem_iteration, apply_sysrem
-from exoplore.pipelines.bl19 import bl19_normalise, bl19_telluric_correct, run_bl19_pipeline
-from exoplore.pipelines.blain24 import blain24_normalise, run_blain24_pipeline
 
 
 # ---------------------------------------------------------------------------
@@ -102,67 +100,6 @@ class TestSysrem:
         good = np.arange(10, 70)
         cleaned, _ = apply_sysrem(self.data, self.unc, n_iterations=1, good_pixels=good)
         assert cleaned.shape[1] == len(good)
-
-
-# ---------------------------------------------------------------------------
-# BL19 pipeline
-# ---------------------------------------------------------------------------
-
-class TestBL19:
-    def setup_method(self):
-        rng = np.random.default_rng(7)
-        self.n_spec, self.n_pix = 20, 100
-        self.wave = np.linspace(1.0, 2.5, self.n_pix)
-        self.data = rng.uniform(0.8, 1.2, (self.n_spec, self.n_pix))
-        self.unc = 0.05 * np.ones_like(self.data)
-        self.good = np.arange(self.n_pix)
-
-    def test_normalise_output_shape(self):
-        out, err = bl19_normalise(self.wave, self.data, self.unc, self.good)
-        assert out.shape == (self.n_spec, self.n_pix)
-        assert err.shape == out.shape
-
-    def test_normalise_envelope_fit(self):
-        out, err = bl19_normalise(self.wave, self.data, self.unc, self.good, use_envelope_fit=True)
-        assert out.shape == (self.n_spec, self.n_pix)
-
-    def test_telluric_correct_shape(self):
-        norm_data, norm_unc = bl19_normalise(self.wave, self.data, self.unc, self.good)
-        corr_data, corr_unc = bl19_telluric_correct(norm_data, norm_unc)
-        assert corr_data.shape == norm_data.shape
-
-    def test_run_pipeline_shape(self):
-        out, err = run_bl19_pipeline(self.wave, self.data, self.unc, self.good)
-        assert out.shape == (self.n_spec, self.n_pix)
-
-
-# ---------------------------------------------------------------------------
-# Blain24 pipeline
-# ---------------------------------------------------------------------------
-
-class TestBlain24:
-    def setup_method(self):
-        rng = np.random.default_rng(99)
-        self.n_spec, self.n_pix = 15, 60
-        self.wave = np.linspace(1.0, 2.5, self.n_pix)
-        self.data = rng.uniform(0.9, 1.1, (self.n_spec, self.n_pix))
-        self.unc = 0.02 * np.ones_like(self.data)
-        self.good = np.arange(self.n_pix)
-
-    def test_normalise_output_shape(self):
-        out, err, mask, gp = blain24_normalise(self.wave, self.data, self.unc, self.good)
-        assert out.shape == self.data.shape
-        assert err.shape == self.data.shape
-
-    def test_normalise_with_mask(self):
-        # Mark first 5 pixels as bad
-        good = np.arange(5, self.n_pix)
-        out, err, mask, gp = blain24_normalise(self.wave, self.data, self.unc, good)
-        assert 0 in mask  # masked pixels still masked
-
-    def test_run_pipeline_shape(self):
-        out, err, mask, gp = run_blain24_pipeline(self.wave, self.data, self.unc, self.good)
-        assert out.shape == self.data.shape
 
 
 # ---------------------------------------------------------------------------

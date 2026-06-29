@@ -54,23 +54,12 @@ from exoplore.pipelines.sysrem import (
     get_SYSREM_its_ordbyord,
 )
 from exoplore.pipelines.bl19 import (
-    # clean API
-    bl19_normalise,
-    bl19_telluric_correct,
-    run_bl19_pipeline,
-    # public API
     pipeline_BL19_norm,
     pipeline_BL19_tellcorr,
 )
 from exoplore.pipelines.blain24 import (
-    # clean API
-    blain24_normalise,
-    blain24_telluric_correct,
-    run_blain24_pipeline,
-    # public API
     remove_telluric_lines_fit,
     remove_throughput_fit,
-    # v0.25
     compute_k_sigma,
 )
 from exoplore.pipelines.tellurics import (
@@ -111,17 +100,9 @@ __all__ = [
     "SYSREM_filtering_projector_singleorder",
     "filter_model_singleorder",
     "get_SYSREM_its_ordbyord",
-    # ---- clean BL19 ----
-    "bl19_normalise",
-    "bl19_telluric_correct",
-    "run_bl19_pipeline",
     # ---- BL19 ----
     "pipeline_BL19_norm",
     "pipeline_BL19_tellcorr",
-    # ---- clean Blain24 ----
-    "blain24_normalise",
-    "blain24_telluric_correct",
-    "run_blain24_pipeline",
     # ---- Blain24 ----
     "remove_telluric_lines_fit",
     "remove_throughput_fit",
