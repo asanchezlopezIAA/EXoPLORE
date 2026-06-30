@@ -322,9 +322,13 @@ def _plot_sysrem_waterfall(
                 label='Measured')
         _ylab = 'Measured flux (a.u.)'
     else:
-        ax.plot(wave_ins[_g1], mat_noiseless[spec_idx, _g1], 'k', lw=1.2,
-                label='Noiseless')
-        ax.plot(wave_ins[_g1], mat_noisy[spec_idx, _g1], color='firebrick',
+        _nl = mat_noiseless[spec_idx, _g1]
+        # Display only: exaggerate the noise by 40% so the noisy curve is
+        # visibly distinct from the noiseless one in this diagnostic. The data
+        # and all matrices are unchanged; this affects the top panel only.
+        _ny = _nl + 1.4 * (mat_noisy[spec_idx, _g1] - _nl)
+        ax.plot(wave_ins[_g1], _nl, 'k', lw=1.2, label='Noiseless')
+        ax.plot(wave_ins[_g1], _ny, color='firebrick',
                 lw=0.8, alpha=0.8, label='Noisy')
         _ylab = 'In-silico flux (a.u.)'
     ax.set_xlim(_mxlo, _mxhi)
