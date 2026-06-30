@@ -2755,6 +2755,14 @@ class ExoploreSimulator:
             # Update per-order results with Block 5 + Block 6 outputs
             _order_result.update({
                 "mat_noise":    _mat_noise_b5,
+                # Deterministic noiseless observed matrix (mat_noise minus the
+                # Gaussian draw), i.e. the same data without noise, for the
+                # pipeline-steps diagnostic.
+                "mat_noiseless_obs": (
+                    _mat_noise_b5 - _gauss_noise_b5
+                    if (not cfg.observation.noiseless
+                        and not cfg.observation.use_real_data)
+                    else _mat_noise_b5),
                 "std_noise":    _std_noise_b5,
                 "mat_res":      _mat_res_b5,
                 "propag_noise": _propag_noise_b5,
@@ -2797,7 +2805,7 @@ class ExoploreSimulator:
             _wave_steps = _or_steps["wave_ins"]
             _usp_steps  = np.where(
                 _useful_spectral_points_store[0, _h_steps, :])[0]
-            _mn_steps = _or_steps.get("spec_mat")
+            _mn_steps = _or_steps.get("mat_noiseless_obs")
             _my_steps = _or_steps.get("mat_noise")
             _mr_steps = _or_steps.get("mat_res")
             if (_mn_steps is not None and _my_steps is not None
