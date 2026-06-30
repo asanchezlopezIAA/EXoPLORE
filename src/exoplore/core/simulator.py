@@ -2856,6 +2856,7 @@ class ExoploreSimulator:
                                          else None),
                     sysrem_stages     = _sysrem_stages,
                     sysrem_iters      = _sysrem_iters,
+                    use_real_data     = cfg.observation.use_real_data,
                     save_plot         = True,
                     show_plot         = False,
                 )

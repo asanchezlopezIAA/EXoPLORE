@@ -179,7 +179,8 @@ logic:
 
 The SYSREM preparation acting on one CARMENES NIR order of an HD 189733 b
 simulation (Gibson22 pipeline), for the 1.486 to 1.489 µm water band. Top: the
-measured flux in a single exposure; the deep features are telluric water lines.
+noiseless (black) and noisy (red) in-silico flux in a single exposure; the deep
+features are telluric water lines.
 Below, the time-series matrix (wavelength on the horizontal axis, spectrum
 number on the vertical) at successive cleaning stages. In the raw matrix the
 telluric and stellar contamination appears as static vertical bands. After one

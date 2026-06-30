@@ -31,6 +31,7 @@ def plot_pipeline_steps(
         xlim_1d=None,
         sysrem_stages=None,
         sysrem_iters=None,
+        use_real_data=False,
         save_plot=True,
         show_plot=False,
 ):
@@ -98,7 +99,8 @@ def plot_pipeline_steps(
         _plot_sysrem_waterfall(
             sim_name, plots_dir, wave_ins, phase, with_signal, good,
             mat_noiseless, mat_noisy, sysrem_stages, sysrem_iters,
-            spec_idx, order_label, xlim_1d, save_plot, show_plot,
+            spec_idx, order_label, xlim_1d, use_real_data,
+            save_plot, show_plot,
         )
         return
 
@@ -147,14 +149,12 @@ def plot_pipeline_steps(
             _xlo = max(_lo, _xlo)
             _xhi = min(_hi, _xhi)
     ax.set_xlim(_xlo, _xhi)
-    ax.set_ylabel('Flux (a.u.)', fontsize=13)
+    ax.set_ylabel(
+        'Measured flux (a.u.)' if use_real_data else 'In-silico flux (a.u.)',
+        fontsize=13)
     ax.legend(fontsize=11, loc='upper right', framealpha=0.6)
     ax.tick_params(direction='in', which='both')
     ax.set_xticklabels([])
-    title = f"Pipeline steps, {sim_name}"
-    if order_label:
-        title += f"  [{order_label}]"
-    ax.set_title(title, fontsize=13, pad=6)
 
     # ── Panels B / C / D: 2-D matrices ───────────────────────────────────────
     panel_data   = [mat_b,   mat_c,   mat_d]
@@ -264,7 +264,8 @@ def reconstruct_sysrem_stages(
 def _plot_sysrem_waterfall(
         sim_name, plots_dir, wave_ins, phase, with_signal, good,
         mat_noiseless, mat_noisy, sysrem_stages, sysrem_iters,
-        spec_idx, order_label, xlim_1d, save_plot, show_plot):
+        spec_idx, order_label, xlim_1d, use_real_data,
+        save_plot, show_plot):
     """Stacked grayscale SYSREM waterfall.
 
     One column shared across panels: a 1-D spectrum on top, then the raw
@@ -316,20 +317,21 @@ def _plot_sysrem_waterfall(
     # ── Panel 0: 1-D spectrum (same wavelength window as the matrices) ────────
     ax = axes[0]
     _g1 = (wave_ins >= _mxlo) & (wave_ins <= _mxhi)
-    # The measured flux in one exposure: telluric and stellar features dominate
-    # (the planet-bearing noiseless spectrum is, by construction, a flat
-    # continuum at this scale, so it is not shown here).
-    ax.plot(wave_ins[_g1], mat_noisy[spec_idx, _g1], 'k', lw=1.0,
-            label='Measured flux (1 exposure)')
+    if use_real_data:
+        ax.plot(wave_ins[_g1], mat_noisy[spec_idx, _g1], 'k', lw=1.0,
+                label='Measured')
+        _ylab = 'Measured flux (a.u.)'
+    else:
+        ax.plot(wave_ins[_g1], mat_noiseless[spec_idx, _g1], 'k', lw=1.2,
+                label='Noiseless')
+        ax.plot(wave_ins[_g1], mat_noisy[spec_idx, _g1], color='firebrick',
+                lw=0.8, alpha=0.8, label='Noisy')
+        _ylab = 'In-silico flux (a.u.)'
     ax.set_xlim(_mxlo, _mxhi)
-    ax.set_ylabel('Flux (a.u.)', fontsize=12)
+    ax.set_ylabel(_ylab, fontsize=12)
     ax.legend(fontsize=10, loc='lower right', framealpha=0.6)
     ax.tick_params(direction='in', which='both')
     ax.set_xticklabels([])
-    title = f"SYSREM pipeline steps, {sim_name}"
-    if order_label:
-        title += f"  [{order_label}]"
-    ax.set_title(title, fontsize=12, pad=8)
 
     # ── 2-D panels: raw matrix then one per iteration ────────────────────────
     import copy as _copy
