@@ -186,8 +186,6 @@ Every run saves PDF figures to `<run_name>/plots/`. The key files are:
 - **Polynomial pipelines (BL19, Blain24)**, no iterations, so two matrix panels: the **raw** matrix (throughput + tellurics) and the **corrected (residual)** matrix after `preparing_pipeline`. Raw → corrected.
 - **SYSREM pipelines (ASL19, Gibson22)**, a waterfall: the **raw** matrix, then one panel for each iteration in `plotting.pipeline_steps_sysrem_iterations` (default `[1, 5]`), so the common-mode systematics are seen peeling away from one panel to the next.
 
-We note that this figure allows us to verify that the pipeline correctly suppresses stellar and telluric systematics while preserving the planet signal trail in the final residual.
-
 ---
 
 ## CCF detection products
