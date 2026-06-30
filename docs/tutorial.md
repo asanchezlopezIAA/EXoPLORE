@@ -179,13 +179,15 @@ Everything for this run lives in that single folder:
 - `plots/`, diagnostic PDFs
 - `warnings/`, masked-order reports
 
+**Disk footprint:** with the default output settings this run writes about **1.2 GB**, almost all of it the per-order spectral matrices in `matrices/` (one compressed NumPy `.npz` per matrix per order, across the 76 ANDES orders); the diagnostic PDFs in `plots/` add ~40 MB. Which matrices are written is your choice, via the `output` block in the config (see [Outputs](outputs.md)). The defaults keep what is needed to re-run cross-correlations with other templates, run retrievals, and use the Gibson22 likelihood, and drop the pure-diagnostic matrices; saving every matrix would be ~2.2 GB, while a minimal run (just the Kp-Vsys map and metadata) is a few MB.
+
 See [docs/outputs.md](outputs.md) for a complete guide to every output file and code examples to read the Kp-Vsys map.
 
 ---
 
 ## Tutorial 2: Simulate a different planet (WASP-76 b)
 
-> **Approximate run time:** ~25 to 35 min (full ANDES simulation, one night, no retrieval; comparable to Tutorial 1).
+> **Approximate run time:** ~61 min on an Apple Mac Studio M2 Ultra (64 GB RAM), running `configs/wasp76b_andes_ubv_limbasym.json` (Blain24 pipeline, asymmetric limbs, all 62 ANDES UBV orders, one night, no retrieval). The petitRADTRANS forward model dominates: it is run for the four limb atmospheres and convolved with the per-limb wind and rotation kernels, so this case is slower than the single-atmosphere Tutorial 1. Times are approximate and machine-dependent; with `timing: true` the run writes a `timing_report_<date>.txt` with the exact per-block breakdown and total.
 
 WASP-76 b is an ultra-hot Jupiter where the extreme day-to-night temperature contrast produces strong chemical asymmetries between the morning and evening limbs. The key observational signature is a neutral iron signal that strengthens from ingress to egress and progressively blueshifts. At ingress the morning (leading) terminator is in view, where its rotation and the day-to-nightside wind partly compensate and contribute a component near zero rest-frame velocity. As the morning terminator rotates out of view, it stops contributing, because iron has condensed out of the cooler nightside. The near-zero velocity component then vanishes, leaving only the hotter evening (trailing) terminator. There, rotation and wind add towards the observer, giving the net blueshift (Ehrenreich et al. 2020). This tutorial runs the reference WASP-76 b simulation: ANDES UBV (0.35 to 0.63 µm, 62 orders, R = 100,000) with limb asymmetries enabled and a Fe-only CCF template.
 
@@ -251,8 +253,10 @@ CCF matrix in the Earth rest frame for the WASP-76 b ANDES UBV simulation (Tutor
 :::{figure} figures/tutorial2_kpvsys_wasp76b.png
 :width: 80%
 :align: center
-Cross-correlation S/N map as a function of the assumed orbital velocity semi-amplitude K<sub>P</sub> and rest-frame planet velocity v<sub>rest</sub>, obtained from the WASP-76 b ANDES UBV simulation (Tutorial 2). The Fe-only CCF template traces neutral iron in the optical (0.35 to 0.63 µm, 62 orders). The red dashed lines mark the expected position for a circular orbit and injected wind velocity (K<sub>P</sub> = 198.3 km s<sup>-1</sup>, v<sub>rest</sub> = -8 km s<sup>-1</sup>). The peak significance of ~30σ is recovered near the injected values; the characteristic shape of the detection, including the asymmetric Doppler trail visible in the CCF matrix above, results from the interplay between the time-varying limb scaling factors and the different net velocities at the leading and trailing terminators (v<sub>rot</sub> + v<sub>wind</sub> at each limb).
+Cross-correlation S/N map as a function of the assumed orbital velocity semi-amplitude K<sub>P</sub> and rest-frame planet velocity v<sub>rest</sub>, obtained from the WASP-76 b ANDES UBV simulation (Tutorial 2). The Fe-only CCF template traces neutral iron in the optical (0.35 to 0.63 µm, 62 orders). The red dashed lines mark the expected position for a circular orbit and injected wind velocity (K<sub>P</sub> = 198.3 km s<sup>-1</sup>, v<sub>rest</sub> = -8 km s<sup>-1</sup>). The peak significance of ~29σ is recovered at K<sub>P</sub> = 181 km s<sup>-1</sup>, v<sub>rest</sub> = -9 km s<sup>-1</sup>. The rest-frame velocity matches the injected wind, while the recovered K<sub>P</sub> sits ~17 km s<sup>-1</sup> below the orbital value. This K<sub>P</sub> offset is a physical consequence of the limb asymmetry rather than a fitting error: the time-varying limb weighting and the different net velocities at the leading and trailing terminators (v<sub>rot</sub> + v<sub>wind</sub> at each limb) make the Doppler trail depart from a single sinusoid, biasing the apparent semi-amplitude as the iron-bearing evening terminator comes to dominate towards egress.
 :::
+
+Outputs are written under `output_root/WASP76b/ANDES_UBV/transit/Blain24_withsignal_1nights_SNR_comb1_simdata_noisy_stdnoisex1/`, with the same `matrices/`, `plots/`, and `warnings/` subfolders as Tutorial 1. **Disk footprint:** with the default output settings this run writes about **0.7 GB** (smaller than Tutorial 1: UBV covers 62 orders and the transit is sampled by fewer exposures), again almost entirely the per-order spectral matrices in `matrices/`. As in Tutorial 1, the set of matrices written is controlled by the `output` block (saving every matrix would be ~1.2 GB; a minimal run is a few MB). See [docs/outputs.md](outputs.md) for the full output guide.
 
 ---
 

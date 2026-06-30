@@ -2729,8 +2729,9 @@ class ExoploreSimulator:
 
             # -- end for b -------------------------------------------------
 
-            # 6g, save ccf_store per-order to disk and accumulate
-            if _ccf_flag:
+            # 6g, save ccf_store per-order to disk (in-memory accumulation for
+            # the Kp-Vsys co-add is separate and unaffected by cfg.output)
+            if _ccf_flag and cfg.output.save_ccf_store:
                 _base_dir_b6 = str(dirs["matrices"])
                 os.makedirs(_base_dir_b6, exist_ok=True)
                 np.savez_compressed(
@@ -2783,7 +2784,15 @@ class ExoploreSimulator:
         # ----------------------------------------------------------------
         try:
             from exoplore.plotting.steps import plot_pipeline_steps
-            _h_steps = 0   # first processed order
+            # Displayed order: the user's pipeline_steps_order if it was
+            # processed in this run, otherwise the first processed order.
+            _h_steps = 0
+            _ord_req = cfg.plotting.pipeline_steps_order
+            if _ord_req is not None:
+                _osel = list(order_selection)
+                if _ord_req in _osel:
+                    _h_steps = _osel.index(_ord_req)
+                # else: requested order not processed -> first order
             _or_steps = per_order_results[_h_steps]
             _wave_steps = _or_steps["wave_ins"]
             _usp_steps  = np.where(
@@ -2802,6 +2811,34 @@ class ExoploreSimulator:
                 _ws_steps  = with_signal[0] if _dn else with_signal
                 _wo_steps  = without_signal[0] if _dn else without_signal
                 _ord_lbl   = f"order {order_selection[_h_steps]}"
+
+                # SYSREM pipelines: reconstruct the per-iteration residuals so
+                # the diagnostic becomes a stacked iteration waterfall.  Uses
+                # apply_sysrem on the displayed order only (no change to the
+                # production preparation).
+                _sysrem_stages = None
+                _sysrem_iters = None
+                if cfg.pipeline.name in ("ASL19", "Gibson22"):
+                    try:
+                        from exoplore.plotting.steps import (
+                            reconstruct_sysrem_stages)
+                        _noise_steps = _or_steps.get("std_noise")
+                        if _noise_steps is not None:
+                            _noise_steps = (_noise_steps[0]
+                                            if _noise_steps.ndim == 3
+                                            else _noise_steps)
+                            _sysrem_iters = list(
+                                cfg.plotting.pipeline_steps_sysrem_iterations)
+                            _sysrem_stages = reconstruct_sysrem_stages(
+                                _wave_steps, _my_steps, _noise_steps,
+                                _usp_steps, _sysrem_iters,
+                                use_normalised_errors=(
+                                    cfg.pipeline.name == "ASL19"),
+                            )
+                    except Exception as _e_rec:
+                        print(f"  NOTE: SYSREM stages skipped ({_e_rec})")
+                        _sysrem_stages = None
+
                 plot_pipeline_steps(
                     sim_name          = sim_name,
                     plots_dir         = str(dirs["plots"]) + "/",
@@ -2817,6 +2854,8 @@ class ExoploreSimulator:
                     xlim_1d           = (tuple(cfg.plotting.pipeline_steps_xlim_um)
                                          if cfg.plotting.pipeline_steps_xlim_um
                                          else None),
+                    sysrem_stages     = _sysrem_stages,
+                    sysrem_iters      = _sysrem_iters,
                     save_plot         = True,
                     show_plot         = False,
                 )
@@ -3811,30 +3850,36 @@ class ExoploreSimulator:
         os.makedirs(_base_dir_b8, exist_ok=True)
         _sfx8 = sim_name
 
-        # 8a, Per-order matrices
+        # 8a, Per-order matrices (each selected by cfg.output, see OutputConfig)
+        _out8 = cfg.output
         for _h8, _ores8 in enumerate(per_order_results):
             _ord8 = order_selection[_h8]
-            np.savez_compressed(
-                f"{_base_dir_b8}/mat_res_order_{_ord8}_{_sfx8}",
-                a=_ores8["mat_res"],
-            )
-            np.savez_compressed(
-                f"{_base_dir_b8}/propag_noise_order_{_ord8}_{_sfx8}",
-                a=_ores8["propag_noise"],
-            )
-            np.savez_compressed(
-                f"{_base_dir_b8}/mat_back_order_{_ord8}_{_sfx8}",
-                a=_ores8["mat_back"],
-            )
-            np.savez_compressed(
-                f"{_base_dir_b8}/mat_noise_order_{_ord8}_{_sfx8}",
-                a=_ores8["mat_noise"],
-            )
-            np.savez_compressed(
-                f"{_base_dir_b8}/std_noise_order_{_ord8}_{_sfx8}",
-                a=_ores8["std_noise"],
-            )
-            if _ores8.get("mat_cc") is not None:
+            if _out8.save_mat_res:
+                np.savez_compressed(
+                    f"{_base_dir_b8}/mat_res_order_{_ord8}_{_sfx8}",
+                    a=_ores8["mat_res"],
+                )
+            if _out8.save_propag_noise:
+                np.savez_compressed(
+                    f"{_base_dir_b8}/propag_noise_order_{_ord8}_{_sfx8}",
+                    a=_ores8["propag_noise"],
+                )
+            if _out8.save_mat_back:
+                np.savez_compressed(
+                    f"{_base_dir_b8}/mat_back_order_{_ord8}_{_sfx8}",
+                    a=_ores8["mat_back"],
+                )
+            if _out8.save_mat_noise:
+                np.savez_compressed(
+                    f"{_base_dir_b8}/mat_noise_order_{_ord8}_{_sfx8}",
+                    a=_ores8["mat_noise"],
+                )
+            if _out8.save_std_noise:
+                np.savez_compressed(
+                    f"{_base_dir_b8}/std_noise_order_{_ord8}_{_sfx8}",
+                    a=_ores8["std_noise"],
+                )
+            if _out8.save_mat_cc and _ores8.get("mat_cc") is not None:
                 np.savez_compressed(
                     f"{_base_dir_b8}/mat_cc_order_{_ord8}_{_sfx8}",
                     a=_ores8["mat_cc"],
@@ -3871,7 +3916,7 @@ class ExoploreSimulator:
             )
 
         # 8c, SYSREM basis and stellar matrix
-        if _U_sysrem is not None:
+        if _U_sysrem is not None and _out8.save_U_sysrem:
             np.savez_compressed(
                 f"{_base_dir_b8}/U_sysrem_{_sfx8}", a=_U_sysrem,
             )

@@ -161,7 +161,7 @@ Output root         : outputs
 | [docs/concepts.md](docs/concepts.md) | **Start here if new to HRS.** The Doppler trick, the forward model, preparation pipelines, cross-correlation and Kp-Vsys maps, the choice of likelihood (with a worked proof), detection significance, and precision versus accuracy |
 | [docs/tutorial.md](docs/tutorial.md) | Step-by-step first simulation, changing planets and species, CARMENES run, multi-night stacking (ANDES and CARMENES), Bayesian retrieval, pipeline unbiasedness testing |
 | [docs/config_reference.md](docs/config_reference.md) | Every configuration field with units, valid values, and physical meaning |
-| [docs/outputs.md](docs/outputs.md) | Output file layout, how to read Kp-Vsys maps, CCF matrices, retrieval products |
+| [docs/outputs.md](docs/outputs.md) | Output file layout, selecting which matrices to write (disk usage), how to read Kp-Vsys maps, CCF matrices, retrieval products |
 | [docs/input_files.md](docs/input_files.md) | Required input files, download instructions, directory layout per instrument |
 | [docs/data_acknowledgements.md](docs/data_acknowledgements.md) | Citation text for bundled datasets (CARMENES reference night, SkyCalc, PHOENIX) |
 

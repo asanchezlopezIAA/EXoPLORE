@@ -177,14 +177,19 @@ logic:
 :width: 90%
 :align: center
 
-The preparation pipeline acting on one ANDES order. (A) A single spectrum,
-noiseless (black) and with noise added (red). (B) The noiseless time-series
-matrix (wavelength against orbital phase); the transit appears as the central
-band of reduced flux. (C) The same matrix with noise, throughput variations, and
-telluric absorption (the vertical features). (D) The residuals after the
-preparation pipeline, which removes the quasi-static telluric and stellar
-structure; the strongly contaminated channels have been masked. EXoPLORE writes
-this diagnostic for every run.
+The SYSREM preparation acting on one CARMENES NIR order of an HD 189733 b
+simulation (Gibson22 pipeline), for the 1.486 to 1.489 µm water band. Top: the
+measured flux in a single exposure; the deep features are telluric water lines.
+Below, the time-series matrix (wavelength on the horizontal axis, spectrum
+number on the vertical) at successive cleaning stages. In the raw matrix the
+telluric and stellar contamination appears as static vertical bands. After one
+SYSREM iteration the dominant common-mode systematics are largely gone; after
+five iterations only residual noise remains, within which the much fainter
+planet trail is buried. Wavelength channels too strongly absorbed by tellurics
+are masked, shown as uniform grey columns. Red dashed lines mark ingress and
+egress; the iterations shown are set by `plotting.pipeline_steps_sysrem_iterations`.
+EXoPLORE writes this diagnostic for every run (the polynomial BL19 and Blain24
+pipelines, which have no iterations, get a four-panel before/after version instead).
 ```
 
 This removal comes at a cost. Because the planet's lines are only

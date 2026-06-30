@@ -734,17 +734,93 @@ class PlottingConfig:
 
     Parameters
     ----------
+    pipeline_steps_order:
+        Absolute spectral-order index to display in the pipeline-steps
+        diagnostic plot.  If the requested order was not processed in this
+        run (for example order 44 when the instrument has only 28 orders, or
+        an order excluded by ``instrument.order_indices``), the first
+        processed order is used instead.  Default ``null`` uses the first
+        processed order.
     pipeline_steps_xlim_um:
-        Wavelength window [lo, hi] in µm for Panel A (1-D spectrum) of the
-        pipeline-steps diagnostic plot (Fig. 5 style).  The 2-D panels
-        always show the full order range.  Set to ``null`` to use the full
-        order range for Panel A as well.
-        Default [1.4862, 1.4890] zooms into a water-band window visible in
-        both CARMENES NIR order 23 and ANDES order 41.
+        Wavelength window [lo, hi] in µm to zoom into.  For the SYSREM
+        waterfall every panel uses this window; for the polynomial four-panel
+        it applies to the 1-D spectrum panel only (the 2-D panels show the
+        full order).  If the window does not fall within the displayed order,
+        the full order is shown instead.  Set to ``null`` for the full order.
+        Default [1.4862, 1.4890] is a water-band window present in CARMENES
+        NIR (around order 22) and ANDES.
+    pipeline_steps_sysrem_iterations:
+        Which SYSREM iterations to show as intermediate panels in the
+        pipeline-steps diagnostic plot.  Used ONLY for SYSREM-based
+        pipelines (ASL19, Gibson22), where the cleaning proceeds iteration
+        by iteration; the panels let you watch the common-mode systematics
+        being removed.  Ignored by the polynomial pipelines (BL19, Blain24),
+        which have no iterations and show a single residual panel instead.
+        Each value is a 1-based iteration index (1 = after the first SYSREM
+        pass).  Default [1, 5] shows an early and a late stage.
     """
+    pipeline_steps_order: Optional[int] = None
     pipeline_steps_xlim_um: Optional[List[float]] = field(
         default_factory=lambda: [1.4862, 1.4890]
     )
+    pipeline_steps_sysrem_iterations: List[int] = field(
+        default_factory=lambda: [1, 5]
+    )
+
+
+# ---------------------------------------------------------------------------
+# Output (which matrices to write to disk)
+# ---------------------------------------------------------------------------
+
+@dataclass
+class OutputConfig:
+    """Which per-order spectral matrices to write to disk.
+
+    A full run can write several GB of per-order matrices, but most are only
+    needed for specific kinds of re-analysis, so each can be switched off to
+    save disk space.  Small metadata (masks, velocity grids, the Kp-Vsys map,
+    phase, Julian dates) is ALWAYS written regardless of these flags.  The
+    sizes quoted are for the 76-order Tutorial 1 run and scale with
+    orders x exposures.
+
+    The defaults keep everything needed to re-run cross-correlations with other
+    templates, run retrievals, and use the Gibson22 log-likelihood, while
+    dropping the pure-diagnostic matrices (about 1.2 GB instead of 2.2 GB for
+    that run).  Set all to False for a minimal result (the Kp-Vsys map plus
+    metadata, a few MB).
+
+    Parameters
+    ----------
+    save_mat_res:
+        Prepared residual data.  Needed to re-run CCFs with a different
+        template and for retrievals.  (~334 MB)
+    save_mat_back:
+        Per-exposure CCF template.  Needed to re-run CCFs and for retrievals.
+        (~298 MB)
+    save_ccf_store:
+        Per-order cross-correlation functions.  Needed to rebuild Kp-Vsys maps
+        without re-running the CCF.  (~141 MB)
+    save_propag_noise:
+        Propagated per-pixel noise.  Needed for inverse-variance CCF weighting
+        and for the retrieval log-likelihood.  (~416 MB)
+    save_U_sysrem:
+        SYSREM basis vectors.  Needed to filter the model for the Gibson22
+        log-likelihood (negligible size).  (~4 KB)
+    save_mat_cc:
+        Noiseless injected model matrix.  Diagnostic only.  (~181 MB)
+    save_mat_noise:
+        The noise realisation.  Diagnostic only.  (~411 MB)
+    save_std_noise:
+        Per-pixel noise standard deviation.  Diagnostic only.  (~419 MB)
+    """
+    save_mat_res: bool = True
+    save_mat_back: bool = True
+    save_ccf_store: bool = True
+    save_propag_noise: bool = True
+    save_U_sysrem: bool = True
+    save_mat_cc: bool = False
+    save_mat_noise: bool = False
+    save_std_noise: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -822,6 +898,7 @@ class SimulationConfig:
     retrieval: RetrievalConfig = field(default_factory=RetrievalConfig)
     statistics: StatisticsConfig = field(default_factory=StatisticsConfig)
     plotting: PlottingConfig = field(default_factory=PlottingConfig)
+    output: OutputConfig = field(default_factory=OutputConfig)
     paths: PathConfig = field(default_factory=PathConfig)
     timing: bool = False
 
@@ -894,6 +971,7 @@ class SimulationConfig:
             retrieval=_retrieval(d.get("retrieval", {})),
             statistics=_safe(StatisticsConfig, d.get("statistics", {})),
             plotting=_safe(PlottingConfig, d.get("plotting", {})),
+            output=_safe(OutputConfig, d.get("output", {})),
             paths=_safe(PathConfig, d.get("paths", {})),
             timing=bool(d.get("timing", False)),
         )

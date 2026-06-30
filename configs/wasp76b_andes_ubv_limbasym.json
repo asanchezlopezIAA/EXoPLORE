@@ -393,6 +393,16 @@
     "stack_group_size": null,
     "detectability_maps": false
   },
+  "output": {
+    "save_mat_res": true,
+    "save_mat_back": true,
+    "save_ccf_store": true,
+    "save_propag_noise": true,
+    "save_U_sysrem": true,
+    "save_mat_cc": false,
+    "save_mat_noise": false,
+    "save_std_noise": false
+  },
   "paths": {
     "output_root": "/path/to/output",
     "planet_parameter_dir": "planet_params",

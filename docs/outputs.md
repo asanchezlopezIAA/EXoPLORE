@@ -91,6 +91,34 @@ For each order with absolute index `K` (from the instrument's `order_selection` 
 | `mat_cc_order_{K}_{run_name}.npz` | `(n_spectra, n_pixels)` | CCF-ready matrix (BL19/Blain24 pipelines only). The matrix as passed to the CCF kernel. |
 | `ccf_store_order_{K}_{run_name}.npz` | `(n_nights, n_vel, n_spectra)` | Per-order CCF: CCF value at each velocity lag and each exposure, for all nights. |
 
+**Controlling which matrices are written.** Almost all of a run's disk footprint is these per-order matrices, so the `output` block in the config selects which ones to write. The global masks, velocity grids, Kp-Vsys map, phase, and Julian dates are always written. These choices do not affect the run itself (which uses the matrices in memory); they only change what is left on disk for later re-analysis.
+
+| `output` flag | Default | Needed for | Size (76-order run) |
+|---|---|---|---|
+| `save_mat_res` | `true` | re-running CCFs with other templates, retrievals | ~334 MB |
+| `save_mat_back` | `true` | re-running CCFs, retrievals | ~298 MB |
+| `save_ccf_store` | `true` | rebuilding Kp-Vsys maps without re-running the CCF | ~141 MB |
+| `save_propag_noise` | `true` | inverse-variance CCF weighting, retrieval log-likelihood | ~416 MB |
+| `save_U_sysrem` | `true` | filtering the model for the Gibson22 log-likelihood | ~4 KB |
+| `save_mat_cc` | `false` | diagnostic only | ~181 MB |
+| `save_mat_noise` | `false` | diagnostic only | ~411 MB |
+| `save_std_noise` | `false` | diagnostic only | ~419 MB |
+
+With the defaults a 76-order run writes ~1.2 GB (down from ~2.2 GB with every matrix on) and still supports re-running CCFs, retrievals, and the Gibson22 likelihood. Set every flag to `false` for a minimal result (the Kp-Vsys map plus metadata, a few MB). If the `output` block is omitted, these defaults apply.
+
+```json
+"output": {
+  "save_mat_res": true,
+  "save_mat_back": true,
+  "save_ccf_store": true,
+  "save_propag_noise": true,
+  "save_U_sysrem": true,
+  "save_mat_cc": false,
+  "save_mat_noise": false,
+  "save_std_noise": false
+}
+```
+
 ### Global mask arrays
 
 | File | Shape | Description |
@@ -145,7 +173,7 @@ Every run saves PDF figures to `<run_name>/plots/`. The key files are:
 
 | File | Description |
 |---|---|
-| `pipeline_steps_<run_name>.pdf` | **Four-panel pipeline-steps figure** (see below). Generated for the first processed order on every run. |
+| `pipeline_steps_<run_name>.pdf` | **Pipeline-steps figure** (see below; four-panel for BL19/Blain24, a SYSREM iteration waterfall for ASL19/Gibson22). Generated for the first processed order on every run. |
 | `sn_map_<run_name>_SNR.pdf` | Kp-Vsys S/N map in colour with contours. |
 | `1D_CCF_<run_name>.pdf` | 1-D CCF at the best-fit Kp vs rest-frame velocity. |
 | `CC_ERF_<run_name>.pdf` | CCF trail as a function of orbital phase (the "butterfly" plot). |
@@ -153,12 +181,16 @@ Every run saves PDF figures to `<run_name>/plots/`. The key files are:
 
 ### Pipeline-steps figure
 
-`pipeline_steps_<run_name>.pdf` shows the successive data-simulation and preparation steps for the first processed order, mirroring Fig. 5 of Sánchez-López et al. (2022). In particular, the four panels illustrate:
+`pipeline_steps_<run_name>.pdf` shows the data-simulation and preparation steps for the first processed order, mirroring Fig. 5 of Sánchez-López et al. (2022). The figure takes one of two forms depending on the pipeline.
+
+**Polynomial pipelines (BL19, Blain24)**, a four-panel before/after figure:
 
 - **Panel A**, 1-D spectrum at mid-transit: noiseless model (black) and noisy realisation (red). The wavelength window is controlled by `plotting.pipeline_steps_xlim_um` in the config (default 1.4862 to 1.4890 µm, a water-band window).
 - **Panel B**, 2-D noiseless spectral matrix (phase × wavelength).
 - **Panel C**, 2-D noisy matrix including throughput variations.
 - **Panel D**, 2-D residual matrix after `preparing_pipeline`. Masked pixels are white; ingress and egress are marked with white dashed lines.
+
+**SYSREM pipelines (ASL19, Gibson22)**, a stacked grayscale waterfall: a 1-D spectrum on top, then the raw data matrix, then one panel for each SYSREM iteration listed in `plotting.pipeline_steps_sysrem_iterations` (default `[1, 5]`), so the common-mode systematics are seen peeling away from one panel to the next.
 
 We note that this figure allows us to verify that the pipeline correctly suppresses stellar and telluric systematics while preserving the planet signal trail in Panel D.
 

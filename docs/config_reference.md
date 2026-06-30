@@ -32,8 +32,10 @@ planet_params/HD189733b.json
 11. [Simulation config, `statistics`](#11-statistics)
 12. [Simulation config, `paths`](#12-paths)
 13. [Atmosphere model block reference](#13-atmosphere-model-block-reference)
-14. [Supported instruments](#14-supported-instruments)
-15. [Adding a new planet](#15-adding-a-new-planet)
+14. [Simulation config, `plotting`](#14-plotting)
+15. [Simulation config, `output`](#15-output)
+16. [Supported instruments](#16-supported-instruments)
+17. [Adding a new planet](#17-adding-a-new-planet)
 
 ---
 
@@ -566,23 +568,29 @@ The per-block breakdown printed to stdout when `timing: true`:
 
 ---
 
-## 13. `plotting`
+## 14. `plotting`
 
 Controls diagnostic plots automatically generated at the end of every run.
 
 ```json
 "plotting": {
-  "pipeline_steps_xlim_um": [1.4862, 1.4890]
+  "pipeline_steps_order": null,
+  "pipeline_steps_xlim_um": [1.4862, 1.4890],
+  "pipeline_steps_sysrem_iterations": [1, 5]
 }
 ```
 
 | Field | Default | Description |
 |---|---|---|
-| `pipeline_steps_xlim_um` | `[1.4862, 1.4890]` | Wavelength window [lo, hi] in µm for **Panel A** (1-D spectrum comparison) of the pipeline-steps diagnostic plot. The 2-D panels always show the full order range. Set to `null` to use the full order range for Panel A as well. The default zooms into a water-band window at ~1.487 µm visible in both CARMENES NIR order 23 and ANDES order 41. |
+| `pipeline_steps_order` | `null` | Absolute spectral-order index to display in the pipeline-steps plot. If the requested order was not processed in the run (e.g. order 44 when the instrument has only 28 orders, or an order excluded by `instrument.order_indices`), the **first processed order** is used. `null` means the first processed order. |
+| `pipeline_steps_xlim_um` | `[1.4862, 1.4890]` | Wavelength window [lo, hi] in µm to zoom into. For the SYSREM waterfall every panel uses this window; for the polynomial four-panel it applies to the 1-D panel only (the 2-D panels show the full order). If the window does **not** fall within the displayed order, the **full order** is shown. Set to `null` for the full order. The default is a water-band window at ~1.487 µm. |
+| `pipeline_steps_sysrem_iterations` | `[1, 5]` | Which SYSREM iterations to show as panels in the pipeline-steps plot. **Used only for SYSREM pipelines** (ASL19, Gibson22); ignored by the polynomial pipelines (BL19, Blain24). Each value is a 1-based iteration index. |
 
 ### Pipeline-steps diagnostic plot
 
-Every run automatically saves `<run_dir>/plots/pipeline_steps_<sim_name>.pdf`, a four-panel figure illustrating the successive data-simulation and preparation steps for the first processed order:
+Every run automatically saves `<run_dir>/plots/pipeline_steps_<sim_name>.pdf`, illustrating the data-simulation and preparation steps for the first processed order. The figure takes one of two forms depending on the pipeline.
+
+**Polynomial pipelines (BL19, Blain24)** — a four-panel before/after figure:
 
 | Panel | Content |
 |---|---|
@@ -591,11 +599,45 @@ Every run automatically saves `<run_dir>/plots/pipeline_steps_<sim_name>.pdf`, a
 | **C** | 2-D noisy matrix including throughput variations. |
 | **D** | 2-D residual matrix after `preparing_pipeline` (masked pixels shown as white). Ingress and egress are marked with white dashed lines. |
 
+**SYSREM pipelines (ASL19, Gibson22)** — a stacked grayscale waterfall showing the common-mode systematics peeling away iteration by iteration: a 1-D spectrum on top (noiseless and noisy), then the raw data matrix, then one panel per iteration listed in `pipeline_steps_sysrem_iterations` (for example after iteration 1 and after iteration 5). The spectrum number is on the vertical axis and the wavelength axis is shared across panels, with ingress and egress marked. The intermediate residuals are reconstructed with `apply_sysrem` on the displayed order, so the production preparation is unchanged.
+
 This plot follows the style of the ANDES paper and is the standard way to verify that the pipeline correctly removes systematics while preserving the planetary signal trail.
 
 ---
 
-## 14. Supported instruments
+## 15. `output`
+
+Selects which per-order spectral matrices are written to disk. Almost all of a run's disk footprint is these matrices; the global masks, velocity grids, Kp-Vsys map, phase, and Julian dates are always written. These flags do not affect the run itself (the matrices are used in memory), only what is left on disk for later re-analysis. If the block is omitted, the defaults below apply.
+
+```json
+"output": {
+  "save_mat_res": true,
+  "save_mat_back": true,
+  "save_ccf_store": true,
+  "save_propag_noise": true,
+  "save_U_sysrem": true,
+  "save_mat_cc": false,
+  "save_mat_noise": false,
+  "save_std_noise": false
+}
+```
+
+| Field | Default | Needed for | Size (76-order run) |
+|---|---|---|---|
+| `save_mat_res` | `true` | re-running CCFs with other templates, retrievals | ~334 MB |
+| `save_mat_back` | `true` | re-running CCFs, retrievals | ~298 MB |
+| `save_ccf_store` | `true` | rebuilding Kp-Vsys maps without re-running the CCF | ~141 MB |
+| `save_propag_noise` | `true` | inverse-variance CCF weighting, retrieval log-likelihood | ~416 MB |
+| `save_U_sysrem` | `true` | filtering the model for the Gibson22 log-likelihood | ~4 KB |
+| `save_mat_cc` | `false` | diagnostic only | ~181 MB |
+| `save_mat_noise` | `false` | diagnostic only | ~411 MB |
+| `save_std_noise` | `false` | diagnostic only | ~419 MB |
+
+With the defaults a 76-order run writes ~1.2 GB instead of ~2.2 GB and still supports re-running CCFs, retrievals, and the Gibson22 likelihood. Set every flag to `false` for a minimal ~few-MB result (the Kp-Vsys map plus metadata). See [outputs.md](outputs.md) for the full matrix descriptions.
+
+---
+
+## 16. Supported instruments
 
 | Config name | Instrument | Coverage (µm) | Orders | R | Recommended mode |
 |---|---|---|---|---|---|
@@ -653,7 +695,7 @@ If your setting covers only one detector order, set `"order_indices": [0]` in th
 
 ---
 
-## 15. Adding a new planet
+## 17. Adding a new planet
 
 1. Create `planet_params/YourPlanet.json` following the structure of `HD189733b.json`.
 2. Fill in all fields from the literature. Key sources: NASA Exoplanet Archive, TEPCat, original discovery papers.
