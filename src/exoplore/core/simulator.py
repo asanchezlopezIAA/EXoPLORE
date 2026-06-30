@@ -2846,6 +2846,17 @@ class ExoploreSimulator:
                     except Exception as _e_rec:
                         print(f"  NOTE: SYSREM stages skipped ({_e_rec})")
                         _sysrem_stages = None
+                else:
+                    # Polynomial pipelines (BL19, Blain24): no iterations, so a
+                    # single "Corrected (residual)" panel (raw -> corrected).
+                    try:
+                        _resid_full = np.full_like(_my_steps, np.nan)
+                        _resid_full[:, _usp_steps] = _mr_steps[:, _usp_steps]
+                        _sysrem_stages = {'Corrected (residual)': _resid_full}
+                        _sysrem_iters = ['Corrected (residual)']
+                    except Exception as _e_poly:
+                        print(f"  NOTE: corrected-stage panel skipped ({_e_poly})")
+                        _sysrem_stages = None
 
                 plot_pipeline_steps(
                     sim_name          = sim_name,

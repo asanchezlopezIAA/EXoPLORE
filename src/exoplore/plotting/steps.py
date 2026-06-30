@@ -284,11 +284,13 @@ def _plot_sysrem_waterfall(
     else:
         iters = [i for i in sysrem_iters if i in sysrem_stages]
 
-    # The raw matrix is unmasked; the SYSREM stages already carry NaN at the
-    # masked columns (from reconstruct_sysrem_stages), shown as a uniform colour.
+    # The raw matrix is unmasked; the stages already carry NaN at the masked
+    # columns, shown as a uniform colour.  Integer keys are SYSREM iterations;
+    # a string key (e.g. polynomial "Corrected (residual)") is used verbatim.
     panels = [(mat_noisy, 'Raw matrix (throughput + tellurics)')]
     for k in iters:
-        panels.append((sysrem_stages[k], f'After SYSREM iteration {k}'))
+        _lbl = f'After SYSREM iteration {k}' if isinstance(k, int) else str(k)
+        panels.append((sysrem_stages[k], _lbl))
 
     n_panels = 1 + len(panels)   # 1-D spectrum + the 2-D panels
 

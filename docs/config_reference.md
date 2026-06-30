@@ -588,18 +588,10 @@ Controls diagnostic plots automatically generated at the end of every run.
 
 ### Pipeline-steps diagnostic plot
 
-Every run automatically saves `<run_dir>/plots/pipeline_steps_<sim_name>.pdf`, illustrating the data-simulation and preparation steps for the first processed order. The figure takes one of two forms depending on the pipeline.
+Every run automatically saves `<run_dir>/plots/pipeline_steps_<sim_name>.pdf`, a stacked grey-scale figure illustrating the data-simulation and preparation steps for the displayed order (set by `pipeline_steps_order`). The top panel is the 1-D in-silico flux at mid-transit, noiseless (black) and noisy (red), zoomed to `pipeline_steps_xlim_um` if set; below it are time-series matrices (wavelength on the horizontal axis, spectrum number on the vertical), with masked channels shown as uniform grey and ingress/egress marked by red dashed lines. The number of matrix panels depends on the pipeline:
 
-**Polynomial pipelines (BL19, Blain24)** — a four-panel before/after figure:
-
-| Panel | Content |
-|---|---|
-| **A** | 1-D flux at mid-transit: noiseless model spectrum (black) and noisy realisation (red). Zoomed to `pipeline_steps_xlim_um` if set. |
-| **B** | 2-D noiseless spectral matrix (phase × wavelength). |
-| **C** | 2-D noisy matrix including throughput variations. |
-| **D** | 2-D residual matrix after `preparing_pipeline` (masked pixels shown as white). Ingress and egress are marked with white dashed lines. |
-
-**SYSREM pipelines (ASL19, Gibson22)** — a stacked grayscale waterfall showing the common-mode systematics peeling away iteration by iteration: a 1-D spectrum on top (noiseless and noisy), then the raw data matrix, then one panel per iteration listed in `pipeline_steps_sysrem_iterations` (for example after iteration 1 and after iteration 5). The spectrum number is on the vertical axis and the wavelength axis is shared across panels, with ingress and egress marked. The intermediate residuals are reconstructed with `apply_sysrem` on the displayed order, so the production preparation is unchanged.
+- **Polynomial pipelines (BL19, Blain24)** have no iterations, so two matrix panels: the **raw** matrix (throughput + tellurics) and the **corrected (residual)** matrix after `preparing_pipeline`. Raw → corrected.
+- **SYSREM pipelines (ASL19, Gibson22)** show the systematics peeling away iteration by iteration: the **raw** matrix, then one panel per iteration listed in `pipeline_steps_sysrem_iterations` (for example after iteration 1 and after iteration 5). The intermediate residuals are reconstructed with `apply_sysrem` on the displayed order, so the production preparation is unchanged.
 
 This plot follows the style of the ANDES paper and is the standard way to verify that the pipeline correctly removes systematics while preserving the planetary signal trail.
 

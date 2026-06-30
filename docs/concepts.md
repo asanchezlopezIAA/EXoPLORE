@@ -189,8 +189,6 @@ five iterations only residual noise remains, within which the much fainter
 planet trail is buried. Wavelength channels too strongly absorbed by tellurics
 are masked, shown as uniform grey columns. Red dashed lines mark ingress and
 egress; the iterations shown are set by `plotting.pipeline_steps_sysrem_iterations`.
-EXoPLORE writes this diagnostic for every run (the polynomial BL19 and Blain24
-pipelines, which have no iterations, get a four-panel before/after version instead).
 ```
 
 This removal comes at a cost. Because the planet's lines are only

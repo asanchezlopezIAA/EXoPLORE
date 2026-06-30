@@ -181,18 +181,12 @@ Every run saves PDF figures to `<run_name>/plots/`. The key files are:
 
 ### Pipeline-steps figure
 
-`pipeline_steps_<run_name>.pdf` shows the data-simulation and preparation steps for the first processed order, mirroring Fig. 5 of Sánchez-López et al. (2022). The figure takes one of two forms depending on the pipeline.
+`pipeline_steps_<run_name>.pdf` shows the data-simulation and preparation steps for the displayed order (`plotting.pipeline_steps_order`, default first order), mirroring Fig. 5 of Sánchez-López et al. (2022). It is a stacked grey-scale figure: the top panel is the 1-D in-silico flux at mid-transit, noiseless (black) and noisy (red), in the window `plotting.pipeline_steps_xlim_um` (default ~1.487 µm water band); below it are time-series matrices (wavelength horizontal, spectrum number vertical), with masked channels as uniform grey and ingress/egress as red dashed lines. The number of matrix panels depends on the pipeline:
 
-**Polynomial pipelines (BL19, Blain24)**, a four-panel before/after figure:
+- **Polynomial pipelines (BL19, Blain24)**, no iterations, so two matrix panels: the **raw** matrix (throughput + tellurics) and the **corrected (residual)** matrix after `preparing_pipeline`. Raw → corrected.
+- **SYSREM pipelines (ASL19, Gibson22)**, a waterfall: the **raw** matrix, then one panel for each iteration in `plotting.pipeline_steps_sysrem_iterations` (default `[1, 5]`), so the common-mode systematics are seen peeling away from one panel to the next.
 
-- **Panel A**, 1-D spectrum at mid-transit: noiseless model (black) and noisy realisation (red). The wavelength window is controlled by `plotting.pipeline_steps_xlim_um` in the config (default 1.4862 to 1.4890 µm, a water-band window).
-- **Panel B**, 2-D noiseless spectral matrix (phase × wavelength).
-- **Panel C**, 2-D noisy matrix including throughput variations.
-- **Panel D**, 2-D residual matrix after `preparing_pipeline`. Masked pixels are white; ingress and egress are marked with white dashed lines.
-
-**SYSREM pipelines (ASL19, Gibson22)**, a stacked grayscale waterfall: a 1-D spectrum on top, then the raw data matrix, then one panel for each SYSREM iteration listed in `plotting.pipeline_steps_sysrem_iterations` (default `[1, 5]`), so the common-mode systematics are seen peeling away from one panel to the next.
-
-We note that this figure allows us to verify that the pipeline correctly suppresses stellar and telluric systematics while preserving the planet signal trail in Panel D.
+We note that this figure allows us to verify that the pipeline correctly suppresses stellar and telluric systematics while preserving the planet signal trail in the final residual.
 
 ---
 
