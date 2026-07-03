@@ -879,65 +879,14 @@ python scripts/plot_corner_overlay.py \\
   --output docs/figures/tutorial_retrieval_bias_corner_noisy.png
 ```
 
-### The choice of likelihood and the noise structure
+The Blain24 and Gibson22 posteriors in the noisy figure are of comparable width,
+because both weight each pixel by its known uncertainty `1/σ²`. The
+[Concepts primer](concepts.md#5-from-cross-correlation-to-a-likelihood) gives the
+full treatment of how the log-likelihoods differ in their handling of the noise
+scale, and a controlled toy illustration of when per-pixel weighting matters,
+which informs the choice of likelihood for a given dataset.
 
-The log-likelihoods differ in how they treat the **noise scale**, which affects
-the resulting constraints and informs the choice of likelihood for a given
-dataset rather than a general ranking of the methods (the full derivation is in
-the [Concepts primer](concepts.md#5-from-cross-correlation-to-a-likelihood)):
-
-- Brogi & Line (2019) estimates a **single** global noise level per spectrum
-  from the residuals themselves. No per-pixel uncertainty enters its formula.
-- Blain et al. (2024) and Gibson et al. (2022) use the **known** per-pixel
-  uncertainty, so each pixel is weighted by `1/σ²`. Because both weight the data
-  the same way, their posteriors in the noisy figure above are of comparable
-  width.
-
-The practical consequence depends on whether the noise is uniform across
-pixels. The script `scripts/illustrate_likelihood_weighting.py` examines this on
-a controlled toy spectrum, comparing the two formulations under uniform and
-non-uniform noise of **identical total variance**:
-
-```bash
-python scripts/illustrate_likelihood_weighting.py \
-  --output docs/figures/likelihood_weighting.png
-```
-
-```{figure} figures/likelihood_weighting.png
-:width: 100%
-:align: center
-
-With uniform noise (left) the two formulations are nearly identical. With
-heteroscedastic noise of the same total variance (right), concentrated in 15
-per cent of the pixels, the Blain et al. (2024) constraint is about five times
-tighter in this toy case. The single global noise estimate of Brogi & Line
-(2019) is raised by the noisy minority of pixels, which dilutes the contribution
-of the clean majority, whereas the per-pixel weighting of Blain et al. (2024)
-assigns those noisy pixels little weight.
-```
-
-Real spectra are frequently heteroscedastic (telluric cores, blaze edges, and
-channels near deep lines carry elevated noise), which is one reason per-pixel
-weighting is often preferred for real data. As noted in the Concepts primer, the
-Brogi & Line (2019) formulation was developed and validated on simulated,
-photon-noise-dominated CRIRES data, where it was shown to recover statistically
-correct credibility intervals; whether a given estimator is appropriate
-therefore depends on the noise structure of the dataset at hand.
-
-### Supported pipeline / likelihood combinations for bias testing
-
-| Preparing pipeline | Log-likelihood | Works noiseless? | Notes |
-|---|---|---|---|
-| BL19 | BL19 | **Not reliable** | Scale-free likelihood collapses to a near-delta on noiseless data, magnifying any residual model-data mismatch into a spurious offset; omitted from the noiseless test for now |
-| BL19 | Blain24 | Yes | BL19 preparation with the chi-squared Blain24 likelihood (propagated noise) |
-| Blain24 | Blain24 | Yes | Polynomial throughput + telluric removal |
-| Gibson22 | Gibson22 (β pinned) | **Yes** | Set `prior_bounds` to pin β ∈ [0.999, 1.001]; see below |
-| ASL19 | any | **TBD** | SYSREM may over-subtract noiseless data; not yet evaluated |
-| any | Gibson22 (β free) | **No** | β diverges when noise → 0 regardless of preparing pipeline |
-
-For ASL19, `noiseless: false` with realistic noise is the safe choice. Gibson22 with a pinned β prior works correctly on noiseless data, as demonstrated by the corner plot above.
-
-#### Testing Gibson22 noiseless with a pinned β prior
+### Testing Gibson22 noiseless with a pinned β prior
 
 There is a principled way to run a Gibson22 noiseless bias test: use an informative prior that pins β near 1. To do so, set a very narrow prior range in the config:
 
