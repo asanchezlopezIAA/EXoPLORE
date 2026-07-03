@@ -38,12 +38,12 @@ observed spectra.
 <td align="center"><b>Multi-night co-addition.</b> Two nights combine to a higher significance than either alone, following the expected √N improvement.</td>
 </tr>
 <tr>
-<td width="50%"><img src="docs/figures/tutorial_retrieval_bias_corner_noisy.png" alt="Pipeline bias test"/></td>
-<td width="50%"><img src="docs/figures/likelihood_weighting.png" alt="How the likelihood choice depends on the noise structure"/></td>
+<td width="50%"><img src="docs/figures/tutorial6_retrieval_corner.png" alt="Bayesian retrieval posterior"/></td>
+<td width="50%"><img src="docs/figures/significance_study_corner.png" alt="Significance and velocity recovery over 100 noise realisations"/></td>
 </tr>
 <tr>
-<td align="center"><b>Retrieval unbiasedness test.</b> Three preparation pipelines and log-likelihoods compared on the same data; all recover the injected truth, with differing precision.</td>
-<td align="center"><b>The likelihood choice depends on the data.</b> A controlled illustration of how per-pixel weighting (Blain et al. 2024) and a single global noise estimate (Brogi & Line 2019) compare under uniform versus heteroscedastic noise.</td>
+<td align="center"><b>Bayesian atmospheric retrieval.</b> Posterior distributions for a Blain24 retrieval of a single noiseless CARMENES NIR order of HD 189733 b; the water abundance, K<sub>P</sub>, T<sub>eq</sub>, and V<sub>rest</sub> are all recovered at the injected truth values (red lines).</td>
+<td align="center"><b>Statistical validation over 100 noise realisations.</b> Distributions of the recovered significance, K<sub>P</sub>, and V<sub>rest</sub> for the same injected HD 189733 b atmosphere (ANDES, single order), comparing the S/N and Welch metrics at two cross-correlation velocity steps.</td>
 </tr>
 </table>
 
