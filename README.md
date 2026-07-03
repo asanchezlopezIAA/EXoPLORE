@@ -34,7 +34,7 @@ observed spectra.
 <td width="50%"><img src="docs/figures/tutorial5c_1dccf_threenights.png" alt="Multi-night co-addition"/></td>
 </tr>
 <tr>
-<td align="center"><b>Kp-Vsys detection map.</b> H<sub>2</sub>O detected at ~56σ in a single simulated ANDES transit of HD 189733 b, recovered at the correct orbital and rest velocity.</td>
+<td align="center"><b>Kp-Vsys detection map.</b> H<sub>2</sub>O detected at ~43σ in a single simulated ANDES transit of HD 189733 b, recovered at the correct orbital and rest velocity.</td>
 <td align="center"><b>Multi-night co-addition.</b> Two nights combine to a higher significance than either alone, following the expected √N improvement.</td>
 </tr>
 <tr>
