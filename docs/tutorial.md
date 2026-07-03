@@ -740,7 +740,7 @@ The preparation is unavoidable: the telluric and stellar lines dominate the spec
 
 In order to isolate pure pipeline systematics, the test should be run with `noiseless: true`, which removes the stochastic noise floor. With perfect noiseless data and the correct forward model, the likelihood should peak sharply at the injected truth. Any offset is consequently pure pipeline bias, not noise. With noisy data, biases can be hidden inside the noise uncertainty and require many injection-recovery realisations to detect.
 
-> **We note that** SYSREM-based pipelines (ASL19, Gibson22) may be problematic with noiseless data, since SYSREM can over-subtract the signal in the absence of noise. The polynomial pipeline Blain24 is therefore a natural choice for a noiseless bias test. Gibson22 remains usable in this regime provided its β parameter is pinned near 1 (see below). We omit the BL19 log-likelihood from this test for now: its scale-free form collapses to a near-delta posterior on noiseless data, which magnifies any residual model-data mismatch into a spurious offset, so it is not a reliable estimator of pipeline bias in this regime.
+> **We note that** SYSREM-based pipelines (ASL19, Gibson22) may be problematic with noiseless data, since SYSREM can over-subtract the signal in the absence of noise. The polynomial pipeline Blain24 is therefore a natural choice for a noiseless bias test. Gibson22 remains usable in this regime provided its β parameter is pinned near 1 (see below).
 
 ### Step 1: Configure the test
 
@@ -822,7 +822,7 @@ confirms no pipeline bias on the dynamical parameters.
 :::{figure} figures/tutorial_retrieval_bias_corner.png
 :width: 90%
 :align: center
-Posterior probability distributions for the retrieved atmospheric parameters of HD 189733 b (CARMENES NIR, order 23, noiseless simulation), obtained with the log-likelihood formulations of Blain et al. (2024; red) and Gibson et al. (2022; green) using nested sampling with 200 live points. Gibson et al. (2022) includes the additional noise-scaling parameter β, shown in the bottom row and column; β is pinned near 1 via an informative prior [0.999, 1.001] (see below), and its truth line is omitted since it is fixed by construction. Contours enclose the 68 and 95 per cent credible regions. Black dashed lines mark the injected truth values (log₁₀(X<sub>H₂O</sub>) = -3.0, K<sub>P</sub> = 149.4 km s<sup>-1</sup>, T<sub>eq</sub> = 1170 K, v<sub>rest</sub> = 0 km s<sup>-1</sup>). Both formulations recover all truth values within 1 to 2σ. The BL19 log-likelihood is omitted from this noiseless test (see the note above).
+Posterior probability distributions for the retrieved atmospheric parameters of HD 189733 b (CARMENES NIR, order 23, noiseless simulation), obtained with the log-likelihood formulations of Blain et al. (2024; red) and Gibson et al. (2022; green) using nested sampling with 200 live points. Gibson et al. (2022) includes the additional noise-scaling parameter β, shown in the bottom row and column; β is pinned near 1 via an informative prior [0.999, 1.001] (see below), and its truth line is omitted since it is fixed by construction. Contours enclose the 68 and 95 per cent credible regions. Black dashed lines mark the injected truth values (log₁₀(X<sub>H₂O</sub>) = -3.0, K<sub>P</sub> = 149.4 km s<sup>-1</sup>, T<sub>eq</sub> = 1170 K, v<sub>rest</sub> = 0 km s<sup>-1</sup>). Both formulations recover all truth values within 1 to 2σ.
 :::
 
 Once you have run the two retrievals, the overlay corner plot can be generated with:
