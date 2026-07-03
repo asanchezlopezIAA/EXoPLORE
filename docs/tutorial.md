@@ -695,6 +695,8 @@ The `dimensionality` field selects the free parameters, and the `log_likelihood`
 
 We note that `1D_Gibson22` must be paired with `Gibson22`, and no other. The β parameter is the noise-scaling degree of freedom that makes the Gibson22 formulation self-consistent; pairing it with Blain24 or BL19 would sample β without ever using it, yielding a meaningless posterior. The simulator raises a `ValueError` on any invalid combination.
 
+The ASL19 preparation pipeline (Sánchez-López et al. 2019) was introduced as a detection method and does not define a retrieval likelihood of its own. Because it is SYSREM-based, retrievals that use the ASL19 preparation fall back to the Gibson22 framework: the forward model is filtered with the same linear projection and evaluated with the Gibson22 log-likelihood (with the β noise scaling). In practice this means pairing `pipeline.name: ASL19` with `dimensionality: 1D_Gibson22` and `log_likelihood: Gibson22`.
+
 The `live_points` field sets the number of active points that MultiNest maintains during nested sampling. A larger value produces a more accurate posterior and a more reliable evidence estimate, at a run time that grows roughly linearly with it. In our experience 200 is adequate for a four-parameter retrieval, and 500 to 1000 is appropriate for publication-quality posteriors. The full run time is typically one to four hours, depending on `live_points`, the number of orders, and the machine.
 
 The retrieval requires three additional dependencies:
@@ -724,7 +726,7 @@ Posterior distributions from a `1D` Blain24 retrieval of a single noiseless CARM
 
 ## Tutorial 7: Assessing retrieval pipeline bias
 
-> **Approximate run time:** the illustrative scripts run in seconds; each single-order retrieval takes ~10 to 20 min, so the full set of six (three noiseless, three noisy) is ~1 to 3 hours.
+> **Approximate run time:** the illustrative scripts run in seconds; each single-order retrieval takes ~20 to 80 min, so the full set of four (two noiseless, two noisy) is ~2 to 4 hours.
 
 Before trusting retrieved atmospheric parameters from real data, it is essential to verify that the pipeline itself does not introduce systematic offsets in the posterior. This is commonly referred to as a **pipeline bias test**, or **unbiasedness test**. EXoPLORE supports a clean, fast version of this test using noiseless simulated data.
 
@@ -736,7 +738,7 @@ A retrieval pipeline is *unbiased* if, when the forward model used in the likeli
 
 In order to isolate pure pipeline systematics, the test should be run with `noiseless: true`, which removes the stochastic noise floor. With perfect noiseless data and the correct forward model, the likelihood should peak sharply at the injected truth. Any offset is consequently pure pipeline bias, not noise. With noisy data, biases can be hidden inside the noise uncertainty and require many injection-recovery realisations to detect.
 
-> **We note that** SYSREM-based pipelines (ASL19, Gibson22) may be problematic with noiseless data, since SYSREM can over-subtract the signal in the absence of noise. The polynomial pipelines BL19 and Blain24 are therefore the natural choices for a noiseless bias test. Gibson22 remains usable in this regime provided its β parameter is pinned near 1 (see below).
+> **We note that** SYSREM-based pipelines (ASL19, Gibson22) may be problematic with noiseless data, since SYSREM can over-subtract the signal in the absence of noise. The polynomial pipeline Blain24 is therefore a natural choice for a noiseless bias test. Gibson22 remains usable in this regime provided its β parameter is pinned near 1 (see below). We omit the BL19 log-likelihood from this test for now: its scale-free form collapses to a near-delta posterior on noiseless data, which magnifies any residual model-data mismatch into a spurious offset, so it is not a reliable estimator of pipeline bias in this regime.
 
 ### Step 1: Configure the test
 
@@ -762,7 +764,7 @@ To keep the retrieval fast (minutes rather than hours), we restrict the simulati
     }
   },
   "pipeline": {
-    "name": "BL19",
+    "name": "Blain24",
     "prepare_template": true
   },
   "retrieval": {
@@ -776,12 +778,9 @@ To keep the retrieval fast (minutes rather than hours), we restrict the simulati
 }
 ```
 
-Ready-made configs are provided for each pipeline. Run the three retrievals sequentially:
+Ready-made configs are provided for each pipeline. Run the two retrievals sequentially:
 
 ```bash
-# Brogi & Line (2019), BL19 preparation pipeline, BL19 log-likelihood
-python -u scripts/run_exoplore.py configs/hd189733b_carmenes_retrieval_bl19_noiseless.json --run
-
 # Blain et al. (2024), Blain24 preparation pipeline, Blain24 log-likelihood
 python -u scripts/run_exoplore.py configs/hd189733b_carmenes_retrieval_blain24_noiseless.json --run
 
@@ -789,11 +788,11 @@ python -u scripts/run_exoplore.py configs/hd189733b_carmenes_retrieval_blain24_n
 python -u scripts/run_exoplore.py configs/hd189733b_carmenes_retrieval_gibson22_noiseless.json --run
 ```
 
-Each run takes a few minutes at 200 live points on a single order.
+Each run takes tens of minutes at 200 live points on a single order.
 
 ### Step 2: Run
 
-See the terminal commands in Step 1 above. Run all three configs to reproduce the overlay corner plot.
+See the terminal commands in Step 1 above. Run both configs to reproduce the overlay corner plot.
 
 ### Step 3: Interpret the results
 
@@ -806,15 +805,14 @@ Open `<run_name>/plots/retrieval_night_0_corner.pdf`. The truth values (plotted 
 | v_rest (km/s) | Posterior offset from 0 (no net velocity injected) |
 | log₁₀(VMR) | Broader, but centred near the injected abundance |
 
-The log-evidence `ln Z` printed to the terminal should be a meaningful negative number (e.g. -10 to -50). A value near 0 indicates the likelihood is flat and the test has failed (the run log should be checked for error messages).
+The log-evidence `ln Z` printed to the terminal by MultiNest is a useful sanity check: it should be a finite, well-behaved value rather than a diverging or `NaN` one (the run log should be checked for error messages if it is).
 
-**Passing criterion:** Kp, T_eq, and v_rest posteriors all cover their truth values within 1 to 2σ. A representative result:
+**Passing criterion:** Kp, T_eq, and v_rest posteriors all cover their truth values within 1 to 2σ. A representative Blain24 result:
 
 ```
-Kp   = 149.9 km/s  (truth 149.4 km/s)   ← <1 km/s offset
-T_eq = 1186  K     (truth 1170 K)        ← within 1σ
-v_rest = -0.06 km/s (truth 0)            ← essentially zero
-ln Z = -10.8                             ← meaningful evidence
+Kp   = 149.6 km/s  (truth 149.4 km/s)   ← within 1 sigma
+T_eq = 1175  K     (truth 1170 K)        ← within 1 sigma
+v_rest = 0.0 km/s  (truth 0)             ← essentially zero
 ```
 
 confirms no pipeline bias on the dynamical parameters.
@@ -822,19 +820,19 @@ confirms no pipeline bias on the dynamical parameters.
 :::{figure} figures/tutorial_retrieval_bias_corner.png
 :width: 90%
 :align: center
-Posterior probability distributions for the retrieved atmospheric parameters of HD 189733 b (CARMENES NIR, order 23, noiseless simulation), obtained with the log-likelihood formulations of Brogi & Line (2019; blue), Blain et al. (2024; red), and Gibson et al. (2022; green) using nested sampling with 200 live points. Gibson et al. (2022) includes the additional noise-scaling parameter β, shown in the bottom row and column; β is pinned near 1 via an informative prior [0.999, 1.001] (see below). Contours enclose the 68 and 95 per cent credible regions. Black dashed lines mark the injected truth values (log₁₀(X<sub>H₂O</sub>) = -3.0, K<sub>P</sub> = 149.4 km s<sup>-1</sup>, T<sub>eq</sub> = 1170 K, v<sub>rest</sub> = 0 km s<sup>-1</sup>, β = 1). All three formulations recover all truth values within 1 to 2σ.
+Posterior probability distributions for the retrieved atmospheric parameters of HD 189733 b (CARMENES NIR, order 23, noiseless simulation), obtained with the log-likelihood formulations of Blain et al. (2024; red) and Gibson et al. (2022; green) using nested sampling with 200 live points. Gibson et al. (2022) includes the additional noise-scaling parameter β, shown in the bottom row and column; β is pinned near 1 via an informative prior [0.999, 1.001] (see below), and its truth line is omitted since it is fixed by construction. Contours enclose the 68 and 95 per cent credible regions. Black dashed lines mark the injected truth values (log₁₀(X<sub>H₂O</sub>) = -3.0, K<sub>P</sub> = 149.4 km s<sup>-1</sup>, T<sub>eq</sub> = 1170 K, v<sub>rest</sub> = 0 km s<sup>-1</sup>). Both formulations recover all truth values within 1 to 2σ. The BL19 log-likelihood is omitted from this noiseless test (see the note above).
 :::
 
-Once you have run the three retrievals, the overlay corner plot can be generated with:
+Once you have run the two retrievals, the overlay corner plot can be generated with:
 
 ```bash
 python scripts/plot_corner_overlay.py \\
   --output-root /path/to/EXoPLORE_clean_run/HD189733b/CARMENES_NIR/transit \\
-  --runs  BL19_withsignal_1nights_SNR_comb1_simdata_noiseless_stdnoisex1 \\
-          Blain24_withsignal_1nights_SNR_comb1_simdata_noiseless_stdnoisex1 \\
-          Gibson22_withsignal_1nights_SNR_comb1_simdata_noiseless_stdnoisex1 \\
-  --labels "Brogi & Line (2019)" "Blain et al. (2024)" "Gibson et al. (2022)" \\
+  --runs  Blain24_withsignal_1nights_SNR_comb1_simdata_noiseless_stdnoisex1 \\
+          Gibson22_withsignal_N4_1nights_SNR_comb1_simdata_noiseless_stdnoisex1 \\
+  --labels "Blain et al. (2024)" "Gibson et al. (2022)" \\
   --truths -3.0 149.4 1170.0 0.0 \\
+  --colors "#c44e52" "#55a868" \\
   --output docs/figures/tutorial_retrieval_bias_corner.png
 ```
 

@@ -179,25 +179,27 @@ Each recipe was introduced by a specific study, on a specific instrument and
 target. We summarise below what each does and where it was developed, and name
 the EXoPLORE routines that implement it.
 
+This section concerns the **data preparation** only. The log-likelihood
+formulations used in the retrievals (BL19, Blain24, Gibson22) are described
+separately in [Section 5](#5-from-cross-correlation-to-a-likelihood).
+
 - **BL19** (Brogi & Line [2019](https://doi.org/10.3847/1538-3881/aaffd3), AJ,
-  157, 114). Introduced as part of a cross-correlation-to-likelihood retrieval
-  framework, validated on simulated photon-noise-dominated CRIRES K-band data and
-  applied to real CRIRES K-band spectra of HD 209458 b and HD 189733 b. Each
-  spectrum is normalised by the median of its brightest pixels, and the tellurics
-  are removed in two stages: a low-order polynomial fit to the master (median)
-  spectrum, then a per-channel polynomial in time. Implemented in
-  `exoplore.pipelines.bl19` as `pipeline_BL19_norm` and `pipeline_BL19_tellcorr`,
-  with telluric masking via `mask_tellurics`.
+  157, 114). The preparation was demonstrated on simulated and real CRIRES K-band
+  spectra of HD 209458 b and HD 189733 b. Each spectrum is normalised by the
+  median of its brightest pixels, and the tellurics are removed in two stages: a
+  low-order polynomial fit to the master (median) spectrum, then a per-channel
+  polynomial in time. Implemented in `exoplore.pipelines.bl19` as
+  `pipeline_BL19_norm` and `pipeline_BL19_tellcorr`, with telluric masking via
+  `mask_tellurics`.
 - **Blain24** (Blain, Sánchez-López & Mollière
   [2024](https://arxiv.org/abs/2402.14001), AJ, 167, 179). Developed on CARMENES
-  near-infrared (R ~ 80,400) transmission data of HD 189733 b, with a formal
-  derivation of how to prepare the forward model to match the data and a Bias
-  Pipeline Metric to quantify residual bias. The throughput and blaze are removed
-  with a per-exposure low-order polynomial over wavelength
+  near-infrared (R ~ 80,400) transmission data of HD 189733 b. The throughput and
+  blaze are removed with a per-exposure low-order polynomial over wavelength
   (`remove_throughput_fit`), and the tellurics with a per-channel low-order
   polynomial in airmass on the log-flux (`remove_telluric_lines_fit`), masking
   channels where the fitted transmittance falls below 0.8. Both live in
-  `exoplore.pipelines.blain24`.
+  `exoplore.pipelines.blain24`. This preparation is also implemented natively in
+  petitRADTRANS; see its [retrieval documentation](https://petitradtrans.readthedocs.io/en/latest/content/notebooks/retrieval_spectral_model.html).
 - **ASL19** (Sánchez-López et al.
   [2019](https://doi.org/10.1051/0004-6361/201936084), A&A, 630, A53). Developed
   for the CARMENES near-infrared detection of water vapour in HD 209458 b, using
@@ -209,11 +211,7 @@ the EXoPLORE routines that implement it.
 - **Gibson22** (Gibson et al. [2022](https://doi.org/10.1093/mnras/stac091),
   MNRAS, 512, 4618). Developed on UVES optical transmission spectroscopy of the
   ultra-hot Jupiter WASP-121b. It applies an out-of-transit normalisation
-  followed by SYSREM detrending (`sysrem`), and, for retrievals, filters the
-  forward model with the same operator represented as a single linear projection
-  rather than re-running SYSREM at every likelihood call
-  (`SYSREM_filtering_projector` and `filter_model_singleorder`), while a β
-  parameter infers the noise scale during the fit.
+  followed by SYSREM detrending (`sysrem`).
 
 ```{figure} figures/pipeline_steps.png
 :width: 90%
@@ -373,7 +371,10 @@ ln L_Blain24 = -(1/2) · Σ_n [ (d(n) - m(n)) / σ(n) ]².
 ```
 
 Each pixel is weighted by `1/σ(n)²`. The formulation derives from the framework
-of Gibson et al. (2020, MNRAS, 493, 2215).
+of Gibson et al. (2020, MNRAS, 493, 2215). The Blain24 method and its retrieval
+framework are also implemented natively in petitRADTRANS, where they are handled
+directly; we encourage readers to consult the [petitRADTRANS retrieval
+documentation](https://petitradtrans.readthedocs.io/en/latest/content/notebooks/retrieval_spectral_model.html).
 
 **Gibson et al. (2022, MNRAS, 512, 4618), `Gibson22`.** The same chi-square with a
 global scale factor `β` multiplying the uncertainties, plus a `-N ln β` penalty.
