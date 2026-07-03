@@ -740,7 +740,7 @@ The preparation is unavoidable: the telluric and stellar lines dominate the spec
 
 In order to isolate pure pipeline systematics, the test should be run with `noiseless: true`, which removes the stochastic noise floor. With perfect noiseless data and the correct forward model, the likelihood should peak sharply at the injected truth. Any offset is consequently pure pipeline bias, not noise. With noisy data, biases can be hidden inside the noise uncertainty and require many injection-recovery realisations to detect.
 
-> **We note that** SYSREM-based pipelines (ASL19, Gibson22) may be problematic with noiseless data, since SYSREM can over-subtract the signal in the absence of noise. The polynomial pipeline Blain24 is therefore a natural choice for a noiseless bias test. Gibson22 remains usable in this regime provided its β parameter is pinned near 1 (see below).
+> **We note that** SYSREM-based pipelines (ASL19, Gibson22) may be problematic with noiseless data, since SYSREM can over-subtract the signal in the absence of noise. The polynomial pipeline Blain24 is therefore a natural choice for a noiseless bias test. Gibson22 remains usable in this regime provided its β parameter is pinned near 1 (see Step 1).
 
 ### Step 1: Configure the test
 
@@ -792,6 +792,21 @@ python -u scripts/run_exoplore.py configs/hd189733b_carmenes_retrieval_gibson22_
 
 Each run takes tens of minutes at 200 live points on a single order.
 
+The Gibson22 noiseless config uses `dimensionality: 1D_Gibson22` and pins its β noise-scaling parameter near 1 through a narrow prior, since β would otherwise diverge on noiseless data (the residuals vanish, so the likelihood is maximised by β → 0). To pin it, set a very narrow prior range on the last (β) parameter:
+
+```json
+"retrieval": {
+  "dimensionality": "1D_Gibson22",
+  "log_likelihood": "Gibson22",
+  "prior_bounds": {
+    "1D_Gibson22": [[-8.0, 0.0], [85.0, 200.0], [400.0, 1500.0],
+               [-25.0, 25.0], [0.999, 1.001]]
+  }
+}
+```
+
+β remains a free parameter, so the sampler runs normally, but it is effectively fixed to 1, which can also be read as an informative prior encoding that noiseless data has perfectly calibrated uncertainties. The recovered T_eq, Kp, and v_rest posteriors then isolate purely pipeline-induced offsets, with no noise contribution.
+
 ### Step 2: Run
 
 See the terminal commands in Step 1 above. Run both configs to reproduce the overlay corner plot.
@@ -822,7 +837,7 @@ confirms no pipeline bias on the dynamical parameters.
 :::{figure} figures/tutorial_retrieval_bias_corner.png
 :width: 90%
 :align: center
-Posterior probability distributions for the retrieved atmospheric parameters of HD 189733 b (CARMENES NIR, order 23, noiseless simulation), obtained with the log-likelihood formulations of Blain et al. (2024; red) and Gibson et al. (2022; green) using nested sampling with 200 live points. Gibson et al. (2022) includes the additional noise-scaling parameter β, shown in the bottom row and column; β is pinned near 1 via an informative prior [0.999, 1.001] (see below), and its truth line is omitted since it is fixed by construction. Contours enclose the 68 and 95 per cent credible regions. Black dashed lines mark the injected truth values (log₁₀(X<sub>H₂O</sub>) = -3.0, K<sub>P</sub> = 149.4 km s<sup>-1</sup>, T<sub>eq</sub> = 1170 K, v<sub>rest</sub> = 0 km s<sup>-1</sup>). Both formulations recover all truth values within 1 to 2σ.
+Posterior probability distributions for the retrieved atmospheric parameters of HD 189733 b (CARMENES NIR, order 23, noiseless simulation), obtained with the log-likelihood formulations of Blain et al. (2024; red) and Gibson et al. (2022; green) using nested sampling with 200 live points. Gibson et al. (2022) includes the additional noise-scaling parameter β, shown in the bottom row and column; β is pinned near 1 via an informative prior [0.999, 1.001] (see Step 1), and its truth line is omitted since it is fixed by construction. Contours enclose the 68 and 95 per cent credible regions. Black dashed lines mark the injected truth values (log₁₀(X<sub>H₂O</sub>) = -3.0, K<sub>P</sub> = 149.4 km s<sup>-1</sup>, T<sub>eq</sub> = 1170 K, v<sub>rest</sub> = 0 km s<sup>-1</sup>). Both formulations recover all truth values within 1 to 2σ.
 :::
 
 Once you have run the two retrievals, the overlay corner plot can be generated with:
@@ -887,23 +902,6 @@ because both weight each pixel by its known uncertainty `1/σ²`. The
 full treatment of how the log-likelihoods differ in their handling of the noise
 scale, and a controlled toy illustration of when per-pixel weighting matters,
 which informs the choice of likelihood for a given dataset.
-
-### Testing Gibson22 noiseless with a pinned β prior
-
-There is a principled way to run a Gibson22 noiseless bias test: use an informative prior that pins β near 1. To do so, set a very narrow prior range in the config:
-
-```json
-"retrieval": {
-  "dimensionality": "1D_Gibson22",
-  "log_likelihood": "Gibson22",
-  "prior_bounds": {
-    "1D_Gibson22": [[-8.0, 0.0], [85.0, 200.0], [400.0, 1500.0],
-               [-25.0, 25.0], [0.999, 1.001]]
-  }
-}
-```
-
-β is still a free parameter (MultiNest is happy) but is effectively fixed to 1, preventing divergence. Although a workaround for illustration purposes, this can also be interpreted as a correctly informative prior encoding the knowledge that noiseless data has perfectly calibrated uncertainties. The recovered T_eq, Kp, and v_rest posteriors consequently isolate purely pipeline-induced biases, with no noise contribution. If an offset survives, it is real; if it disappears, it was a noise fluctuation.
 
 ---
 
