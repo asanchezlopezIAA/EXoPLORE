@@ -5526,6 +5526,51 @@ class ExoploreSimulator:
                                             [np.log10(_mini_b7["vmr"][2]),
                                              _mini_b7["K_p"], _mini_b7["T_equ"],
                                              _mini_b7["V_wind"], 1.0])
+
+                            # Zoom each axis to the posterior bulk (weighted
+                            # 0.3 to 99.7 percentile with padding), so the
+                            # corner is not stretched to the full prior range.
+                            _d9m = _dat9[_mask9, :]
+                            _w9m = _wts9[_mask9]
+                            _truth_for_range = (
+                                _truths_g229
+                                if _mini_b7["Ret_dim"] in (
+                                    "1D_Gibson22", "Blain24_beta")
+                                else _truths_1d9)
+
+                            def _wrange9(_col, _tv=None):
+                                _o = np.argsort(_col)
+                                _c = _col[_o]
+                                _cw = np.cumsum(_w9m[_o])
+                                _cw = _cw / _cw[-1]
+                                _lo = np.interp(0.003, _cw, _c)
+                                _hi = np.interp(0.997, _cw, _c)
+                                if _tv is not None and np.isfinite(_tv):
+                                    _lo = min(_lo, _tv)
+                                    _hi = max(_hi, _tv)
+                                _pad = 0.10 * (_hi - _lo) if _hi > _lo else 1.0
+                                return (_lo - _pad, _hi + _pad)
+
+                            _ranges9 = [
+                                _wrange9(
+                                    _d9m[:, _k],
+                                    (_truth_for_range[_k]
+                                     if _truth_for_range is not None
+                                     and _k < len(_truth_for_range) else None))
+                                for _k in range(_d9m.shape[1])]
+
+                            # Shared "pretty" corner style (filled blue
+                            # contours), matching the multi-method comparison
+                            # plots.
+                            _cstyle9 = dict(
+                                color="#3b5ba5",
+                                fill_contours=True,
+                                levels=(0.68, 0.95),
+                                smooth=1.0, smooth1d=1.0,
+                                range=_ranges9,
+                                contour_kwargs={"linewidths": 1.5},
+                                hist_kwargs={"linewidth": 2})
+
                             if _mini_b7["Ret_dim"] == "1D":
                                 _fig9 = _corner.corner(
                                     _dat9[_mask9, :],
@@ -5535,9 +5580,10 @@ class ExoploreSimulator:
                                     title_fmt=".2E",
                                     truths=_truths_1d9,
                                     quantiles=[0.16, 0.5, 0.84],
-                                    color="k", truth_color="firebrick",
+                                    truth_color="firebrick",
                                     label_kwargs={"fontsize": 18},
-                                    title_kwargs={"fontsize": 18})
+                                    title_kwargs={"fontsize": 18},
+                                    **_cstyle9)
                             elif _mini_b7["Ret_dim"] in ["1D_Gibson22", "Blain24_beta"]:
                                 _fig9 = _corner.corner(
                                     _dat9[_mask9, :],
@@ -5547,9 +5593,10 @@ class ExoploreSimulator:
                                     title_fmt=".2E",
                                     truths=_truths_g229,
                                     quantiles=[0.16, 0.5, 0.84],
-                                    color="k", truth_color="firebrick",
+                                    truth_color="firebrick",
                                     label_kwargs={"fontsize": 18},
-                                    title_kwargs={"fontsize": 18})
+                                    title_kwargs={"fontsize": 18},
+                                    **_cstyle9)
                             else:
                                 _fig9 = _corner.corner(
                                     _dat9[_mask9, :],
@@ -5558,9 +5605,9 @@ class ExoploreSimulator:
                                     plot_datapoints=False,
                                     title_fmt=".2E",
                                     quantiles=[0.16, 0.5, 0.84],
-                                    color="k",
                                     label_kwargs={"fontsize": 18},
-                                    title_kwargs={"fontsize": 18})
+                                    title_kwargs={"fontsize": 18},
+                                    **_cstyle9)
                             for _ax9 in _fig9.get_axes():
                                 _ax9.tick_params(axis="both", **_tick9)
                             _plt9.savefig(

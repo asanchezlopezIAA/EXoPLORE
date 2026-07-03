@@ -652,74 +652,68 @@ The simulator writes diagnostic products both per individual night and for the c
 
 ## Tutorial 6: Enable Bayesian retrieval
 
-> **Approximate run time:** ~15 to 30 min (single order, one night, plus a nested-sampling retrieval at 200 live points; the retrieval dominates).
+> **Approximate run time:** ~28 min on an Apple Mac Studio M2 Ultra (64 GB RAM), running `configs/hd189733b_carmenes_retrieval_blain24_noiseless.json` (CARMENES NIR, order 23, noiseless, Blain24 pipeline and log-likelihood, nested sampling at 200 live points). The retrieval dominates the total; the forward-model blocks that precede it are fast for a single order.
 
 :::{note}
-**From detection to atmospheric constraints: why retrieval is needed**
+**From detection to atmospheric constraints**
 
-A peak in the Kp-Vsys map tells you that a molecular species is present and gives its approximate orbital and atmospheric velocity. What it does not give you is a formal posterior probability distribution over atmospheric parameters: abundances, temperature structure, or chemical composition ratios. To go from "H₂O detected at 7σ" to "log₁₀(H₂O) = -2.4 ± 0.3" requires a Bayesian retrieval.
+A peak in the Kp-Vsys map establishes that a species is present and yields its approximate orbital and rest-frame velocity. It does not, however, provide a posterior probability distribution over the atmospheric parameters, that is, the abundances, the temperature structure, or the chemical composition ratios. To go from a detection to a constraint of the form log₁₀(X<sub>H₂O</sub>) = -4.2 ± 0.3 we must perform a Bayesian retrieval.
 
-In the retrieval framework, the forward model (petitRADTRANS spectrum at a given set of parameters) is Doppler-shifted, run through the same preparation pipeline as the data, and compared to the data via a log-likelihood function. A nested sampler (MultiNest) or MCMC (emcee) explores the parameter space and maps the posterior. The critical requirement is that the forward model is prepared identically to the data (this is the pipeline bias problem discussed above).
+In the retrieval, a petitRADTRANS forward model is computed for a trial set of parameters, Doppler-shifted to each exposure, and processed through the same preparation pipeline as the data. It is then compared to the data through a log-likelihood function, and a nested sampler (MultiNest) or an MCMC (emcee) explores the parameter space to map the posterior. We caution that the forward model must be prepared identically to the data at every likelihood evaluation. This is the pipeline-bias requirement, and it is the subject of Tutorial 7.
 
-The log-likelihood formulations available in EXoPLORE (BL19, Blain24, Gibson22) differ in how they treat per-pixel noise and model amplitude scaling. For polynomial-based pipelines with reliable per-pixel uncertainties, the Blain24 formulation provides a natural default, although the most suitable choice depends on the dataset (see the [Concepts primer](concepts.md#5-from-cross-correlation-to-a-likelihood)).
+Three log-likelihood formulations are available (BL19, Blain24, Gibson22), which differ in how they treat the per-pixel noise and the model amplitude scaling. For a polynomial pipeline with reliable per-pixel uncertainties the Blain24 formulation is a natural choice, although the most suitable formulation depends on the dataset (see the [Concepts primer](concepts.md#5-from-cross-correlation-to-a-likelihood)).
 :::
 
-After verifying a detection in the forward-model run, the Bayesian retrieval can be enabled within the **same simulation** by setting `retrieval.enabled: true`. The retrieval runs at the end of the simulation, after all matrices have been built and the CCF has been computed. Therefore, it does not require a separate run or re-loading of saved files.
+The retrieval is enabled within the **same simulation** by setting `retrieval.enabled: true`. It runs at the end of the simulation, after the matrices have been built and the cross-correlation has been computed, and reads those products directly from memory. Consequently, it requires neither a separate run nor the reloading of saved files. To repeat a retrieval on a past simulation, the full simulation must be re-run, since the intermediate matrices are not reloaded from disk.
 
-The example below uses `"log_likelihood": "Blain24"`, which is the log-likelihood formulation from Blain, Sánchez-López & Mollière (2024, AJ, 167, 179). Blain24 accounts for per-order noise scaling and is the recommended choice for most retrieval configurations in EXoPLORE.
+The example below uses the Blain24 log-likelihood (Blain, Sánchez-López & Mollière 2024, AJ, 167, 179), which accounts for the per-order noise scaling:
 
 ```json
 "retrieval": {
   "enabled": true,
   "sampler": "nested_sampling",
   "log_likelihood": "Blain24",
-  "dimensionality": "1D_CtoO_met",
+  "dimensionality": "1D",
   "live_points": 200
 }
 ```
 
-The `live_points` parameter controls the number of active sample points that MultiNest maintains during nested sampling. Higher values produce more accurate posteriors and more reliable evidence estimates, but runtime scales roughly linearly with `live_points`. A value of 200 is a reasonable starting point for a 4-parameter retrieval; increase to 500 to 1000 for publication-quality results.
-
-This configuration retrieves the C/O ratio and metallicity using the Blain24 log-likelihood. The four supported retrieval modes and their required likelihood are:
+The `dimensionality` field selects the free parameters, and the `log_likelihood` must be compatible with it:
 
 | `dimensionality` | `log_likelihood` | Free parameters |
 |---|---|---|
-| `"1D"` | `"BL19"` or `"Blain24"` | log(VMR), Kp, T_eq, v_wind |
-| `"1D_Gibson22"` | `"Gibson22"` **only** | log(VMR), Kp, T_eq, v_wind, β |
+| `"1D"` | `"BL19"` or `"Blain24"` | log(VMR), Kp, T_eq, v_rest |
+| `"1D_Gibson22"` | `"Gibson22"` **only** | log(VMR), Kp, T_eq, v_rest, β |
 | `"1D_CtoO_met"` | `"BL19"` or `"Blain24"` | C/O, metallicity (EasyChem) |
-| `"1D_extended"` | `"BL19"` or `"Blain24"` | log(VMR) × 6 species, Kp, T_eq, v_wind |
-| `"1D_extended_fast"` | `"BL19"` or `"Blain24"` | log(VMR) × 6 species, T_eq (Kp/v_wind fixed) |
+| `"1D_extended"` | `"BL19"` or `"Blain24"` | log(VMR) × 6 species, Kp, T_eq, v_rest |
+| `"1D_extended_fast"` | `"BL19"` or `"Blain24"` | log(VMR) × 6 species, T_eq (Kp/v_rest fixed) |
 | `"2D"` | `"BL19"` or `"Blain24"` | morning/evening VMR + T_eq |
 
-> **`1D_Gibson22` must be paired with `Gibson22` only.** The β parameter is the noise-scaling degree of freedom that makes Gibson22 physically meaningful (using it with Blain24 or BL19 samples β but never uses it, producing a meaningless posterior). The simulator raises a `ValueError` on invalid combinations.
+We note that `1D_Gibson22` must be paired with `Gibson22`, and no other. The β parameter is the noise-scaling degree of freedom that makes the Gibson22 formulation self-consistent; pairing it with Blain24 or BL19 would sample β without ever using it, yielding a meaningless posterior. The simulator raises a `ValueError` on any invalid combination.
 
-Retrieval dependencies must be installed to that end:
+The `live_points` field sets the number of active points that MultiNest maintains during nested sampling. A larger value produces a more accurate posterior and a more reliable evidence estimate, at a run time that grows roughly linearly with it. In our experience 200 is adequate for a four-parameter retrieval, and 500 to 1000 is appropriate for publication-quality posteriors. The full run time is typically one to four hours, depending on `live_points`, the number of orders, and the machine.
+
+The retrieval requires three additional dependencies:
 
 ```bash
 pip install pymultinest emcee corner
 ```
 
-`pymultinest` is needed for nested sampling, `emcee` for the MCMC sampler, and `corner` for posterior corner plots. PyMultiNest also requires the compiled MultiNest Fortran library (see its [installation guide](https://github.com/JohannesBuchner/PyMultiNest)).
+Here `pymultinest` provides the nested sampler, `emcee` the MCMC sampler, and `corner` the posterior corner plots. PyMultiNest further requires the compiled MultiNest Fortran library (see its [installation guide](https://github.com/JohannesBuchner/PyMultiNest)).
 
-> **Important:** the retrieval reads the spectral matrices and mask arrays that the forward-model blocks built in memory during the same run. It does not load previously saved NPZ files from disk. To re-run the retrieval on a previous simulation, the full simulation must be re-run (or a retrieval-only entry point must be implemented).
+The MultiNest chain files are written to `<run_name>/matrices/matrices_<run_name>/` and the corner plot to `<run_name>/plots/`. See [docs/outputs.md](outputs.md#retrieval-outputs) for how to read and plot the posteriors.
 
-Typical run time: 1 to 4 hours depending on `live_points`, number of orders, and the machine.
-
-**Retrieval output:** MultiNest chain files are written to `<run_name>/matrices/matrices_<run_name>/` and the corner plot PDF to `<run_name>/plots/`. See [docs/outputs.md](outputs.md#retrieval-outputs) for how to read and plot the posteriors.
-
-A ready-made config for this tutorial (CARMENES NIR, order 23, noiseless, Blain24 pipeline and log-likelihood, `1D_CtoO_met` dimensionality) is provided:
+A ready-to-run config is provided at `configs/hd189733b_carmenes_retrieval_blain24_noiseless.json` (CARMENES NIR, order 23, noiseless, Blain24 pipeline and log-likelihood, `1D` dimensionality):
 
 ```bash
-python -u scripts/run_exoplore.py configs/hd189733b_carmenes_retrieval_cto_met.json --run
+python -u scripts/run_exoplore.py configs/hd189733b_carmenes_retrieval_blain24_noiseless.json --run
 ```
-
-The retrieval produces a corner plot of the marginal and joint posterior distributions. The example below shows a `1D` retrieval (log₁₀(X<sub>H₂O</sub>), K<sub>P</sub>, T<sub>eq</sub>, and v<sub>wind</sub>) of a noiseless CARMENES NIR order, recovering the injected truth values (dashed lines).
 
 ```{figure} figures/tutorial6_retrieval_corner.png
 :width: 75%
 :align: center
 
-Posterior distributions from a Blain24 retrieval of a single noiseless CARMENES NIR order of HD 189733 b. The diagonal panels show the marginal distribution of each parameter and the off-diagonal panels the pairwise joint distributions, with contours at the 68 and 95 per cent credible levels. Dashed lines mark the injected truth values.
+Posterior distributions from a `1D` Blain24 retrieval of a single noiseless CARMENES NIR order (order 23) of HD 189733 b. The free parameters are the logarithmic water volume mixing ratio log₁₀(X<sub>H₂O</sub>), the orbital velocity semi-amplitude K<sub>P</sub>, the equilibrium temperature T<sub>eq</sub>, and the rest-frame velocity v<sub>rest</sub>. The diagonal panels show the marginal distribution of each parameter, and the off-diagonal panels the pairwise joint distributions, with contours at the 68 and 95 per cent credible levels. Red lines mark the injected truth values, and dashed lines the 16th, 50th, and 84th posterior percentiles. All four truths are recovered within the credible intervals: log₁₀(X<sub>H₂O</sub>) = -2.9 ± 0.5, K<sub>P</sub> = 150.0 ± 4.0 km s<sup>-1</sup>, T<sub>eq</sub> = 1170 ± 80 K, and v<sub>rest</sub> = 0.0 ± 0.2 km s<sup>-1</sup>.
 ```
 
 ---
