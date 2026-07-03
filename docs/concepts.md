@@ -173,6 +173,48 @@ logic:
 3. **Mask** the wavelength channels where telluric absorption is so deep that
    no usable signal survives.
 
+### The available preparation pipelines
+
+Each recipe was introduced by a specific study, on a specific instrument and
+target. We summarise below what each does and where it was developed, and name
+the EXoPLORE routines that implement it.
+
+- **BL19** (Brogi & Line [2019](https://doi.org/10.3847/1538-3881/aaffd3), AJ,
+  157, 114). Introduced as part of a cross-correlation-to-likelihood retrieval
+  framework, validated on simulated photon-noise-dominated CRIRES K-band data and
+  applied to real CRIRES K-band spectra of HD 209458 b and HD 189733 b. Each
+  spectrum is normalised by the median of its brightest pixels, and the tellurics
+  are removed in two stages: a low-order polynomial fit to the master (median)
+  spectrum, then a per-channel polynomial in time. Implemented in
+  `exoplore.pipelines.bl19` as `pipeline_BL19_norm` and `pipeline_BL19_tellcorr`,
+  with telluric masking via `mask_tellurics`.
+- **Blain24** (Blain, Sánchez-López & Mollière
+  [2024](https://arxiv.org/abs/2402.14001), AJ, 167, 179). Developed on CARMENES
+  near-infrared (R ~ 80,400) transmission data of HD 189733 b, with a formal
+  derivation of how to prepare the forward model to match the data and a Bias
+  Pipeline Metric to quantify residual bias. The throughput and blaze are removed
+  with a per-exposure low-order polynomial over wavelength
+  (`remove_throughput_fit`), and the tellurics with a per-channel low-order
+  polynomial in airmass on the log-flux (`remove_telluric_lines_fit`), masking
+  channels where the fitted transmittance falls below 0.8. Both live in
+  `exoplore.pipelines.blain24`.
+- **ASL19** (Sánchez-López et al.
+  [2019](https://doi.org/10.1051/0004-6361/201936084), A&A, 630, A53). Developed
+  for the CARMENES near-infrared detection of water vapour in HD 209458 b, using
+  SYSREM (a principal-component analysis with proper error propagation) to remove
+  the telluric and stellar lines. In EXoPLORE it combines a pseudo-continuum
+  normalisation (`pipeline_pseudocontinuum_norm`) with a telluric-window mask
+  (`mask_tellurics_window`) and SYSREM detrending (`sysrem` / `apply_sysrem` in
+  `exoplore.pipelines.sysrem`).
+- **Gibson22** (Gibson et al. [2022](https://doi.org/10.1093/mnras/stac091),
+  MNRAS, 512, 4618). Developed on UVES optical transmission spectroscopy of the
+  ultra-hot Jupiter WASP-121b. It applies an out-of-transit normalisation
+  followed by SYSREM detrending (`sysrem`), and, for retrievals, filters the
+  forward model with the same operator represented as a single linear projection
+  rather than re-running SYSREM at every likelihood call
+  (`SYSREM_filtering_projector` and `filter_model_singleorder`), while a β
+  parameter infers the noise scale during the fit.
+
 ```{figure} figures/pipeline_steps.png
 :width: 90%
 :align: center
@@ -202,6 +244,21 @@ so that it carries the same distortions. EXoPLORE does this when
 `pipeline.prepare_template: true`. An inconsistent or omitted template
 preparation is a recurrent source of biased results in the literature, and is
 the subject of Tutorial 7.
+
+:::{caution}
+Some of the individual steps generalise well, such as dividing out a low-order
+continuum or exploiting the near-linear dependence of the log-telluric
+transmission on airmass. Others are closely tied to the specifics of a given
+instrument, target, and observing strategy, and the normalisation, telluric, and
+stellar corrections that suit one dataset may fail or introduce biases in
+another. EXoPLORE provides several literature methods (described above with their
+original references) as a starting point, but the appropriate choice, the number
+of SYSREM components, the masking thresholds, and the order-by-order treatment
+all depend on the data at hand. We caution that these must be studied and, where
+necessary, adapted for each dataset. High-resolution data analysis is difficult,
+and every night carries its own tellurics, systematics, and stellar behaviour; a
+pipeline should be verified on the data it is applied to, not applied blindly.
+:::
 
 > The SYSREM-based recipes raise a further question: how many components should
 > be removed? Too few leaves systematics in the data; too many over-fits and

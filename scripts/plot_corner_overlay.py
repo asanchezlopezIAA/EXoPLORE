@@ -14,7 +14,7 @@ python scripts/plot_corner_overlay.py \\
             Gibson22_withsignal_1nights_SNR_comb1_simdata_noiseless_stdnoisex1 \\
     --labels "Brogi & Line (2019)" "Blain et al. (2024)" "Gibson et al. (2022)" \\
     --truths -3.0 149.4 1170.0 0.0 \\
-    --param-names "log10(X_H2O)" "Kp" "T_eq" "v_wind" \\
+    --param-names "log10(X_H2O)" "Kp" "T_eq" "v_rest" \\
     --output docs/figures/tutorial_retrieval_bias_corner.png
 
 Arguments
@@ -52,7 +52,7 @@ _DEFAULT_PARAM_NAMES = [
     r'$\log_{10}(X_{\rm H_2O})$',
     r'$K_{\rm P}$ (km s$^{-1}$)',
     r'$T_{\rm eq}$ (K)',
-    r'$v_{\rm wind}$ (km s$^{-1}$)',
+    r'$v_{\rm rest}$ (km s$^{-1}$)',
     r'$\beta$',
 ]
 

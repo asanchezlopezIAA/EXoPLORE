@@ -65,6 +65,10 @@ The atmosphere block defines **two separate petitRADTRANS models**: the injected
 
 The `"pipeline": "Blain24"` entry selects the Blain24 preparation pipeline (Blain, Sánchez-López & Mollière 2024). Blain24 first removes the instrumental throughput and blaze by dividing each exposure by a second-order polynomial fit over wavelength, and then removes the telluric absorption by fitting a second-order polynomial to the logarithm of the flux as a function of airmass (the log-transmittance of the Earth's atmosphere is, to first order, linear in airmass) and dividing by the resulting fit. Wavelength channels where the fitted telluric transmittance falls below 0.8 are masked, to exclude regions too strongly affected by telluric absorption.
 
+:::{caution}
+As discussed in the [Concepts primer, Section 3](concepts.md#3-the-preparation-pipeline-removing-the-contaminants-and-its-cost), some individual steps of these preparation methods generalise well, while others are tied to the specifics of a given dataset and do not transfer blindly. The pipeline choice, the SYSREM component count, and the masking thresholds should be studied and, where necessary, adapted for the data at hand, and verified on that data rather than applied blindly. Every night carries its own tellurics, systematics, and stellar behaviour.
+:::
+
 :::{important}
 **Preparing pipeline and retrieval consistency**
 
@@ -732,7 +736,7 @@ A retrieval pipeline is *unbiased* if, when the forward model used in the likeli
 
 In order to isolate pure pipeline systematics, the test should be run with `noiseless: true`, which removes the stochastic noise floor. With perfect noiseless data and the correct forward model, the likelihood should peak sharply at the injected truth. Any offset is consequently pure pipeline bias, not noise. With noisy data, biases can be hidden inside the noise uncertainty and require many injection-recovery realisations to detect.
 
-> **We note that** SYSREM-based pipelines (ASL19, Gibson22) may be problematic with noiseless data, as SYSREM can over-subtract signal in the absence of noise. BL19 and Blain24 are the recommended choices for noiseless bias testing. Gibson22 with a β prior pinned near 1 (see below) is under evaluation.
+> **We note that** SYSREM-based pipelines (ASL19, Gibson22) may be problematic with noiseless data, since SYSREM can over-subtract the signal in the absence of noise. The polynomial pipelines BL19 and Blain24 are therefore the natural choices for a noiseless bias test. Gibson22 remains usable in this regime provided its β parameter is pinned near 1 (see below).
 
 ### Step 1: Configure the test
 
@@ -785,7 +789,7 @@ python -u scripts/run_exoplore.py configs/hd189733b_carmenes_retrieval_blain24_n
 python -u scripts/run_exoplore.py configs/hd189733b_carmenes_retrieval_gibson22_noiseless.json --run
 ```
 
-Each run takes a few minutes with 400 live points and one order.
+Each run takes a few minutes at 200 live points on a single order.
 
 ### Step 2: Run
 
@@ -799,17 +803,17 @@ Open `<run_name>/plots/retrieval_night_0_corner.pdf`. The truth values (plotted 
 |---|---|
 | Kp (km/s) | Posterior offset from the planet's true orbital velocity |
 | T_eq (K) | Posterior offset from the simulated equilibrium temperature |
-| v_wind (km/s) | Posterior offset from 0 (no wind injected) |
+| v_rest (km/s) | Posterior offset from 0 (no net velocity injected) |
 | log₁₀(VMR) | Broader, but centred near the injected abundance |
 
 The log-evidence `ln Z` printed to the terminal should be a meaningful negative number (e.g. -10 to -50). A value near 0 indicates the likelihood is flat and the test has failed (the run log should be checked for error messages).
 
-**Passing criterion:** Kp, T_eq, and v_wind posteriors all cover their truth values within 1 to 2σ. A result like the one obtained during EXoPLORE development:
+**Passing criterion:** Kp, T_eq, and v_rest posteriors all cover their truth values within 1 to 2σ. A representative result:
 
 ```
 Kp   = 149.9 km/s  (truth 149.4 km/s)   ← <1 km/s offset
-T_eq = 1186  K     (truth ~1200 K)       ← within 1σ
-v_wind = -0.06 km/s (truth 0)            ← essentially zero
+T_eq = 1186  K     (truth 1170 K)        ← within 1σ
+v_rest = -0.06 km/s (truth 0)            ← essentially zero
 ln Z = -10.8                             ← meaningful evidence
 ```
 
@@ -818,7 +822,7 @@ confirms no pipeline bias on the dynamical parameters.
 :::{figure} figures/tutorial_retrieval_bias_corner.png
 :width: 90%
 :align: center
-Posterior probability distributions for the retrieved atmospheric parameters of HD 189733 b (CARMENES NIR, order 23, noiseless simulation), obtained with the log-likelihood formulations of Brogi & Line (2019; blue), Blain et al. (2024; red), and Gibson et al. (2022; green) using nested sampling (200 live points for Brogi & Line 2019 and Blain et al. 2024; 400 live points for Gibson et al. 2022). Gibson et al. (2022) includes the additional noise-scaling parameter β, shown in the bottom row and column; β is pinned near 1 via an informative prior [0.999, 1.001] (see below). Contours enclose the 68 and 95 per cent credible regions. Black dashed lines mark the injected truth values (log₁₀(X<sub>H₂O</sub>) = -3.0, K<sub>P</sub> = 149.4 km s<sup>-1</sup>, T<sub>eq</sub> = 1170 K, v<sub>wind</sub> = 0 km s<sup>-1</sup>, β = 1). All three formulations recover all truth values within 1 to 2σ.
+Posterior probability distributions for the retrieved atmospheric parameters of HD 189733 b (CARMENES NIR, order 23, noiseless simulation), obtained with the log-likelihood formulations of Brogi & Line (2019; blue), Blain et al. (2024; red), and Gibson et al. (2022; green) using nested sampling with 200 live points. Gibson et al. (2022) includes the additional noise-scaling parameter β, shown in the bottom row and column; β is pinned near 1 via an informative prior [0.999, 1.001] (see below). Contours enclose the 68 and 95 per cent credible regions. Black dashed lines mark the injected truth values (log₁₀(X<sub>H₂O</sub>) = -3.0, K<sub>P</sub> = 149.4 km s<sup>-1</sup>, T<sub>eq</sub> = 1170 K, v<sub>rest</sub> = 0 km s<sup>-1</sup>, β = 1). All three formulations recover all truth values within 1 to 2σ.
 :::
 
 Once you have run the three retrievals, the overlay corner plot can be generated with:
@@ -864,7 +868,7 @@ With realistic noise the Gibson22 β parameter is identifiable and no prior pinn
 :::{figure} figures/tutorial_retrieval_bias_corner_noisy.png
 :width: 90%
 :align: center
-Posterior probability distributions for the retrieved atmospheric parameters of HD 189733 b (ANDES YJHK, order 35, 1310 to 1326 nm, noisy simulation), obtained with Brogi & Line (2019; blue), Blain et al. (2024; red), and Gibson et al. (2022; green) using nested sampling with 200 live points. The posterior widths differ between formulations for this single noisy order: the Brogi & Line (2019) constraints are broader, while those of Blain et al. (2024) and Gibson et al. (2022) are tighter (Kp to ±2 km s<sup>-1</sup>, T<sub>eq</sub> to ±42 K, v<sub>wind</sub> to ±0.1 km s<sup>-1</sup>). All three formulations recover the truth values within 1 to 2σ, with no evidence of systematic pipeline bias; the difference in width reflects the heteroscedastic noise of a single order (see the text below) rather than a general ordering of the methods. The β parameter of Gibson et al. (2022) is identifiable on noisy data (β = 0.994 ± 0.001) and requires no prior pinning.
+Posterior probability distributions for the retrieved atmospheric parameters of HD 189733 b (ANDES YJHK, order 35, 1310 to 1326 nm, noisy simulation), obtained with Brogi & Line (2019; blue), Blain et al. (2024; red), and Gibson et al. (2022; green) using nested sampling with 200 live points. The posterior widths differ between formulations for this single noisy order: the Brogi & Line (2019) constraints are broader, while those of Blain et al. (2024) and Gibson et al. (2022) are tighter (Kp to ±2 km s<sup>-1</sup>, T<sub>eq</sub> to ±42 K, v<sub>rest</sub> to ±0.1 km s<sup>-1</sup>). All three formulations recover the truth values within 1 to 2σ, with no evidence of systematic pipeline bias; the difference in width reflects the heteroscedastic noise of a single order (see the text below) rather than a general ordering of the methods. The β parameter of Gibson et al. (2022) is identifiable on noisy data (β = 0.994 ± 0.001) and requires no prior pinning.
 :::
 
 The overlay corner plot is generated with:
@@ -956,7 +960,7 @@ There is a principled way to run a Gibson22 noiseless bias test: use an informat
 }
 ```
 
-β is still a free parameter (MultiNest is happy) but is effectively fixed to 1, preventing divergence. Although a workaround for illustration purposes, this can also be interpreted as a correctly informative prior encoding the knowledge that noiseless data has perfectly calibrated uncertainties. The recovered T_eq, Kp, and v_wind posteriors consequently isolate purely pipeline-induced biases, with no noise contribution. If an offset survives, it is real; if it disappears, it was a noise fluctuation.
+β is still a free parameter (MultiNest is happy) but is effectively fixed to 1, preventing divergence. Although a workaround for illustration purposes, this can also be interpreted as a correctly informative prior encoding the knowledge that noiseless data has perfectly calibrated uncertainties. The recovered T_eq, Kp, and v_rest posteriors consequently isolate purely pipeline-induced biases, with no noise contribution. If an offset survives, it is real; if it disappears, it was a noise fluctuation.
 
 ---
 

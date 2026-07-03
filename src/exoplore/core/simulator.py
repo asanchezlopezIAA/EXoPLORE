@@ -4821,12 +4821,16 @@ class ExoploreSimulator:
 
                     # ---- log-likelihood ----
                     if _mini_b7["logL_choice"] == "BL19":
+                        # The model must carry the same preparation as the data
+                        # (as the CCF and the Blain24/Gibson22 loglikes do), so
+                        # it is compared using model_mat_prepared, not the raw
+                        # model_mat.
                         if _mini_b7["Different_nights"]:
                             for n in with_signal_ret:
                                 _d = _mat_res_ret[n,
                                     useful_spectral_points_ret[_night_index]]
                                 _d  = _d - np.mean(_d)
-                                _tpl = model_mat[n,
+                                _tpl = model_mat_prepared[n,
                                     useful_spectral_points_ret[_night_index]]
                                 _tpl = _tpl - np.mean(_tpl)
                                 sf2 = np.mean(_d**2)
@@ -4843,10 +4847,10 @@ class ExoploreSimulator:
                                       - np.mean(_mat_res_ret[_night_index, n,
                                         useful_spectral_points_ret[
                                             _night_index, :]]))
-                                _tpl = (model_mat[n,
+                                _tpl = (model_mat_prepared[n,
                                         useful_spectral_points_ret[
                                             _night_index, :]]
-                                        - np.mean(model_mat[n,
+                                        - np.mean(model_mat_prepared[n,
                                         useful_spectral_points_ret[
                                             _night_index, :]]))
                                 sf2 = np.mean(_d**2)
