@@ -385,10 +385,11 @@ likelihood is maximised by `β → 0`); for noiseless bias tests `β` is pinned 
 
 ### Whether the difference matters depends on the noise structure
 
-The per-pixel weighting of Blain24 is not always the better approach. The script
-`scripts/illustrate_likelihood_weighting.py` examines this on a toy absorption
-spectrum, comparing how tightly each likelihood constrains the line depth under
-two noise structures of **identical total variance**:
+The single-global-noise estimator of BL19 and the per-pixel weighting of Blain24
+and Gibson22 only diverge when the per-pixel noise is non-uniform. The script
+`scripts/illustrate_likelihood_weighting.py` illustrates this on a toy absorption
+spectrum, comparing how each likelihood constrains the line depth under two noise
+structures of **identical total variance**:
 
 ```{figure} figures/likelihood_weighting.png
 :width: 100%
@@ -398,36 +399,28 @@ Log-likelihood as a function of the line-depth parameter (truth = 1) for a toy
 spectrum. **Left:** with uniform (homoscedastic) noise the two formulations are
 almost identical. **Right:** with heteroscedastic noise of the same total
 variance, concentrated in 15 per cent of the pixels, the per-pixel-weighted
-formulation of Blain et al. (2024) yields a tighter constraint than that of
-Brogi & Line (2019) in this particular toy case. Generated with
-`python scripts/illustrate_likelihood_weighting.py`.
+formulation (Blain et al. 2024) gives a narrower likelihood than the
+single-global-noise formulation (Brogi & Line 2019) in this particular toy
+configuration. Generated with `python scripts/illustrate_likelihood_weighting.py`.
 ```
 
-- With **uniform** noise the two agree to within ten per cent. The per-pixel
-  weighting has nothing to redistribute.
+- With **uniform** noise the two agree closely: there is no non-uniformity for
+  the per-pixel weighting to act on.
 - With **heteroscedastic** noise (the same noise budget concentrated in a
-  minority of pixels) the Blain24 constraint is roughly five times tighter in
-  this configuration.
+  minority of pixels) the two give constraints of different width, for the reason
+  below.
 
 The mechanism follows from the formulas. The `s_f²` term of BL19 is a single
-number for the whole spectrum, so a noisy minority of pixels inflates that
-estimate and dilutes the signal carried by the clean majority. Blain24 uses
-`σ(n)` directly and assigns the noisy pixels little weight, preserving the
-signal in the clean ones. Real spectra are frequently heteroscedastic (telluric
-cores, blaze edges, and channels near deep lines all carry elevated noise), so
-for datasets with strong per-pixel noise variation, such as the single noisy
-ANDES order considered later in this documentation, the Blain24 and Gibson22
-formulations may yield tighter posteriors. This does not imply that BL19 is less
-accurate: when the noise among the retained pixels is uniform the two converge,
-and BL19 remains a sensible choice when reliable per-pixel uncertainties are not
-available. The appropriate formulation depends on the dataset rather than on a
-general ordering of the methods.
-
-> The same reasoning explains why BL19 may yield broader constraints on a single
-> noisy order while nearly matching the other formulations on noiseless data:
-> with vanishing noise there is no heteroscedasticity to exploit, so the three
-> converge. This can be seen directly in the noiseless and noisy corner plots of
-> Tutorial 7.
+number for the whole spectrum, so a noisy minority of pixels raises that estimate
+and reduces the effective weight of the clean majority. The per-pixel
+formulations use `σ(n)` directly and down-weight the noisy pixels individually.
+A narrower constraint is not automatically a better one: it is only informative
+if the noise model it assumes is correct. BL19's single-noise estimator is a
+well-motivated choice, in particular when reliable per-pixel uncertainties are
+not available, and it was validated to return statistically correct credibility
+intervals in the photon-noise-dominated regime (see the BL19 discussion above).
+Which formulation is appropriate depends on the dataset, not on a general
+ordering of the methods.
 
 ---
 
