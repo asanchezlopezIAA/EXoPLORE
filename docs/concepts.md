@@ -91,9 +91,9 @@ job of the cross-correlation function (Section 4).
 
 Before we can analyse data we must be able to **generate** it. EXoPLORE builds
 a synthetic transmission (or emission) spectrum with
-[petitRADTRANS](https://petitradtrans.readthedocs.io) (Mollière et al. 2019,
+[petitRADTRANS](https://petitradtrans.readthedocs.io) ([Mollière et al. 2019](https://doi.org/10.1051/0004-6361/201935470),
 A&A, 627, A67), using equilibrium chemistry from
-[EasyChem](https://easychem.readthedocs.io) (Lei & Mollière 2024,
+[EasyChem](https://easychem.readthedocs.io) ([Lei & Mollière 2024](https://arxiv.org/abs/2410.21364),
 arXiv:2410.21364) or manual mass fractions, over a pressure-temperature profile
 (isothermal or Guillot). This is configured in the `atmosphere` block and
 explained in Tutorial 3.

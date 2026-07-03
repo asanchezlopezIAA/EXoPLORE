@@ -30,7 +30,7 @@ and subsequently used in Sánchez-López et al. (2019, A&A, 630, A53) and
 Blain, Sánchez-López & Mollière (2024, AJ, 167, 179).
 
 **If you use these files in published work, please consider citing Alonso-Floriano et al.
-(2019), Sánchez-López et al. (2019), and Blain, Sánchez-López & Mollière (2024), and including the following acknowledgement:**
+(2019), [Sánchez-López et al. (2019)](https://doi.org/10.1051/0004-6361/201936084), and [Blain, Sánchez-López & Mollière (2024)](https://arxiv.org/abs/2402.14001), and including the following acknowledgement:**
 
 > Based on data from the CAHA Archive at CAB (INTA-CSIC). The CAHA Archive is
 > part of the Spanish Virtual Observatory project funded by
@@ -53,7 +53,7 @@ use the ESO SkyCalc model via the `skycalc_ipy` Python package.  Please cite:
 > A&A, 560, A91.
 > [doi:10.1051/0004-6361/201322433](https://doi.org/10.1051/0004-6361/201322433)
 
-The `--mode astro` airmass computation uses [astroplan](https://astroplan.readthedocs.io) (Morris et al. 2018,
+The `--mode astro` airmass computation uses [astroplan](https://astroplan.readthedocs.io) ([Morris et al. 2018](https://doi.org/10.3847/1538-3881/aaa47e),
 AJ 155, 128) following the methodology of Dash et al.
 (arXiv:2602.22830, 2026).
 

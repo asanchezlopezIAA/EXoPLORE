@@ -236,7 +236,7 @@ is downloaded.  Two modes are available, selected with `--mode`:
 **`--mode astro` (default)**
 
 Computes airmass from true sky geometry using
-[astroplan](https://astroplan.readthedocs.io) (Morris et al. 2018), querying
+[astroplan](https://astroplan.readthedocs.io) ([Morris et al. 2018](https://doi.org/10.3847/1538-3881/aaa47e)), querying
 the planet's RA/Dec against the observatory site and the actual observation
 timestamps.  This approach mirrors the methodology of the Ratri simulator
 (Dash et al. (arXiv:2602.22830, 2026)), which uses [astroplan](https://astroplan.readthedocs.io)
