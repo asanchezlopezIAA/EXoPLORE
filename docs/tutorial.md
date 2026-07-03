@@ -848,16 +848,13 @@ Key optional arguments:
 
 ### Noisy retrieval with ANDES YJHK
 
-The noiseless case above demonstrates bias in the absence of noise. To verify that all three pipelines also recover truth under realistic noise, the same test can be run with a single ANDES YJHK order at J-band (order 35, 1310 to 1326 nm), where H₂O provides strong signal even in one order. The ETC SNR in this order is ≈1256 per resolution element per exposure. The ANDES SNR tables are given per resolution element; EXoPLORE converts them to a per-pixel SNR internally via SNR<sub>pixel</sub> = SNR<sub>resel</sub> / √m, where m = `pixels_per_resolution_element` (2.5 for ANDES), so the per-pixel SNR here is ≈800. Even at this single order the signal is strong enough to make the posteriors tight despite the added noise.
+The noiseless case above demonstrates bias in the absence of noise. To verify that Blain24 and Gibson22 also recover truth under realistic noise, the same test can be run with a single ANDES YJHK order at J-band (order 35, 1310 to 1326 nm), where H₂O provides strong signal even in one order. The ETC SNR in this order is ≈1256 per resolution element per exposure. The ANDES SNR tables are given per resolution element; EXoPLORE converts them to a per-pixel SNR internally via SNR<sub>pixel</sub> = SNR<sub>resel</sub> / √m, where m = `pixels_per_resolution_element` (2.5 for ANDES), so the per-pixel SNR here is ≈800. Even at this single order the signal is strong enough to make the posteriors tight despite the added noise.
 
 ```bash
-# BL19, noisy, ANDES YJHK, order 35
-python -u scripts/run_exoplore.py configs/hd189733b_andes_retrieval_bl19_noisy.json --run
-
 # Blain24, noisy, ANDES YJHK, order 35
 python -u scripts/run_exoplore.py configs/hd189733b_andes_retrieval_blain24_noisy.json --run
 
-# Gibson22, noisy, ANDES YJHK, order 35 (β free; β prior [0.9, 1.1] avoids divergence)
+# Gibson22, noisy, ANDES YJHK, order 35 (β free)
 python -u scripts/run_exoplore.py configs/hd189733b_andes_retrieval_gibson22_noisy.json --run
 ```
 
@@ -866,7 +863,7 @@ With realistic noise the Gibson22 β parameter is identifiable and no prior pinn
 :::{figure} figures/tutorial_retrieval_bias_corner_noisy.png
 :width: 90%
 :align: center
-Posterior probability distributions for the retrieved atmospheric parameters of HD 189733 b (ANDES YJHK, order 35, 1310 to 1326 nm, noisy simulation), obtained with Brogi & Line (2019; blue), Blain et al. (2024; red), and Gibson et al. (2022; green) using nested sampling with 200 live points. The posterior widths differ between formulations for this single noisy order: the Brogi & Line (2019) constraints are broader, while those of Blain et al. (2024) and Gibson et al. (2022) are tighter (Kp to ±2 km s<sup>-1</sup>, T<sub>eq</sub> to ±42 K, v<sub>rest</sub> to ±0.1 km s<sup>-1</sup>). All three formulations recover the truth values within 1 to 2σ, with no evidence of systematic pipeline bias; the difference in width reflects the heteroscedastic noise of a single order (see the text below) rather than a general ordering of the methods. The β parameter of Gibson et al. (2022) is identifiable on noisy data (β = 0.994 ± 0.001) and requires no prior pinning.
+Posterior probability distributions for the retrieved atmospheric parameters of HD 189733 b (ANDES YJHK, order 35, 1310 to 1326 nm, noisy simulation), obtained with Blain et al. (2024; red) and Gibson et al. (2022; green) using nested sampling with 200 live points. Both formulations recover the truth values within 1 to 2σ, with no evidence of systematic pipeline bias, and their posteriors are of comparable width since both weight each pixel by its known uncertainty. The recovered K<sub>P</sub> sits ~3 km s<sup>-1</sup> below the injected value for both methods (146.5 and 146.3 km s<sup>-1</sup> against 149.4), consistent between them; this reflects the particular noise realisation of this single order rather than a pipeline bias. The β parameter of Gibson et al. (2022) is free and identifiable on noisy data (β = 0.994 ± 0.001), requiring no prior pinning; its truth line is omitted as it is a noise-model parameter with no injected value. Black dashed lines mark the injected truth values.
 :::
 
 The overlay corner plot is generated with:
@@ -874,26 +871,27 @@ The overlay corner plot is generated with:
 ```bash
 python scripts/plot_corner_overlay.py \\
   --output-root /path/to/EXoPLORE_clean_run/HD189733b/ANDES_YJHK/transit \\
-  --runs  BL19_withsignal_1nights_SNR_comb1_simdata_noisy_stdnoisex1 \\
-          Blain24_withsignal_1nights_SNR_comb1_simdata_noisy_stdnoisex1 \\
-          Gibson22_withsignal_1nights_SNR_comb1_simdata_noisy_stdnoisex1 \\
-  --labels "Brogi & Line (2019)" "Blain et al. (2024)" "Gibson et al. (2022)" \\
+  --runs  Blain24_withsignal_1nights_SNR_comb1_simdata_noisy_stdnoisex1 \\
+          Gibson22_withsignal_N4_1nights_SNR_comb1_simdata_noisy_stdnoisex1 \\
+  --labels "Blain et al. (2024)" "Gibson et al. (2022)" \\
   --truths -3.0 149.4 1170.0 0.0 \\
+  --colors "#c44e52" "#55a868" \\
   --output docs/figures/tutorial_retrieval_bias_corner_noisy.png
 ```
 
-### Why the posterior widths differ between formulations
+### The choice of likelihood and the noise structure
 
-The difference in posterior width reflects how each formulation treats the
-noise, and it informs the choice of likelihood for a given dataset rather than a
-general ranking of the methods. All three assume Gaussian noise and differ in
-how they treat the **noise scale** (the full derivation is in the
-[Concepts primer](concepts.md#5-from-cross-correlation-to-a-likelihood)).
+The log-likelihoods differ in how they treat the **noise scale**, which affects
+the resulting constraints and informs the choice of likelihood for a given
+dataset rather than a general ranking of the methods (the full derivation is in
+the [Concepts primer](concepts.md#5-from-cross-correlation-to-a-likelihood)):
 
 - Brogi & Line (2019) estimates a **single** global noise level per spectrum
   from the residuals themselves. No per-pixel uncertainty enters its formula.
 - Blain et al. (2024) and Gibson et al. (2022) use the **known** per-pixel
-  uncertainty, so each pixel is weighted by `1/σ²`.
+  uncertainty, so each pixel is weighted by `1/σ²`. Because both weight the data
+  the same way, their posteriors in the noisy figure above are of comparable
+  width.
 
 The practical consequence depends on whether the noise is uniform across
 pixels. The script `scripts/illustrate_likelihood_weighting.py` examines this on
@@ -919,23 +917,19 @@ assigns those noisy pixels little weight.
 ```
 
 Real spectra are frequently heteroscedastic (telluric cores, blaze edges, and
-channels near deep lines carry elevated noise), which may explain why the Blain
-et al. (2024) and Gibson et al. (2022) formulations produce tighter posteriors
-than Brogi & Line (2019) for this single noisy ANDES order. On noiseless data
-the effect vanishes, since there is no noise structure to exploit, which is why
-the three converge in the noiseless corner plot earlier in this tutorial. As
-noted in the Concepts primer, the Brogi & Line (2019) formulation was developed
-and validated on simulated, photon-noise-dominated CRIRES data, where it was
-shown to recover statistically correct credibility intervals; its broader
-posteriors for this single noisy ANDES order reflect the heteroscedastic noise
-of that particular test rather than a general limitation of the method.
+channels near deep lines carry elevated noise), which is one reason per-pixel
+weighting is often preferred for real data. As noted in the Concepts primer, the
+Brogi & Line (2019) formulation was developed and validated on simulated,
+photon-noise-dominated CRIRES data, where it was shown to recover statistically
+correct credibility intervals; whether a given estimator is appropriate
+therefore depends on the noise structure of the dataset at hand.
 
 ### Supported pipeline / likelihood combinations for bias testing
 
 | Preparing pipeline | Log-likelihood | Works noiseless? | Notes |
 |---|---|---|---|
-| BL19 | BL19 | Yes | Matched filter, noise-independent |
-| BL19 | Blain24 | Yes | Chi-squared with propagated noise |
+| BL19 | BL19 | **Not reliable** | Scale-free likelihood collapses to a near-delta on noiseless data, magnifying any residual model-data mismatch into a spurious offset; omitted from the noiseless test for now |
+| BL19 | Blain24 | Yes | BL19 preparation with the chi-squared Blain24 likelihood (propagated noise) |
 | Blain24 | Blain24 | Yes | Polynomial throughput + telluric removal |
 | Gibson22 | Gibson22 (β pinned) | **Yes** | Set `prior_bounds` to pin β ∈ [0.999, 1.001]; see below |
 | ASL19 | any | **TBD** | SYSREM may over-subtract noiseless data; not yet evaluated |
