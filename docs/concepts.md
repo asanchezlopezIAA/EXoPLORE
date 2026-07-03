@@ -383,45 +383,6 @@ on noisy data but diverges on noiseless data (the residuals vanish, so the
 likelihood is maximised by `β → 0`); for noiseless bias tests `β` is pinned near
 1 with an informative prior (Tutorial 7).
 
-### Whether the difference matters depends on the noise structure
-
-The single-global-noise estimator of BL19 and the per-pixel weighting of Blain24
-and Gibson22 only diverge when the per-pixel noise is non-uniform. The script
-`scripts/illustrate_likelihood_weighting.py` illustrates this on a toy absorption
-spectrum, comparing how each likelihood constrains the line depth under two noise
-structures of **identical total variance**:
-
-```{figure} figures/likelihood_weighting.png
-:width: 100%
-:align: center
-
-Log-likelihood as a function of the line-depth parameter (truth = 1) for a toy
-spectrum. **Left:** with uniform (homoscedastic) noise the two formulations are
-almost identical. **Right:** with heteroscedastic noise of the same total
-variance, concentrated in 15 per cent of the pixels, the per-pixel-weighted
-formulation (Blain et al. 2024) gives a narrower likelihood than the
-single-global-noise formulation (Brogi & Line 2019) in this particular toy
-configuration. Generated with `python scripts/illustrate_likelihood_weighting.py`.
-```
-
-- With **uniform** noise the two agree closely: there is no non-uniformity for
-  the per-pixel weighting to act on.
-- With **heteroscedastic** noise (the same noise budget concentrated in a
-  minority of pixels) the two give constraints of different width, for the reason
-  below.
-
-The mechanism follows from the formulas. The `s_f²` term of BL19 is a single
-number for the whole spectrum, so a noisy minority of pixels raises that estimate
-and reduces the effective weight of the clean majority. The per-pixel
-formulations use `σ(n)` directly and down-weight the noisy pixels individually.
-A narrower constraint is not automatically a better one: it is only informative
-if the noise model it assumes is correct. BL19's single-noise estimator is a
-well-motivated choice, in particular when reliable per-pixel uncertainties are
-not available, and it was validated to return statistically correct credibility
-intervals in the photon-noise-dominated regime (see the BL19 discussion above).
-Which formulation is appropriate depends on the dataset, not on a general
-ordering of the methods.
-
 ---
 
 ## 6. Detection significance: three complementary measures

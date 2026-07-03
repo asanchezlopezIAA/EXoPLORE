@@ -898,10 +898,8 @@ python scripts/plot_corner_overlay.py \\
 
 The Blain24 and Gibson22 posteriors in the noisy figure are of comparable width,
 because both weight each pixel by its known uncertainty `1/σ²`. The
-[Concepts primer](concepts.md#5-from-cross-correlation-to-a-likelihood) gives the
-full treatment of how the log-likelihoods differ in their handling of the noise
-scale, and a controlled toy illustration of when per-pixel weighting matters,
-which informs the choice of likelihood for a given dataset.
+[Concepts primer](concepts.md#5-from-cross-correlation-to-a-likelihood) sets out
+the log-likelihood formulations in full.
 
 ---
 
