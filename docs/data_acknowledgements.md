@@ -38,7 +38,7 @@ Blain, Sánchez-López & Mollière (2024, AJ, 167, 179).
 
 ---
 
-## SkyCalc telluric model
+## [SkyCalc](https://skycalc-ipy.readthedocs.io) telluric model
 
 Telluric transmission spectra generated with `scripts/generate_skycalc_inputs.py`
 use the ESO SkyCalc model via the `skycalc_ipy` Python package.  Please cite:
@@ -53,7 +53,7 @@ use the ESO SkyCalc model via the `skycalc_ipy` Python package.  Please cite:
 > A&A, 560, A91.
 > [doi:10.1051/0004-6361/201322433](https://doi.org/10.1051/0004-6361/201322433)
 
-The `--mode astro` airmass computation uses astroplan (Morris et al. 2018,
+The `--mode astro` airmass computation uses [astroplan](https://astroplan.readthedocs.io) (Morris et al. 2018,
 AJ 155, 128) following the methodology of Dash et al.
 (arXiv:2602.22830, 2026).
 

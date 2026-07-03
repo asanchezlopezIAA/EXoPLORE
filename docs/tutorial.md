@@ -21,7 +21,7 @@ Furthermore, the PHOENIX stellar model files must be placed on disk and the path
 
 ## Tutorial 1: Run the reference HD 189733 b ANDES simulation
 
-> **Approximate run time:** ~32 min on an Apple Mac Studio M2 Ultra (64 GB RAM) (measured: all 76 ANDES orders, one night, no retrieval; the petitRADTRANS forward model is 95% of the total). The times quoted in these tutorials are approximate and machine-dependent. With `timing: true` in the config, each run writes a `timing_report_<date>.txt` to its output directory with the exact per-block breakdown and total.
+> **Approximate run time:** ~32 min on an Apple Mac Studio M2 Ultra (64 GB RAM) (measured: all 76 ANDES orders, one night, no retrieval; the [petitRADTRANS](https://petitradtrans.readthedocs.io) forward model is 95% of the total). The times quoted in these tutorials are approximate and machine-dependent. With `timing: true` in the config, each run writes a `timing_report_<date>.txt` to its output directory with the exact per-block breakdown and total.
 
 This is the reference case. It simulates one ANDES transit of HD 189733 b using a realistic multi-species atmosphere (H₂O, CO, CH₄, NH₃, H₂S, HCN, Fe, Ca) with limb asymmetries enabled, and a H₂O-only CCF template. In the following we describe each step in detail.
 
@@ -135,11 +135,11 @@ Consecutively, the simulator will:
 
 1. Load planet parameters from `planet_params/HD189733b.json`
 2. Build the ANDES wavelength grid (76 spectral orders: 55 YJH + 21 K, R = 100,000, 2048 px/order)
-3. Compute equilibrium chemistry with EasyChem (C/O = 0.41, Z = 0.53 dex) for each limb sub-block
+3. Compute equilibrium chemistry with [EasyChem](https://easychem.readthedocs.io) (C/O = 0.41, Z = 0.53 dex) for each limb sub-block
 4. Run petitRADTRANS for each of the six atmospheric models (planet, CCF template, four limb regions)
 5. Build the stellar continuum matrix from the PHOENIX model
 6. Simulate the full observing sequence (~390 exposures at 30 s, ~3.3 h baseline + 1.94 h transit)
-7. For each of the 76 orders: apply telluric contamination, inject the planetary signal with a limb-weighted BATMAN light curve, add photon noise from the ANDES ETC
+7. For each of the 76 orders: apply telluric contamination, inject the planetary signal with a limb-weighted [BATMAN](https://lkreidberg.github.io/batman/docs/html/index.html) light curve, add photon noise from the ANDES ETC
 8. Apply the Blain24 pipeline (polynomial throughput removal, airmass-based telluric removal, telluric and SNR-column masking)
 9. Compute the inverse-variance weighted CCF against the H₂O template
 10. Build the Kp-Vsys S/N detection map
@@ -215,7 +215,7 @@ WASP-76 is an F7 star (T<sub>eff</sub> ≈ 6329 K). The nearest PHOENIX grid poi
 
 ### Step 2: Generate the telluric reference spectrum
 
-ANDES UBV covers the optical range (0.35 to 0.63 µm). This range is not included in the NIR telluric reference file bundled for HD 189733 b. A separate SkyCalc reference spectrum must be generated before running the simulation.
+ANDES UBV covers the optical range (0.35 to 0.63 µm). This range is not included in the NIR telluric reference file bundled for HD 189733 b. A separate [SkyCalc](https://skycalc-ipy.readthedocs.io) reference spectrum must be generated before running the simulation.
 
 :::{important}
 **Why a new telluric file is needed**
@@ -663,7 +663,7 @@ The simulator writes diagnostic products both per individual night and for the c
 
 A peak in the Kp-Vsys map establishes that a species is present and yields its approximate orbital and rest-frame velocity. It does not, however, provide a posterior probability distribution over the atmospheric parameters, that is, the abundances, the temperature structure, or the chemical composition ratios. To go from a detection to a constraint of the form log₁₀(X<sub>H₂O</sub>) = -4.2 ± 0.3 we must perform a Bayesian retrieval.
 
-In the retrieval, a petitRADTRANS forward model is computed for a trial set of parameters, Doppler-shifted to each exposure, and processed through the same preparation pipeline as the data. It is then compared to the data through a log-likelihood function, and a nested sampler (MultiNest) or an MCMC (emcee) explores the parameter space to map the posterior. We caution that the forward model must be prepared identically to the data at every likelihood evaluation. This is the pipeline-bias requirement, and it is the subject of Tutorial 7.
+In the retrieval, a petitRADTRANS forward model is computed for a trial set of parameters, Doppler-shifted to each exposure, and processed through the same preparation pipeline as the data. It is then compared to the data through a log-likelihood function, and a nested sampler ([MultiNest](https://github.com/JohannesBuchner/PyMultiNest)) or an MCMC ([emcee](https://emcee.readthedocs.io)) explores the parameter space to map the posterior. We caution that the forward model must be prepared identically to the data at every likelihood evaluation. This is the pipeline-bias requirement, and it is the subject of Tutorial 7.
 
 Three log-likelihood formulations are available (BL19, Blain24, Gibson22), which differ in how they treat the per-pixel noise and the model amplitude scaling. For a polynomial pipeline with reliable per-pixel uncertainties the Blain24 formulation is a natural choice, although the most suitable formulation depends on the dataset (see the [Concepts primer](concepts.md#5-from-cross-correlation-to-a-likelihood)).
 :::
@@ -705,7 +705,7 @@ The retrieval requires three additional dependencies:
 pip install pymultinest emcee corner
 ```
 
-Here `pymultinest` provides the nested sampler, `emcee` the MCMC sampler, and `corner` the posterior corner plots. PyMultiNest further requires the compiled MultiNest Fortran library (see its [installation guide](https://github.com/JohannesBuchner/PyMultiNest)).
+Here `pymultinest` provides the nested sampler, `emcee` the MCMC sampler, and `corner` the posterior [corner](https://corner.readthedocs.io) plots. [PyMultiNest](https://github.com/JohannesBuchner/PyMultiNest) further requires the compiled MultiNest Fortran library (see its [installation guide](https://github.com/JohannesBuchner/PyMultiNest)).
 
 The MultiNest chain files are written to `<run_name>/matrices/matrices_<run_name>/` and the corner plot to `<run_name>/plots/`. See [docs/outputs.md](outputs.md#retrieval-outputs) for how to read and plot the posteriors.
 
@@ -1039,6 +1039,6 @@ The dynamical and thermal parameters are recovered with calibrated uncertainties
 
 **Simulation running all orders when you only want one**, `cross_correlation.order_selection` is a CCF-only filter. To restrict the entire simulation (Blocks 3 to 9) to a specific set of orders, use `instrument.order_indices`. For a single-order retrieval test: `"instrument": { "order_indices": [23] }`. We caution that forgetting this will run all orders through the forward model and make the retrieval far slower than necessary.
 
-**Retrieval posterior is completely flat / log Z ≈ 0**, This means the log-likelihood function is returning the same value for every parameter combination. The run log should be checked for Python `Traceback` or `KeyError` lines printed before the MultiNest output, these are exceptions silently swallowed inside the Fortran/Python interface that cause pymultinest to return a default constant value. Common causes are: i) a missing key in the configuration dict passed to `preparing_pipeline` or `call_pRT` (check that `instrument.order_indices` is set and the config is otherwise valid); ii) using a SYSREM-based pipeline with `noiseless: true` without a pinned β prior (over-subtraction may render data identically zero for all models, use BL19 or Blain24, or Gibson22 with `prior_bounds` pinning β near 1).
+**Retrieval posterior is completely flat / log Z ≈ 0**, This means the log-likelihood function is returning the same value for every parameter combination. The run log should be checked for Python `Traceback` or `KeyError` lines printed before the MultiNest output, these are exceptions silently swallowed inside the Fortran/Python interface that cause [pymultinest](https://github.com/JohannesBuchner/PyMultiNest) to return a default constant value. Common causes are: i) a missing key in the configuration dict passed to `preparing_pipeline` or `call_pRT` (check that `instrument.order_indices` is set and the config is otherwise valid); ii) using a SYSREM-based pipeline with `noiseless: true` without a pinned β prior (over-subtraction may render data identically zero for all models, use BL19 or Blain24, or Gibson22 with `prior_bounds` pinning β near 1).
 
 **Retrieval corner plot shows `Too few points to create valid contours`**, The posterior is effectively flat (all 200 equal-weight samples uniformly cover the prior). See the point above. We caution that when using the Gibson22 likelihood with `noiseless: true`, the β hyperparameter diverges and the posterior cannot be constrained, switching to BL19 or Blain24 resolves this.

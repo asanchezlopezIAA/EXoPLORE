@@ -41,7 +41,7 @@ planet_params/HD189733b.json
 
 ## 1. Planet parameter file
 
-Stored in `planet_params/<PlanetName>.json`. All values use natural astronomical units (solar, Jupiter, AU, degrees), the simulator converts internally to CGS and km/s as required by petitRADTRANS.
+Stored in `planet_params/<PlanetName>.json`. All values use natural astronomical units (solar, Jupiter, AU, degrees), the simulator converts internally to CGS and km/s as required by [petitRADTRANS](https://petitradtrans.readthedocs.io).
 
 | Field | Unit | Description |
 |---|---|---|
@@ -67,7 +67,7 @@ Stored in `planet_params/<PlanetName>.json`. All values use natural astronomical
 | `t_int_K` | K | Planet internal temperature (for Guillot profile; typically 100 to 300 K) |
 | `kappa_ir` | cm²/g | Infrared opacity for Guillot temperature profile |
 | `gamma_guillot` |, | Ratio of optical to infrared opacity for Guillot profile |
-| `limb_darkening_coeffs` |, | Quadratic limb darkening coefficients [u1, u2] for BATMAN transit model |
+| `limb_darkening_coeffs` |, | Quadratic limb darkening coefficients [u1, u2] for [BATMAN](https://lkreidberg.github.io/batman/docs/html/index.html) transit model |
 | `ra_deg` | degrees | Right ascension (used for BERV calculation) |
 | `dec_deg` | degrees | Declination (used for BERV calculation) |
 
@@ -256,7 +256,7 @@ All six atmosphere sub-blocks share the same structure:
 | Field | Unit | Description |
 |---|---|---|
 | `species` |, | List of chemical species to include. Must use petitRADTRANS opacity names. Always include `"H2"` and `"He"` as bulk gas. Common detectable species: `"H2O"`, `"CO"`, `"CH4"`, `"NH3"`, `"H2S"`, `"HCN"`, `"CO2"`, `"C2H2"`. Atomic species: `"Fe"`, `"Ca"`, `"Na"`, `"K"`. The list order must match `mass_fractions`. |
-| `use_easychem` |, | If `true`, compute equilibrium chemistry mass fractions using EasyChem (based on metallicity and C/O ratio). For all species **except H₂ and He**, the `mass_fractions` values in the JSON are overridden by EasyChem output. H₂ and He mass fractions are always taken from the JSON `mass_fractions` list and are not computed by EasyChem. If `false`, use the `mass_fractions` values directly for all species. |
+| `use_easychem` |, | If `true`, compute equilibrium chemistry mass fractions using [EasyChem](https://easychem.readthedocs.io) (based on metallicity and C/O ratio). For all species **except H₂ and He**, the `mass_fractions` values in the JSON are overridden by EasyChem output. H₂ and He mass fractions are always taken from the JSON `mass_fractions` list and are not computed by EasyChem. If `false`, use the `mass_fractions` values directly for all species. |
 | `metallicity_wrt_solar` | dex | Atmospheric metallicity relative to solar. Only used when `use_easychem: true`. Typical range: -1 to +3. Solar = 0. |
 | `carbon_to_oxygen_ratio` |, | Atmospheric C/O ratio (solar ≈ 0.55). Only used when `use_easychem: true`. |
 | `mass_fractions` |, | Manual mass fractions for each species in `species` (same order). Must sum to exactly 1. Used when `use_easychem: false`, or for H2 and He even when EasyChem is active. |
@@ -341,7 +341,7 @@ where `T_ref` is the reference transmission at airmass `X_ref` and `X` is the ai
 | `use_accurate_airmass` | `true`, `false` | If `true`, compute the airmass from the observation time, target coordinates, and observatory location. If `false`, use the values in `airmass_limits` directly. |
 | `airmass_evolution` | `"up_and_down"`, `"up"`, `"down"`, `"constant"` | Shape of the airmass time series when `use_accurate_airmass: false`. `"up_and_down"`: airmass decreases to a minimum at transit midpoint then increases (target transits the meridian). `"up"`: monotonically increasing. `"down"`: monotonically decreasing. `"constant"`: flat at the mean of `airmass_limits`. |
 | `airmass_limits` | `[min, max]` | Minimum and maximum airmass during the observation. Used to construct the airmass time series when `use_accurate_airmass: false`. |
-| `constant_pwv` | `true`, `false` | Controls PWV handling for both Mode 2 and Mode 3. `true`: all exposures use the same `pwv_mm` value (saved to `Fixed_PWV/pwv_values.fits`). `false`: PWV varies randomly around `pwv_mm` within the SkyCalc grid (saved to `Variable_PWV/pwv_values.fits`). **In Mode 1 (airmass scaling), PWV does not affect the computed telluric spectra**, it is only stored in the FITS file for bookkeeping and used when generating per-exposure files for Mode 2. |
+| `constant_pwv` | `true`, `false` | Controls PWV handling for both Mode 2 and Mode 3. `true`: all exposures use the same `pwv_mm` value (saved to `Fixed_PWV/pwv_values.fits`). `false`: PWV varies randomly around `pwv_mm` within the [SkyCalc](https://skycalc-ipy.readthedocs.io) grid (saved to `Variable_PWV/pwv_values.fits`). **In Mode 1 (airmass scaling), PWV does not affect the computed telluric spectra**, it is only stored in the FITS file for bookkeeping and used when generating per-exposure files for Mode 2. |
 | `pwv_mm` | mm | Precipitable water vapour in mm. Reference value used when `constant_pwv: true` (all exposures), or as the centre of the random draw when `constant_pwv: false`. Typical range: 1 to 30 mm. Dry site (Paranal): 2 to 10 mm. Must be a value on the SkyCalc PWV grid: `[0.05, 0.1, 0.25, 0.5, 1.0, 1.5, 2.5, 3.5, 5.0, 7.5, 10.0, 20.0, 30.0]`. |
 | `pwv_mm_per_night` | list of mm or `null` | Per-night PWV values for `different_nights: true` simulations. When set, night `n` uses `pwv_mm_per_night[n]` instead of `pwv_mm`. Length must equal `n_nights`. Used by the simulator when loading per-night SkyCalc files (Mode 2) and by `scripts/generate_skycalc_inputs.py --night N` when generating those files. Example: `[2.5, 3.5]` for a two-night run with different atmospheric conditions. `null` (default) uses `pwv_mm` for all nights. |
 | `reference_airmass` | float | The airmass at which `reference_telluric_file` was computed. Typically 1.0. Used in the Beer-Lambert scaling formula `T(X) = T_ref^(X / X_ref)` for Mode 1. |
@@ -474,7 +474,7 @@ When SYSREM is applied to the data it does not merely remove telluric and stella
 | Field | Valid values | Description |
 |---|---|---|
 | `enabled` | `true`, `false` | Master switch. Set to `false` to skip retrieval entirely (default for exploration runs). When `true`, the retrieval runs at the **end of the same simulation** using the spectral matrices built in memory, it does not re-load previously saved files. To re-run the retrieval on old data you must re-run the full simulation. |
-| `sampler` | `"nested_sampling"`, `"mcmc"` | Bayesian sampler. `"nested_sampling"`: MultiNest via PyMultiNest (faster, better for multimodal posteriors). `"mcmc"`: emcee ensemble sampler. |
+| `sampler` | `"nested_sampling"`, `"mcmc"` | Bayesian sampler. `"nested_sampling"`: [MultiNest](https://github.com/JohannesBuchner/PyMultiNest) via [PyMultiNest](https://github.com/JohannesBuchner/PyMultiNest) (faster, better for multimodal posteriors). `"mcmc"`: [emcee](https://emcee.readthedocs.io) ensemble sampler. |
 | `log_likelihood` | `"Blain24"`, `"BL19"`, `"Gibson22"` | Log-likelihood function. **Coupled to `dimensionality`, see below.** `"Blain24"`: Blain, Sánchez-López & Mollière (2024, AJ, 167, 179), per-order noise scaling; use with `"1D"`, `"1D_CtoO_met"`, or `"2D"`. `"BL19"`: Brogi & Line (2019), analytic marginalisation over signal scaling; use with `"1D"`, `"1D_CtoO_met"`, or `"2D"`. `"Gibson22"`: Gibson et al. (2022), chi-squared with free β noise-scaling; **must be used exclusively with `"1D_Gibson22"`**. Any invalid combination raises a `ValueError` at runtime. |
 | `dimensionality` | `"1D"`, `"1D_Gibson22"`, `"1D_CtoO_met"`, `"1D_extended"`, `"1D_extended_fast"`, `"2D"` | Retrieval parameter space. **Coupled to `log_likelihood`, see above.** `"1D"`: single VMR (H₂O), Kp, T_eq, wind velocity (4 params), use with BL19 or Blain24. `"1D_Gibson22"`: same plus β noise-scaling parameter (5 params), **use only with Gibson22 likelihood**. `"1D_CtoO_met"`: C/O ratio and metallicity via EasyChem (2 params, Kp and V_wind fixed to planet values), use with BL19 or Blain24. `"1D_extended"`: log₁₀(VMR) for H₂O, CH₄, NH₃, CO, CO₂, HCN plus Kp, T_eq, and wind velocity (9 params), multi-species retrieval; use with BL19 or Blain24. `"1D_extended_fast"`: same species plus T_eq only (Kp and wind velocity fixed; 7 params). `"2D"`: morning and evening limb VMR and T_eq independently (limb asymmetry retrieval), use with BL19 or Blain24. |
 | `retrieval_choice` | int | Selects the specific retrieval configuration within a dimensionality class. See the retrieval module documentation. |

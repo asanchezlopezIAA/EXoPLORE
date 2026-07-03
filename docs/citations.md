@@ -26,7 +26,7 @@ primer and in Tutorial 3 is of the kind detected in WASP-127 b.
 
 ---
 
-## petitRADTRANS
+## [petitRADTRANS](https://petitradtrans.readthedocs.io)
 
 Atmospheric forward model.
 
@@ -38,7 +38,7 @@ Atmospheric forward model.
 
 ---
 
-## EasyChem
+## [EasyChem](https://easychem.readthedocs.io)
 
 Equilibrium chemistry.
 
@@ -49,7 +49,7 @@ Equilibrium chemistry.
 
 ---
 
-## BATMAN
+## [BATMAN](https://lkreidberg.github.io/batman/docs/html/index.html)
 
 Transit light-curve model.
 
@@ -60,7 +60,7 @@ Transit light-curve model.
 
 ---
 
-## MultiNest / PyMultiNest
+## [MultiNest](https://github.com/JohannesBuchner/PyMultiNest) / [PyMultiNest](https://github.com/JohannesBuchner/PyMultiNest)
 
 Nested sampling retrieval.
 
@@ -96,7 +96,7 @@ Signal-to-noise estimates for ANDES use the ESO ANDES Exposure Time Calculator.
 
 ---
 
-## SkyCalc
+## [SkyCalc](https://skycalc-ipy.readthedocs.io)
 
 Telluric transmission spectra.
 

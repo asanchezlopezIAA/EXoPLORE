@@ -199,7 +199,7 @@ separately in [Section 5](#5-from-cross-correlation-to-a-likelihood).
   polynomial in airmass on the log-flux (`remove_telluric_lines_fit`), masking
   channels where the fitted transmittance falls below 0.8. Both live in
   `exoplore.pipelines.blain24`. This preparation is also implemented natively in
-  petitRADTRANS; see its [retrieval documentation](https://petitradtrans.readthedocs.io/en/latest/content/notebooks/retrieval_spectral_model.html).
+  [petitRADTRANS](https://petitradtrans.readthedocs.io); see its [retrieval documentation](https://petitradtrans.readthedocs.io/en/latest/content/notebooks/retrieval_spectral_model.html).
 - **ASL19** (Sánchez-López et al.
   [2019](https://doi.org/10.1051/0004-6361/201936084), A&A, 630, A53). Developed
   for the CARMENES near-infrared detection of water vapour in HD 209458 b, using

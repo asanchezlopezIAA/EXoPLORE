@@ -2,7 +2,7 @@
 
 ## Requirements
 
-EXoPLORE requires Python 3.10 or later and a UNIX-like system (Linux or macOS; Windows is not tested). In addition, approximately 10 GB of free disk space are needed to accommodate the petitRADTRANS opacity tables and PHOENIX stellar model files.
+EXoPLORE requires Python 3.10 or later and a UNIX-like system (Linux or macOS; Windows is not tested). In addition, approximately 10 GB of free disk space are needed to accommodate the [petitRADTRANS](https://petitradtrans.readthedocs.io) opacity tables and PHOENIX stellar model files.
 
 ## 1. Clone the repository
 
@@ -24,7 +24,7 @@ source .venv/bin/activate
 pip install -e .
 ```
 
-This installs the `exoplore` package in editable mode together with all core dependencies (NumPy, SciPy, Astropy, matplotlib, and others) declared in `pyproject.toml`.
+This installs the `exoplore` package in editable mode together with all core dependencies (NumPy, SciPy, Astropy, [matplotlib](https://matplotlib.org), and others) declared in `pyproject.toml`.
 
 ## 4. Install petitRADTRANS
 
@@ -50,7 +50,7 @@ These packages are only required when `retrieval.enabled: true`:
 pip install pymultinest emcee corner
 ```
 
-`pymultinest` wraps the MultiNest nested sampling algorithm and requires the compiled MultiNest Fortran library to be installed separately. We refer to the [PyMultiNest installation guide](https://github.com/JohannesBuchner/PyMultiNest) for platform-specific instructions.
+`pymultinest` wraps the [MultiNest](https://github.com/JohannesBuchner/PyMultiNest) nested sampling algorithm and requires the compiled MultiNest Fortran library to be installed separately. We refer to the [PyMultiNest installation guide](https://github.com/JohannesBuchner/PyMultiNest) for platform-specific instructions.
 
 ## 6. Download PHOENIX stellar model files
 

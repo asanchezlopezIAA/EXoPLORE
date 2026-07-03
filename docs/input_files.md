@@ -11,9 +11,9 @@ Input files fall into four categories:
 1. **Instrument files**, wavelength grids and SNR tables specific to the spectrograph
 2. **Observation reference files**, real data from a reference night (JD, airmass, signal, SNR arrays)
 3. **Stellar atmosphere models**, PHOENIX spectra for the target star
-4. **Telluric reference spectra**, SkyCalc-generated atmospheric transmission
+4. **Telluric reference spectra**, [SkyCalc](https://skycalc-ipy.readthedocs.io)-generated atmospheric transmission
 
-petitRADTRANS opacity tables are a fifth category handled separately (see the [Installation guide](installation.md)).
+[petitRADTRANS](https://petitradtrans.readthedocs.io) opacity tables are a fifth category handled separately (see the [Installation guide](installation.md)).
 
 ---
 
@@ -239,7 +239,7 @@ Computes airmass from true sky geometry using
 [astroplan](https://astroplan.readthedocs.io) (Morris et al. 2018), querying
 the planet's RA/Dec against the observatory site and the actual observation
 timestamps.  This approach mirrors the methodology of the Ratri simulator
-(Dash et al. (arXiv:2602.22830, 2026)), which uses astroplan
+(Dash et al. (arXiv:2602.22830, 2026)), which uses [astroplan](https://astroplan.readthedocs.io)
 to plan and date synthetic observations from the ELT site and derives the
 per-exposure airmass from real sky coordinates rather than a parametric model.
 

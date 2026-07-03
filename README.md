@@ -6,12 +6,12 @@
 
 EXoPLORE is a Python framework for simulating and analysing this kind of
 observation end to end. It builds a full atmospheric forward model
-(petitRADTRANS + EasyChem) in a 1D **or pseudo-2D** approach, adds realistic
+([petitRADTRANS](https://petitradtrans.readthedocs.io) + [EasyChem](https://easychem.readthedocs.io)) in a 1D **or pseudo-2D** approach, adds realistic
 per-exposure telluric contamination and instrument noise for several
 spectrographs, removes systematics with a choice of literature preparation
 pipelines, and produces inverse-variance weighted cross-correlation and
 Kp-Vsys detection maps, multi-night co-addition, and optional Bayesian
-retrievals (MultiNest or emcee). A single JSON config drives everything, and
+retrievals ([MultiNest](https://github.com/JohannesBuchner/PyMultiNest) or [emcee](https://emcee.readthedocs.io)). A single JSON config drives everything, and
 the same configuration applies equally to fully synthetic data and to real
 observed spectra.
 
@@ -82,7 +82,7 @@ Kp-Vsys detection maps  and/or  atmospheric retrieval  (MultiNest / emcee)
 - [PHOENIX stellar models](https://phoenix.astro.physik.uni-goettingen.de), Husser et al. (2013, [A&A 553, A6](https://doi.org/10.1051/0004-6361/201219058)); download the wave grid and the flux file matching your target star
 - A Fortran compiler (gfortran) is required to build petitRADTRANS and EasyChem
 - petitRADTRANS opacity tables (several GB); see [docs/input_files.md](docs/input_files.md)
-- **For SkyCalc telluric generation** (optional, Mode 2 only): [skycalc_ipy](https://skycalc-ipy.readthedocs.io), Noll et al. (2012, [A&A 543, A92](https://doi.org/10.1051/0004-6361/201219040)); [astroplan](https://astroplan.readthedocs.io), Morris et al. (2018, [AJ 155, 128](https://doi.org/10.3847/1538-3881/aaa47e))
+- **For [SkyCalc](https://skycalc-ipy.readthedocs.io) telluric generation** (optional, Mode 2 only): [skycalc_ipy](https://skycalc-ipy.readthedocs.io), Noll et al. (2012, [A&A 543, A92](https://doi.org/10.1051/0004-6361/201219040)); [astroplan](https://astroplan.readthedocs.io), Morris et al. (2018, [AJ 155, 128](https://doi.org/10.3847/1538-3881/aaa47e))
 - **For Bayesian retrieval** (optional): [PyMultiNest](https://github.com/JohannesBuchner/PyMultiNest), Feroz et al. (2009, [MNRAS 398, 1601](https://doi.org/10.1111/j.1365-2966.2009.14548.x)); [emcee](https://emcee.readthedocs.io), Foreman-Mackey et al. (2013, [PASP 125, 306](https://doi.org/10.1086/670067)); [corner](https://corner.readthedocs.io), Foreman-Mackey (2016, [JOSS 1, 24](https://doi.org/10.21105/joss.00024))
 
 ### Step-by-step

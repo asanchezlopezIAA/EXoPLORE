@@ -48,6 +48,6 @@ ii) **Change the atmosphere**: edit `atmosphere.planet_model.carbon_to_oxygen_ra
 
 iii) **Enable Bayesian retrieval**: add a `retrieval` block to the config with `"enabled": true`, choose a log-likelihood (`"BL19"`, `"Blain24"`, or `"Gibson22"`), and set the number of live points. See [Tutorial 6](tutorial.md#tutorial-6-enable-bayesian-retrieval) for details.
 
-iv) **Run multiple nights**: set `"observation": { "n_nights": 4 }` to stack consecutive transits. For distinct nights with different observing conditions, set `different_nights: true`. For ANDES this requires per-night SkyCalc telluric files (generated with `scripts/generate_skycalc_inputs.py --night N`) and optionally `tellurics.pwv_mm_per_night` to assign different PWV per night. For CARMENES_NIR it requires per-night reference files. See [Tutorial 5](tutorial.md#tutorial-5-multiple-nights) for both workflows.
+iv) **Run multiple nights**: set `"observation": { "n_nights": 4 }` to stack consecutive transits. For distinct nights with different observing conditions, set `different_nights: true`. For ANDES this requires per-night [SkyCalc](https://skycalc-ipy.readthedocs.io) telluric files (generated with `scripts/generate_skycalc_inputs.py --night N`) and optionally `tellurics.pwv_mm_per_night` to assign different PWV per night. For CARMENES_NIR it requires per-night reference files. See [Tutorial 5](tutorial.md#tutorial-5-multiple-nights) for both workflows.
 
 All configuration options are documented in the [Config reference](config_reference.md).

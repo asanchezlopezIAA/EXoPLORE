@@ -177,7 +177,7 @@ Every run saves PDF figures to `<run_name>/plots/`. The key files are:
 | `sn_map_<run_name>_SNR.pdf` | Kp-Vsys S/N map in colour with contours. |
 | `1D_CCF_<run_name>.pdf` | 1-D CCF at the best-fit Kp vs rest-frame velocity. |
 | `CC_ERF_<run_name>.pdf` | CCF trail as a function of orbital phase (the "butterfly" plot). |
-| `retrieval_night_0_corner.pdf` | Posterior corner plot from the Bayesian retrieval (if `retrieval.enabled: true`). |
+| `retrieval_night_0_corner.pdf` | Posterior [corner](https://corner.readthedocs.io) plot from the Bayesian retrieval (if `retrieval.enabled: true`). |
 
 ### Pipeline-steps figure
 
@@ -367,7 +367,7 @@ When retrieval is enabled, posterior files are written into `<run_name>/matrices
 
 The file naming follows: `<retrieval_name>_night_<N>_<suffix>`, where `retrieval_name` defaults to `"retrieval"`.
 
-**MultiNest raw files** are written to the same directory with the prefix `<retrieval_name>_night_<N>_`:
+**[MultiNest](https://github.com/JohannesBuchner/PyMultiNest) raw files** are written to the same directory with the prefix `<retrieval_name>_night_<N>_`:
 
 | File pattern | Contents |
 |---|---|
