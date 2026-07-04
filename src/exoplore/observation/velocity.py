@@ -193,16 +193,24 @@ def get_V_eccentric(Kp, phases, e, omega, berv, v_sys, v_wind=0.0):
     Parameters
     ----------
     Kp : float  Semi-amplitude (km/s).
-    phases : array  Orbital phases.
+    phases : array  Orbital phases (phi = 0 at mid-transit).
     e : float  Eccentricity.
-    omega : float  Argument of periastron (radians).
+    omega : float  Argument of periastron (degrees).
     berv : float  BERV correction (km/s).
     v_sys : float  Systemic velocity (km/s).
     v_wind : float  Wind velocity (km/s, default 0).
     """
     import kepler
     phases = np.asarray(phases)
-    M = 2.0 * np.pi * phases - omega
+    omega = np.deg2rad(omega)
+    # Anchor phi = 0 at mid-transit. In this convention the true anomaly at
+    # transit is nu_t = -omega; convert it to the mean anomaly M_t so the phase
+    # offset is exact at any eccentricity (it reduces to -omega when e = 0).
+    nu_t = -omega
+    E_t = 2.0 * np.arctan2(np.sqrt(1.0 - e) * np.sin(nu_t / 2.0),
+                           np.sqrt(1.0 + e) * np.cos(nu_t / 2.0))
+    M_t = E_t - e * np.sin(E_t)
+    M = 2.0 * np.pi * phases + M_t
     _, cos_nu, sin_nu = kepler.kepler(M, e)
     bracket = sin_nu * np.cos(omega) + cos_nu * np.sin(omega) + e * np.sin(omega)
     return Kp * bracket - berv + v_sys + v_wind

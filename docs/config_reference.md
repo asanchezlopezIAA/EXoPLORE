@@ -696,6 +696,8 @@ If your setting covers only one detector order, set `"order_indices": [0]` in th
    Kp = (2π / P) × a × sin(i) / sqrt(1 - e²)
    ```
    or look up the measured value from radial velocity studies.
+
+   For a circular orbit the planet velocity is `Kp·sin(2πφ)`, with `φ = 0` at mid-transit. If `observation.significant_eccentricity` is set, the velocity is instead computed by solving Kepler's equation for the true anomaly at each phase (`get_V_eccentric` in `src/exoplore/observation/velocity.py`); `eccentricity` and `argument_of_periastron_deg` (in degrees) then also shape the velocity curve.
 4. For the PHOENIX stellar model, download the file matching `stellar_teff_K` (rounded to nearest 100 K), `stellar_logg` (nearest 0.5), and `stellar_metallicity` (nearest 0.5) from https://phoenix.astro.physik.uni-goettingen.de/data/HiResFITS/PHOENIX-ACES-AGSS-COND-2011/
 5. Create `configs/yourplanet_instrument_event.json` by copying the HD189733b config and updating all planet, instrument, atmosphere, and path fields.
 6. Preview: `python scripts/run_exoplore.py configs/yourplanet_instrument_event.json`
