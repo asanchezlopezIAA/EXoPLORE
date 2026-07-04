@@ -2,7 +2,6 @@
   "_description": "HD 189733 b, canonical hot Jupiter, primary target for EXoPLORE development",
   "_note_units": "Physical quantities stored in natural astronomical units; to_inp_dat() converts them to CGS/km as required by petitRADTRANS.",
   "_references": [
-    "Triaud et al. 2010, A&A 524, A25 (orbital/stellar)",
     "Bouchy et al. 2005, A&A 444, L15 (discovery)",
     "Agol et al. 2010, ApJ 721, 1861 (T_0, period)",
     "Baluev et al. 2015, MNRAS 450, 3101 (refined epoch)"

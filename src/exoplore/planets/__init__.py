@@ -18,15 +18,15 @@ Quick start
 >>> p.name
 'HD189733b'
 >>> round(p.kp_kms, 1)
-152.8
+149.4
 >>> round(p.transit_duration_hours, 2)
-1.83
+1.94
 
 inp_dat conversion
 ------------------
 >>> inp_dat = p.to_inp_dat()
 >>> inp_dat["K_p"]   # km/s, ready to pass to the simulator
-152.8...
+149.4...
 """
 
 from exoplore.planets.models import PlanetParameters

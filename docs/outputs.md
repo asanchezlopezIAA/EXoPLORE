@@ -49,17 +49,22 @@ Shape: `(n_spectra,)`, synthetic BJD timestamps for each exposure, computed from
 
 Shape: `(n_spectra,)`, orbital phase for each exposure.
 
-Phase = (BJD - T₀) / Period. Values near 0 are at transit centre. Ingress and egress occur at ±T₁₄ / (2 × Period).
+Phase = (BJD - T₀) / Period. Values near 0 are at transit centre, with ingress and egress at ±T₁₄ / (2 × Period). The exposures that carry the planet signal are what EXoPLORE calls the `with_signal` set: for a transit these are the in-transit exposures (`|phase| < T₁₄ / (2 × Period)`); for an emission or phase-curve event they are instead the out-of-eclipse exposures. EXoPLORE builds this set from the transit duration and `observation.event_type`, not from a fixed phase cut. The example below reconstructs it for a transit using the same transit duration the simulator computes:
 
 ```python
 from astropy.io import fits
+from exoplore.planets import load_planet
 import numpy as np
 
 run    = 'BL19_withsignal_1nights_SNR_comb1_simdata_noisy_stdnoisex1'
 base   = f'/your/output_root/HD189733b/ANDES_YJHK/transit/{run}/matrices/'
 
-phase     = fits.open(base + 'phase.fits')[0].data
-in_transit = np.where(np.abs(phase) < 0.01)[0]
+phase  = fits.open(base + 'phase.fits')[0].data
+
+# In-transit ("with_signal") exposures: |phase| < T14 / (2 * Period).
+planet      = load_planet('planet_params/HD189733b.json')
+half_window = (planet.transit_duration_hours / 24.0) / planet.orbital_period_days / 2.0
+with_signal = np.where(np.abs(phase) < half_window)[0]
 ```
 
 ### `airmass.fits`

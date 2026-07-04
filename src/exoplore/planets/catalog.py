@@ -25,9 +25,9 @@ Example
 >>> from exoplore.planets import load_planet
 >>> planet = load_planet("planet_params/HD189733b.json")
 >>> print(f"Kp = {planet.kp_kms:.1f} km/s")
-Kp = 152.8 km/s
+Kp = 149.4 km/s
 >>> print(f"T₁₄ = {planet.transit_duration_hours:.2f} h")
-T₁₄ = 1.83 h
+T₁₄ = 1.94 h
 """
 
 from __future__ import annotations

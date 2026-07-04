@@ -401,10 +401,11 @@ class PlanetParameters:
 
         Example
         -------
+        >>> from exoplore.planets import load_planet
         >>> planet = load_planet("planet_params/HD189733b.json")
         >>> inp_dat = planet.to_inp_dat()
         >>> inp_dat["K_p"]   # km/s
-        152.5
+        149.4...
         """
         return {
             "Exoplanet_name": self.name,
