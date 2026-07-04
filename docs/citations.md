@@ -13,6 +13,38 @@ relevant dependencies listed below.
 
 ---
 
+## Preparation pipelines and log-likelihoods
+
+EXoPLORE implements several published preparation pipelines and retrieval
+log-likelihoods. Please cite the ones you use.
+
+> Brogi, M. & Line, M. R. (2019).
+> *Retrieving Temperatures and Abundances of Exoplanet Atmospheres with
+> High-resolution Cross-correlation Spectroscopy.*
+> AJ, 157, 114.
+> [doi:10.3847/1538-3881/aaffd3](https://doi.org/10.3847/1538-3881/aaffd3)
+
+> Sánchez-López, A., López-Puertas, M., Snellen, I. A. G., et al. (2019).
+> *Water vapor detection in the transmission spectra of HD 209458 b with the
+> CARMENES near-infrared channel.*
+> A&A, 630, A53.
+> [doi:10.1051/0004-6361/201936084](https://doi.org/10.1051/0004-6361/201936084)
+
+> Gibson, N. P., Merritt, S., Nugroho, S. K., et al. (2022).
+> *Relative abundance constraints from high-resolution optical transmission
+> spectroscopy of WASP-121b, and a fast model-filtering technique for
+> accelerating retrievals.*
+> MNRAS, 512, 4618.
+> [doi:10.1093/mnras/stac091](https://doi.org/10.1093/mnras/stac091)
+
+> Blain, D., Sánchez-López, A. & Mollière, P. (2024).
+> *A Formally Motivated Retrieval Framework Applied to the High-resolution
+> Transmission Spectrum of HD 189733 b.*
+> AJ, 167, 179.
+> [doi:10.3847/1538-3881/ad2c8b](https://doi.org/10.3847/1538-3881/ad2c8b)
+
+---
+
 ## WASP-127 b equatorial jet
 
 The resolved double-limb (morning/evening) signature illustrated in the Concepts

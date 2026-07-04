@@ -4,7 +4,7 @@ This page provides the shortest path to a working simulation. In the following, 
 
 ## Run the reference simulation
 
-The reference configuration simulates one CARMENES NIR transit of HD 189733 b using the BL19 preparing pipeline. To preview the simulation parameters without computing anything:
+The reference configuration simulates one CARMENES NIR transit of HD 189733 b using the BL19 preparation pipeline. To preview the simulation parameters without computing anything:
 
 ```bash
 python scripts/run_exoplore.py configs/hd189733b_carmenes_transit.json

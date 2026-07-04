@@ -192,7 +192,7 @@ separately in [Section 5](#5-from-cross-correlation-to-a-likelihood).
   `pipeline_BL19_norm` and `pipeline_BL19_tellcorr`, with telluric masking via
   `mask_tellurics`.
 - **Blain24** (Blain, Sánchez-López & Mollière
-  [2024](https://arxiv.org/abs/2402.14001), AJ, 167, 179). Developed on CARMENES
+  [2024](https://doi.org/10.3847/1538-3881/ad2c8b), AJ, 167, 179). Developed on CARMENES
   near-infrared (R ~ 80,400) transmission data of HD 189733 b. The throughput and
   blaze are removed with a per-exposure low-order polynomial over wavelength
   (`remove_throughput_fit`), and the tellurics with a per-channel low-order

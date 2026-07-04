@@ -30,7 +30,7 @@ and subsequently used in Sánchez-López et al. (2019, A&A, 630, A53) and
 Blain, Sánchez-López & Mollière (2024, AJ, 167, 179).
 
 **If you use these files in published work, please consider citing Alonso-Floriano et al.
-(2019), [Sánchez-López et al. (2019)](https://doi.org/10.1051/0004-6361/201936084), and [Blain, Sánchez-López & Mollière (2024)](https://arxiv.org/abs/2402.14001), and including the following acknowledgement:**
+(2019), [Sánchez-López et al. (2019)](https://doi.org/10.1051/0004-6361/201936084), and [Blain, Sánchez-López & Mollière (2024)](https://doi.org/10.3847/1538-3881/ad2c8b), and including the following acknowledgement:**
 
 > Based on data from the CAHA Archive at CAB (INTA-CSIC). The CAHA Archive is
 > part of the Spanish Virtual Observatory project funded by
