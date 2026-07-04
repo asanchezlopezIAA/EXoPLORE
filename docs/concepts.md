@@ -268,7 +268,7 @@ pipeline should be verified on the data it is applied to, not applied blindly.
 > signal injected at a velocity **away** from the planet, so the choice never
 > sees the real signal; and a model-independent criterion based on the change in
 > the residual standard deviation between successive SYSREM iterations
-> (`delta_sigma`), following Parker et al. (2025, MNRAS, 538, 3263), which
+> (`delta_sigma`), following [Parker et al. (2025, MNRAS, 538, 3263)](https://doi.org/10.1093/mnras/staf469), which
 > avoids assuming a model altogether. The two latter approaches both avoid tuning the
 > analysis on the real signal.
 

@@ -18,7 +18,7 @@
     "flag_event": "full_event",
     "pre_event_hours": 0.0,
     "post_event_hours": 0.0,
-    "n_nights": 100,
+    "n_nights": 200,
     "different_nights": false,
     "exposure_time_seconds": 30.0,
     "readout_time_seconds": 6.0,

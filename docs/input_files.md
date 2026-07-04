@@ -93,7 +93,7 @@ Here `K` is the **absolute spectral order number** from the instrument's `order_
 
 > **Note on `n_spectra`:** regardless of `use_real_data`, the number of exposures per night is always determined by `julian_date_{b}.fits`, specifically, `n_spectra_b = len(julian_date_b)`. The spectral and uncertainty arrays must have a matching first dimension; the simulator does not infer `n_spectra` from them. For `different_nights: false` with `use_real_data: true`, the night suffix is omitted: `observations_order_{K}.fits` and `observations_berv.fits`.
 
-**For the HD189733b CARMENES reference night** (Alonso-Floriano et al. 2019, A&A 621, A74, night of 2017-09-07):
+**For the HD189733b CARMENES reference night** ([Alonso-Floriano et al. 2019](https://doi.org/10.1051/0004-6361/201834339), A&A 621, A74, night of 2017-09-07):
 The sig/snr/JD/airmass files from that published observation are in `inputs/CARMENES_NIR/HD189733b/reference_night/`. These are the files used in the CARMENES validation run. They should be cited as Alonso-Floriano et al. (2019) if used in published work.
 
 ---

@@ -265,7 +265,7 @@ print(f"Peak S/N = {peak_snr:.1f} at Kp = {peak_kp:.0f} km/s, Vsys = {peak_vsys:
 ## How to read a 1D CCF at the best Kp
 
 ```python
-kp_best = 152.5   # km/s, literature Kp for HD 189733 b (Triaud et al. 2009)
+kp_best = 152.5   # km/s, Kp for HD 189733 b
 kp_idx  = np.argmin(np.abs(kp_range - kp_best))
 
 ccf_1d = snr_map[kp_idx, :]
