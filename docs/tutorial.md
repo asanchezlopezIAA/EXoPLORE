@@ -526,9 +526,9 @@ With the default config (seed = 12345, specific_event reference night, 23 orders
 
 > **Approximate run time:** ~5 to 10 min (single order, two nights, no retrieval).
 
-### 5a: Identical nights (any instrument)
+### 5a: Repeated nights, same observing conditions (any instrument)
 
-To co-add N consecutive transits treated as identical copies of one night:
+To co-add N consecutive transits observed under the same conditions:
 
 ```json
 "observation": {
@@ -537,32 +537,31 @@ To co-add N consecutive transits treated as identical copies of one night:
 }
 ```
 
-All nights share the same airmass profile, SNR, and telluric model; only the Gaussian noise realisation differs between them. The per-night CCF matrices are then co-added. When the per-exposure noise is dominated by uncorrelated (for example photon) noise, the combined detection S/N is expected to grow roughly as √N.
+All nights share the same airmass profile, SNR, and telluric model; the only thing that changes between them is the noise realisation (the noise is drawn independently per night when `n_nights > 1`). The per-night CCF matrices are then co-added. When the per-exposure noise is dominated by uncorrelated (for example photon) noise, the combined detection S/N is expected to grow roughly as √N.
 
-We illustrate this with two three-night runs of HD 189733 b that differ only in the noise draw, one with CARMENES NIR and one with ANDES (figure below). In the CARMENES run the three nights reach S/N ≈ 8, 6, and 10, and their combination reaches ≈ 15, close to the √3 improvement expected for uncorrelated noise. In the ANDES run of these simulations the three nights each reach S/N ≈ 42 and their combination stays at ≈ 43, that is, no measurable gain.
+We illustrate this with a three-night CARMENES NIR run of HD 189733 b (figure below). The individual nights reach S/N ≈ 8, 6, and 10, and their combination reaches ≈ 15, close to the √3 improvement expected for three independent noise realisations. Because the noise is drawn independently each run, the exact values vary from run to run; the figure shows one representative realisation.
 
-Both behaviours are worth pausing on. A plausible reason for the flat ANDES result is that, in the current version of the simulator, the dominant off-peak structure in the CCF is set by the telluric-removal residual, which is essentially identical from night to night when the nights share the same conditions, and so co-adds coherently instead of averaging down. This should be read as a property of the present, deliberately simple noise and telluric treatment rather than as a statement about real ELT data; it may equally indicate that our forward and noise models are too idealised in this regime. We expect it to change once per-night varying tellurics and further noise sources are introduced, at which point the residuals would decorrelate between nights and a stacking gain should reappear. Note also that because the per-night noise is drawn independently when `n_nights > 1`, the exact S/N values vary from run to run; the figure shows one representative realisation.
-
-**Run it.** Starting from the Tutorial 4 CARMENES config or the Tutorial 1 ANDES config, set `n_nights: 3` and `different_nights: false`, then:
+**Run it.** Starting from the Tutorial 4 CARMENES config, set `n_nights: 3` and `different_nights: false`, then:
 
 ```bash
 python scripts/run_exoplore.py <your_config>.json --run
 ```
 
-The CARMENES example (23 orders) takes about 1.5 min; the ANDES example (76 orders, limb asymmetries on) about 55 min. For this simple co-add the simulator writes the same products it writes for distinct nights: per-night Kp-Vsys maps and 1D CCFs (labelled `..._night{b}_...`), the combined map, and a single overlay `1D_CCF_..._nights_combined.pdf/png`. The two-panel figure below is composed from the saved maps with:
+The example above (23 orders, three nights) takes about 1.5 min. For this simple co-add the simulator writes the same products it writes for distinct nights: per-night Kp-Vsys maps and 1D CCFs (labelled `..._night{b}_...`), the combined map, and a single overlay `1D_CCF_..._nights_combined.pdf/png`. The figure below is composed from the saved maps with:
 
 ```bash
 python scripts/plot_multinight_stacking.py \
   --run "<carmenes_run>/matrices" --label "CARMENES NIR (3.5 m)" \
-  --run "<andes_run>/matrices"    --label "ANDES YJHK (39 m)" \
   --out docs/figures/tutorial5a_stacking.png
 ```
 
 :::{figure} figures/tutorial5a_stacking.png
-:width: 95%
+:width: 80%
 :align: center
-Per-night and combined 1D CCFs (in units of S/N) at the K<sub>P</sub> of maximum significance, for two three-night HD 189733 b co-adds that differ only in the noise realisation. **Left:** CARMENES NIR (23 orders); the three nights (colours) reach S/N ≈ 6 to 10 and their co-addition (black) rises to ≈ 15, close to the √3 gain expected when the noise between nights is uncorrelated. **Right:** ANDES YJHK (76 orders, limb asymmetries on); the three nights each reach S/N ≈ 42 and the combined curve (black) lies almost on top of them, showing no measurable improvement. In these runs the ANDES per-night CCFs are nearly identical away from the peak, which suggests the co-added residual is correlated between nights in the current noise and telluric model (see the note above). The dashed line marks v<sub>rest</sub> = 0.
+Per-night and combined 1D CCFs (in units of S/N) at the K<sub>P</sub> of maximum significance, for a three-night HD 189733 b co-add with CARMENES NIR (23 orders) in which the nights differ only in their noise realisation. The three nights (colours) reach S/N ≈ 6 to 10 and their co-addition (black) rises to ≈ 15, close to the √3 gain expected when the noise between nights is uncorrelated. The dashed line marks v<sub>rest</sub> = 0.
 :::
+
+How much co-adding helps depends on how independent the nights really are. Repeating the same conditions only averages down the part of the noise that is uncorrelated between nights; the more the observing conditions differ (airmass, PWV, cadence), the more of the residual structure decorrelates as well. That distinct-nights case is covered next.
 
 ### 5b: Distinct nights with CARMENES_NIR (real data)
 
