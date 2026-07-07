@@ -314,6 +314,10 @@ The CCF template is configured independently via the `ccf_template` block. Setti
 }
 ```
 
+:::{note}
+**How C/O and metallicity are set.** For a primer on equilibrium chemistry and how to configure it, see the [EasyChem documentation](https://easychem.readthedocs.io/en/latest/). EasyChem's native C/O control (setting `exo.co`) changes only the oxygen abundance, holding carbon fixed and setting O = C / (C/O). Because oxygen is a major metal, this also shifts the total metallicity. EXoPLORE therefore uses a symmetric scheme instead (`_solve_co_symmetric` in `src/exoplore/atmosphere/chemistry.py`). It scales carbon and oxygen by equal and opposite factors, `sqrt(target / current)` and its inverse, so the C/O reaches the requested value while the combined metal content, and hence the metallicity, is preserved. This is the default whenever `use_easychem: true`, and it keeps `carbon_to_oxygen_ratio` and `metallicity_wrt_solar` independent, which matters when both are free parameters in a retrieval.
+:::
+
 ### Example B: isothermal temperature profile
 
 ```json
@@ -404,7 +408,7 @@ The list order must exactly match the `species` list. H₂ and He dominate; trac
 
 ## Tutorial 4: CARMENES NIR simulation
 
-> **Approximate run time:** ~10 to 15 min (CARMENES NIR, 23 orders, one night, no retrieval).
+> **Approximate run time:** ~2 to 3 min (CARMENES NIR, 23 orders, one night, no retrieval).
 
 CARMENES covers the NIR 0.96 to 1.71 µm (Y+J+H, 28 orders) at R ≈ 80,400. In EXoPLORE, the CARMENES NIR wavelength grid is bundled with the repository and found automatically. A ready-to-run config is already provided at `configs/hd189733b_carmenes_transit.json`. In the following we explain every change relative to the ANDES reference config, so that these choices can be adapted to other instruments.
 
@@ -514,7 +518,7 @@ The script selects exposures between `--first` and `--last`, removes Fabry-Péro
 python -u scripts/run_exoplore.py configs/hd189733b_carmenes_transit.json --run
 ```
 
-With the default config (seed = 12345, specific_event reference night, 23 orders), the peak S/N is approximately 7σ at the correct (Kp, Vsys). This is substantially lower than the ANDES result for the same planet, a direct consequence of three compounding limitations of this dataset: CARMENES NIR covers 23 orders versus 76 for ANDES, its resolving power (R ≈ 80,400) is lower than ANDES (R = 100,000), and the reference night provides only 45 spectra compared to roughly 390 for the ANDES simulation. The simulation completes in approximately 5 to 10 minutes on a modern desktop.
+With the default config (seed = 12345, specific_event reference night, 23 orders), the peak S/N is approximately 8σ, close to the expected (Kp, Vsys). This is substantially lower than the ANDES result for the same planet, a direct consequence of three compounding limitations of this dataset. CARMENES NIR covers 23 orders against 76 for ANDES, its resolving power (R ≈ 80,400) is below that of ANDES (R = 100,000), and the reference night provides only 45 spectra against roughly 390 for the ANDES simulation. The simulation itself takes about 75 s after the one-time opacity load.
 
 ---
 
@@ -524,16 +528,41 @@ With the default config (seed = 12345, specific_event reference night, 23 orders
 
 ### 5a: Identical nights (any instrument)
 
-To simulate N consecutive transits treated as identical copies of night 1:
+To co-add N consecutive transits treated as identical copies of one night:
 
 ```json
 "observation": {
-  "n_nights": 4,
+  "n_nights": 3,
   "different_nights": false
 }
 ```
 
-All four nights share the same airmass profile, SNR, and noise model. CCF matrices are co-added coherently, and consequently the expected detection S/N scales as √N.
+All nights share the same airmass profile, SNR, and telluric model; only the Gaussian noise realisation differs between them. The per-night CCF matrices are then co-added. When the per-exposure noise is dominated by uncorrelated (for example photon) noise, the combined detection S/N is expected to grow roughly as √N.
+
+We illustrate this with two three-night runs of HD 189733 b that differ only in the noise draw, one with CARMENES NIR and one with ANDES (figure below). In the CARMENES run the three nights reach S/N ≈ 8, 6, and 10, and their combination reaches ≈ 15, close to the √3 improvement expected for uncorrelated noise. In the ANDES run of these simulations the three nights each reach S/N ≈ 42 and their combination stays at ≈ 43, that is, no measurable gain.
+
+Both behaviours are worth pausing on. A plausible reason for the flat ANDES result is that, in the current version of the simulator, the dominant off-peak structure in the CCF is set by the telluric-removal residual, which is essentially identical from night to night when the nights share the same conditions, and so co-adds coherently instead of averaging down. This should be read as a property of the present, deliberately simple noise and telluric treatment rather than as a statement about real ELT data; it may equally indicate that our forward and noise models are too idealised in this regime. We expect it to change once per-night varying tellurics and further noise sources are introduced, at which point the residuals would decorrelate between nights and a stacking gain should reappear. Note also that because the per-night noise is drawn independently when `n_nights > 1`, the exact S/N values vary from run to run; the figure shows one representative realisation.
+
+**Run it.** Starting from the Tutorial 4 CARMENES config or the Tutorial 1 ANDES config, set `n_nights: 3` and `different_nights: false`, then:
+
+```bash
+python scripts/run_exoplore.py <your_config>.json --run
+```
+
+The CARMENES example (23 orders) takes about 1.5 min; the ANDES example (76 orders, limb asymmetries on) about 55 min. For this simple co-add the simulator writes the same products it writes for distinct nights: per-night Kp-Vsys maps and 1D CCFs (labelled `..._night{b}_...`), the combined map, and a single overlay `1D_CCF_..._nights_combined.pdf/png`. The two-panel figure below is composed from the saved maps with:
+
+```bash
+python scripts/plot_multinight_stacking.py \
+  --run "<carmenes_run>/matrices" --label "CARMENES NIR (3.5 m)" \
+  --run "<andes_run>/matrices"    --label "ANDES YJHK (39 m)" \
+  --out docs/figures/tutorial5a_stacking.png
+```
+
+:::{figure} figures/tutorial5a_stacking.png
+:width: 95%
+:align: center
+Per-night and combined 1D CCFs (in units of S/N) at the K<sub>P</sub> of maximum significance, for two three-night HD 189733 b co-adds that differ only in the noise realisation. **Left:** CARMENES NIR (23 orders); the three nights (colours) reach S/N ≈ 6 to 10 and their co-addition (black) rises to ≈ 15, close to the √3 gain expected when the noise between nights is uncorrelated. **Right:** ANDES YJHK (76 orders, limb asymmetries on); the three nights each reach S/N ≈ 42 and the combined curve (black) lies almost on top of them, showing no measurable improvement. In these runs the ANDES per-night CCFs are nearly identical away from the peak, which suggests the co-added residual is correlated between nights in the current noise and telluric model (see the note above). The dashed line marks v<sub>rest</sub> = 0.
+:::
 
 ### 5b: Distinct nights with CARMENES_NIR (real data)
 
@@ -576,7 +605,7 @@ Set `specific_event: true` so that per-night Julian dates from the files are use
 
 ### 5c: Distinct nights with ANDES (fully synthetic)
 
-`different_nights: true` is fully supported for ANDES. Because ANDES uses a theoretical ETC for the SNR model, no JD or airmass files are needed: the simulator synthesises the per-night JD grids automatically, placing successive transit epochs at T₀ + n × P and computing the real airmass from the planet's sky coordinates at those times (when `use_accurate_airmass: true`). Each night thus gets its own airmass evolution naturally. If you prefer to control the airmass manually (for hypothetical scheduling studies), set `use_accurate_airmass: false` and adjust `airmass_limits`, the same `airmass_evolution` shape applies to all nights, though the limits can differ by editing the config before each run.
+`different_nights: true` is fully supported for ANDES. Because ANDES uses a theoretical ETC for the SNR model, no JD or airmass files are needed. The simulator synthesises the per-night JD grids automatically, placing successive transit epochs at T₀ + n × P and computing the real airmass from the planet's sky coordinates at those times (when `use_accurate_airmass: true`). Each night thus gets its own airmass evolution naturally. To control the airmass manually (for hypothetical scheduling studies), set `use_accurate_airmass: false` and adjust `airmass_limits`. The same `airmass_evolution` shape then applies to all nights, though the limits can differ by editing the config before each run.
 
 **What makes each simulated night different** (and why combining them helps):
 

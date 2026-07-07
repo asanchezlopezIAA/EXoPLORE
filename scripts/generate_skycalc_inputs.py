@@ -124,7 +124,10 @@ def _query_skycalc(
     sky["lsf_type"]         = "none"
     sky["lsf_gauss_fwhm"]   = 5.0
     sky["lsf_boxcar_fwhm"]  = 5.0
-    sky["observatory"]      = observatory
+    # ESO SkyCalc only models its own sites. Map other observatory codes to
+    # the nearest ESO site: Calar Alto (CARMENES, 2168 m) -> La Silla (2400 m).
+    _skycalc_obs = {"caha": "lasilla"}
+    sky["observatory"]      = _skycalc_obs.get(observatory.lower(), observatory)
 
     skm = SkyModel()
     try:
@@ -162,7 +165,7 @@ def _gen_pwv(n_spectra: int, ref_pwv: float) -> np.ndarray:
 # Airmass computation, uses the same function as the simulator
 # ---------------------------------------------------------------------------
 
-def _build_airmass(cfg: dict) -> np.ndarray:
+def _build_airmass(cfg: dict, n_spectra: int = None) -> np.ndarray:
     """Compute the per-exposure airmass array using the same logic as Block 2.
 
     Calls :func:`exoplore.observation.timing.observation_julian_dates` to
@@ -189,10 +192,18 @@ def _build_airmass(cfg: dict) -> np.ndarray:
     else:
         t0_bjd = obs.get("specific_T0_bjd", 0.0)
 
-    n_spectra    = obs.get("n_spectra", 45)
-    exp_s        = obs.get("exposure_time_s", 198.0)
-    readout_s    = obs.get("readout_time_s", 0.0)
-    overhead_s   = obs.get("overhead_time_s", 0.0)
+    # n_spectra must match what the simulator builds; the caller (generate())
+    # already derives it from the event duration, so use that. Only fall back
+    # to a config value if not passed. Read the real config keys
+    # (exposure_time_seconds, not the old CARMENES-default _s aliases).
+    if n_spectra is None:
+        n_spectra = int(obs.get("n_spectra", 45))
+    exp_s        = float(obs.get("exposure_time_seconds",
+                                 obs.get("exposure_time_s", 198.0)))
+    readout_s    = float(obs.get("readout_time_seconds",
+                                 obs.get("readout_time_s", 0.0)))
+    overhead_s   = float(obs.get("overhead_time_seconds",
+                                 obs.get("overhead_time_s", 0.0)))
     start_offset = obs.get("start_offset_hours",
                            obs.get("pre_event_hours", 1.0))
 
@@ -318,9 +329,11 @@ def _build_airmass_astro(cfg: dict, search_from: str = None,
     # Use PlanetParameters for transit duration so it matches the simulator
     # exactly (same formula used at simulator.py lines 388-392).
     try:
-        from exoplore.planets.models import PlanetParameters as _PP
-        _pp = _PP(**{k: v for k, v in p.items()
-                     if k in _PP.__dataclass_fields__})
+        # Use load_planet (full unit handling) so transit_duration_hours is
+        # computed exactly as the simulator does; constructing PlanetParameters
+        # directly from the raw JSON skips the conversions and yields 0.
+        from exoplore.planets import load_planet as _load_planet
+        _pp = _load_planet(p_file)
         dur_h = _pp.transit_duration_hours
     except Exception:
         dur_h = _transit_duration_hours(p)  # fallback
@@ -497,7 +510,37 @@ def generate(config_path: str, overwrite: bool = False,
 
     inputs_dir   = paths.get("inputs_dir", "inputs/")
     flag_event   = obs.get("flag_event", "full_event")
-    n_spectra    = obs.get("n_spectra", 1)
+    # Number of exposures the simulator will build: from the transit duration
+    # + pre/post baseline and the exposure cadence (mirrors get_event). The old
+    # default of 1 silently produced a single SkyCalc file for synthetic modes.
+    n_spectra    = obs.get("n_spectra")
+    if n_spectra:
+        n_spectra = int(n_spectra)
+    else:
+        import sys as _sy7, os as _os7, json as _jn7
+        _sy7.path.insert(0, _os7.path.join(_os7.path.dirname(__file__),
+                                           "..", "src"))
+        _pfile = cfg.get("planet", {}).get("parameter_file", "")
+        try:
+            # load_planet computes transit_duration_hours exactly as the
+            # simulator does, so the file count matches the simulator's
+            # n_spectra (the raw _transit_duration_hours fallback is ~3 short).
+            from exoplore.planets import load_planet as _lp7
+            _durh = _lp7(_pfile).transit_duration_hours
+        except Exception:
+            try:
+                with open(_pfile) as _pf7:
+                    _durh = _transit_duration_hours(_jn7.load(_pf7))
+            except Exception:
+                _durh = 2.0
+        _exp = float(obs.get("exposure_time_seconds", 198.0) or 198.0)
+        _cad = _exp + float(obs.get("readout_time_seconds", 0.0) or 0.0) \
+             + float(obs.get("overhead_time_seconds", 0.0) or 0.0)
+        _pre = float(obs.get("pre_event_hours", 0.0) or 0.0) or _durh / 2.0
+        _post = float(obs.get("post_event_hours", 0.0) or 0.0) or _durh / 2.0
+        _step = _cad / 86400.0
+        _tot = (_durh + _pre + _post) / 24.0
+        n_spectra = len(np.arange(0, _tot + _step, _step))
     constant_pwv = tell.get("constant_pwv", True)
     ref_airmass  = tell.get("reference_airmass", 1.0)
     am_limits    = tell.get("airmass_limits", [1.4, 1.7])
@@ -533,7 +576,26 @@ def generate(config_path: str, overwrite: bool = False,
     os.makedirs(out_dir, exist_ok=True)
 
     # Airmass array
-    if mode == "astro":
+    _specific = cfg.get("observation", {}).get("specific_event", False)
+    _am_fits = os.path.join(inputs_dir, "reference_night", "airmass_0.fits")
+    if _specific and os.path.exists(_am_fits):
+        # Observed night: the real per-exposure airmass is already known
+        # (the simulator itself reads it from airmass_0.fits), so use it
+        # directly rather than recomputing the sky geometry. No astroplan
+        # is needed in this case.
+        from astropy.io import fits as _fits_am
+        airmass = _fits_am.open(_am_fits)[0].data.astype(float)
+        print(f"\n  Mode: specific_event (real airmass from airmass_0.fits, "
+              f"{airmass.min():.2f} to {airmass.max():.2f})")
+    elif _specific:
+        # Observed night but no airmass_0.fits: recover the airmass from the
+        # target coordinates and the real BJDs (julian_date_0.fits) via
+        # astroplan, rather than a synthetic model.
+        print("\n  Mode: specific_event (no airmass_0.fits; computing airmass "
+              "from target + real BJDs via astroplan)")
+        airmass = _build_airmass_astro(cfg, search_from,
+                                       skip_transits=night_idx or 0)
+    elif mode == "astro":
         print(f"\n  Mode: astro (real sky geometry via astroplan)")
         # For night N, skip the first N observable transits so each night
         # gets its own distinct transit epoch.
@@ -544,7 +606,7 @@ def generate(config_path: str, overwrite: bool = False,
         print(f"\n  Mode: synthetic (fixed airmass {am_limits[0]:.1f})")
     else:
         print(f"\n  Mode: synthetic (parabolic airmass model)")
-        airmass = _build_airmass(cfg)
+        airmass = _build_airmass(cfg, n_spectra)
 
     # PWV array (always constant within a night)
     pwv_arr = np.full(len(airmass), pwv_mm)

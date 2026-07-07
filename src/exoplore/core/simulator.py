@@ -628,26 +628,26 @@ class ExoploreSimulator:
             # use a list of None as a safe placeholder.
             if airmass_og is None:
                 # Synthetic different_nights: no reference airmass files.
-                # Mode 2 (use_full_skycalc): airmass is embedded in per-night
-                # SkyCalc files, placeholder list of None is fine.
-                # Mode 1 (airmass scaling): Beer-Lambert needs a real airmass
-                # array per night, compute from the parabolic model using
-                # each night's own JD grid.
-                if (cfg.tellurics.include_tellurics
-                        and not cfg.tellurics.use_full_skycalc):
-                    _amlpn = cfg.tellurics.airmass_limits_per_night
-                    airmass = [
-                        get_airmass(
-                            cfg.tellurics.airmass_evolution,
-                            syn_jd[n],
-                            (_amlpn[n] if _amlpn is not None
-                             and n < len(_amlpn)
-                             else cfg.tellurics.airmass_limits),
-                        )
-                        for n in range(cfg.observation.n_nights)
-                    ]
-                else:
-                    airmass = [None] * cfg.observation.n_nights
+                # The per-exposure airmass is a physical quantity the
+                # preparation requires (Blain24 fits log-flux against airmass),
+                # so it is always computed from the parabolic model on each
+                # night's own JD grid, regardless of the telluric mode. It must
+                # never be left as None (which np.asarray later collapses to a
+                # 0-d scalar).
+                _amlpn = cfg.tellurics.airmass_limits_per_night
+                _aml_default = (cfg.tellurics.airmass_limits
+                                if cfg.tellurics.airmass_limits is not None
+                                else [1.2, 1.6])
+                airmass = [
+                    get_airmass(
+                        cfg.tellurics.airmass_evolution,
+                        syn_jd[n],
+                        (_amlpn[n] if _amlpn is not None
+                         and n < len(_amlpn)
+                         else _aml_default),
+                    )
+                    for n in range(cfg.observation.n_nights)
+                ]
             else:
                 airmass = airmass_og
 
@@ -2495,8 +2495,11 @@ class ExoploreSimulator:
                             num=_ccf_iterations, dtype=float,
                         )
 
-                    # 6b, ccf_store allocation (b==0 per order)
-                    if b == 0:
+                    # 6b, ccf_store allocation. Allocate on the first night that
+                    # reaches here: night 0 may have hit the fully-masked
+                    # `continue` above, so gating on b==0 could leave this None
+                    # and crash a later night at the NaN-fill below.
+                    if _ccf_store_b6 is None:
                         if not _dn:
                             _ccf_store_b6 = np.zeros(
                                 ((_nn, _ccf_iterations, n_spectra, 2, _si)
@@ -3395,6 +3398,74 @@ class ExoploreSimulator:
                                 f"{_feh_dm:.4f} {_co_dm:.4f} "
                                 f"{ccf_tot_sig[_vr_idx, max_kp_idx]:.4f}\n"
                             )
+
+                    # Per-night Kp-Vsys maps + 1D CCFs + overlay for the
+                    # simple co-add (different_nights=False, n_nights>1). The
+                    # nights share one geometry (identical phase/berv), so each
+                    # night's map comes from ccf_nights[b] with the same shift
+                    # arguments; ccf_complete above is their co-add. Mirrors
+                    # the different_nights per-night save/plot calls so the
+                    # nightwise CCFs and the overlay are available alongside
+                    # the combined map.
+                    if _nn > 1:
+                        _night_1d_slices = []
+                        for _bco in range(_nn):
+                            _mini_b7["Simulation_name"] = (
+                                f"{sim_name}_night{_bco}")
+                            _cvs_bco = get_shifted_ccf_matrix(
+                                _mini_b7, with_signal, v_rest, _v_ccf,
+                                _kp_range, phase,
+                                planet.systemic_velocity_kms, berv,
+                                _pix_lr_b7, _ccf_v_step, ccf_nights[_bco],
+                                sysrem_opt=_opt_needs_injection,
+                            )
+                            _ccf_tot_bco = np.nansum(_cvs_bco, 1)
+                            (_cts_bco, _ms_bco, _mki_bco,
+                             _mvw_bco, _) = get_max_CCF_peak(
+                                _mini_b7, _ccf_tot_bco, v_rest, _kp_range,
+                                b=None, stats=None,
+                                sysrem_opt=_opt_needs_injection,
+                                CCF_Noise=False,
+                            )
+                            try:
+                                _snr_mdco = str(dirs["matrices"])
+                                os.makedirs(_snr_mdco, exist_ok=True)
+                                np.savez(
+                                    f"{_snr_mdco}/ccf_tot_sn_map_"
+                                    f"{_mini_b7['Simulation_name']}.npz",
+                                    ccf_tot_sn=_cts_bco, v_rest=v_rest,
+                                    kp_range=_kp_range,
+                                    sysrem_opt=bool(_opt_needs_injection),
+                                    order_indices=np.asarray(order_selection),
+                                )
+                            except Exception as _eco:
+                                print("  NOTE: per-night S/N map save "
+                                      f"skipped ({_eco})")
+                            plot_Kp_Vrest(
+                                _mini_b7, _kp_range, _cts_bco, v_rest,
+                                show_plot=False, save_plot=True,
+                                sysrem_opt=_opt_needs_injection,
+                            )
+                            plot_1D_CCF(
+                                _mini_b7, v_rest, _cts_bco, _mki_bco,
+                                _ms_bco, _n_kp, _mvw_bco, [-100, 100],
+                                show_plot=False, save_plot=True,
+                                sysrem_opt=_opt_needs_injection,
+                            )
+                            _night_1d_slices.append(
+                                (_cts_bco[:, int(_mki_bco)], float(_ms_bco))
+                            )
+                        _mini_b7["Simulation_name"] = sim_name  # restore
+                        from exoplore.plotting.kpvsys import (
+                            plot_multi_night_1D_CCF)
+                        plot_multi_night_1D_CCF(
+                            _mini_b7, v_rest,
+                            _night_1d_slices,
+                            (ccf_tot_sig[:, int(max_kp_idx)],
+                             float(max_sig)),
+                            xlims=[-100, 100],
+                            show_plot=False, save_plot=True,
+                        )
                 else:  # Different_nights
                     # Per-night Kp-Vsys maps (each saved with _nightN suffix)
                     _night_1d_slices = []
@@ -3408,6 +3479,19 @@ class ExoploreSimulator:
                             b=None, stats=None,
                             sysrem_opt=_opt_needs_injection, CCF_Noise=False,
                         )
+                        try:
+                            _snr_md7 = str(dirs["matrices"])
+                            os.makedirs(_snr_md7, exist_ok=True)
+                            np.savez(
+                                f"{_snr_md7}/ccf_tot_sn_map_"
+                                f"{_mini_b7['Simulation_name']}.npz",
+                                ccf_tot_sn=ccf_tot_sig, v_rest=v_rest,
+                                kp_range=_kp_range,
+                                sysrem_opt=bool(_opt_needs_injection),
+                                order_indices=np.asarray(order_selection),
+                            )
+                        except Exception as _e7:
+                            print(f"  NOTE: per-night S/N map save skipped ({_e7})")
                         plot_Kp_Vrest(
                             _mini_b7, _kp_range, ccf_tot_sig, v_rest,
                             show_plot=False, save_plot=True,
@@ -3437,6 +3521,19 @@ class ExoploreSimulator:
                         b=None, stats=None,
                         sysrem_opt=_opt_needs_injection, CCF_Noise=False,
                     )
+                    try:
+                        _snr_mdc = str(dirs["matrices"])
+                        os.makedirs(_snr_mdc, exist_ok=True)
+                        np.savez(
+                            f"{_snr_mdc}/ccf_tot_sn_map_"
+                            f"{_mini_b7['Simulation_name']}.npz",
+                            ccf_tot_sn=ccf_tot_sig, v_rest=v_rest,
+                            kp_range=_kp_range,
+                            sysrem_opt=bool(_opt_needs_injection),
+                            order_indices=np.asarray(order_selection),
+                        )
+                    except Exception as _ec:
+                        print(f"  NOTE: combined S/N map save skipped ({_ec})")
                     plot_Kp_Vrest(
                         _mini_b7, _kp_range, ccf_tot_sig, v_rest,
                         show_plot=False, save_plot=True,
