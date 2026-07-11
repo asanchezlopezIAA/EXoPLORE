@@ -499,6 +499,8 @@ class ExoploreSimulator:
         # synthetic, no JD files), get_event expects JD_og[n] per night
         # but JD_og is None.  Synthesise per-night JD arrays here so
         # get_event can index them.  Each night is placed at T0 + n*Period.
+        _accurate_nights = False   # True when synthetic nights sit at real
+                                   # observable epochs (Block 2a below)
         if (cfg.observation.different_nights
                 and not cfg.observation.specific_event
                 and JD_og is None):
@@ -508,9 +510,37 @@ class ExoploreSimulator:
             _td_d = planet.transit_duration_hours / 24.0
             _pre_d = _pre_h / 24.0
             _post_d = _post_h / 24.0
+            # Night placement: with use_accurate_airmass, each night is a
+            # real observable transit from the site (deterministic search
+            # from the reference epoch), so airmass and BERV genuinely
+            # differ between nights.  Otherwise consecutive orbits at
+            # T0 + n * P (nights differ only through the config inputs).
+            _tmid_list = None
+            if (cfg.tellurics.use_accurate_airmass
+                    and planet.ra_deg is not None
+                    and planet.dec_deg is not None):
+                from exoplore.observation.ephemeris import (
+                    find_observable_transit_epochs)
+                try:
+                    _tmid_list = find_observable_transit_epochs(
+                        planet.transit_epoch_bjd,
+                        planet.orbital_period_days,
+                        planet.ra_deg, planet.dec_deg,
+                        cfg.instrument.observatory,
+                        cfg.observation.n_nights,
+                    )
+                except Exception as _eph_err:
+                    print(f"  WARNING: observable-transit search failed "
+                          f"({_eph_err}); falling back to T0 + n * P.")
+            elif cfg.tellurics.use_accurate_airmass:
+                print("  WARNING: use_accurate_airmass=True but the planet "
+                      "file lacks ra_deg/dec_deg; falling back to T0 + n * P "
+                      "and the parabolic airmass model.")
             JD_og = []
             for _n in range(cfg.observation.n_nights):
-                _tmid_n = (planet.transit_epoch_bjd
+                _tmid_n = (float(_tmid_list[_n])
+                           if _tmid_list is not None
+                           else planet.transit_epoch_bjd
                            + _n * planet.orbital_period_days)
                 _jd_n = np.arange(
                     _tmid_n - _td_d / 2.0 - _pre_d,
@@ -518,6 +548,12 @@ class ExoploreSimulator:
                     _jd_step,
                 )
                 JD_og.append(_jd_n)
+            _accurate_nights = _tmid_list is not None
+            if _accurate_nights:
+                from astropy.time import Time as _Time
+                _iso = [_Time(t, format="jd").iso[:10] for t in _tmid_list]
+                print(f"  Different nights at observable transit epochs: "
+                      f"{', '.join(_iso)}")
 
         from exoplore.observation import get_event_v2
         syn_jd, with_signal, without_signal, transit_mid_JD = \
@@ -558,11 +594,32 @@ class ExoploreSimulator:
                         and _n < len(cfg.tellurics.airmass_limits_per_night))
                     else cfg.tellurics.airmass_limits
                 )
-                _new_airmass.append(
-                    get_airmass(cfg.tellurics.airmass_evolution, _jd_n,
-                                _am_limits_n)
-                    if cfg.tellurics.include_tellurics else None
-                )
+                _amf_n = (f"{cfg.paths.inputs_dir}"
+                          f"Skycalc_{cfg.observation.flag_event}/"
+                          f"night_{_n}/Fixed_PWV/airmass.fits")
+                if not cfg.tellurics.include_tellurics:
+                    _new_airmass.append(None)
+                elif (cfg.tellurics.use_full_skycalc
+                        and os.path.exists(_amf_n)):
+                    from astropy.io import fits as _fits_amn
+                    _arr_n = _fits_amn.open(_amf_n)[0].data.astype(float)
+                    if len(_arr_n) != len(_jd_n):
+                        raise ValueError(
+                            f"night {_n}: airmass.fits has {len(_arr_n)} "
+                            f"entries but this night's cadence gives "
+                            f"{len(_jd_n)} exposures. Regenerate the SkyCalc "
+                            f"inputs for the per-night exposure times.")
+                    _new_airmass.append(_arr_n)
+                elif _accurate_nights:
+                    from exoplore.observation.ephemeris import (
+                        accurate_airmass as _acc_am_pn)
+                    _new_airmass.append(
+                        _acc_am_pn(_jd_n, planet.ra_deg, planet.dec_deg,
+                                   cfg.instrument.observatory))
+                else:
+                    _new_airmass.append(
+                        get_airmass(cfg.tellurics.airmass_evolution, _jd_n,
+                                    _am_limits_n))
             syn_jd       = _new_jd
             with_signal  = _new_with
             without_signal = _new_without
@@ -630,30 +687,97 @@ class ExoploreSimulator:
                 # Synthetic different_nights: no reference airmass files.
                 # The per-exposure airmass is a physical quantity the
                 # preparation requires (Blain24 fits log-flux against airmass),
-                # so it is always computed from the parabolic model on each
-                # night's own JD grid, regardless of the telluric mode. It must
-                # never be left as None (which np.asarray later collapses to a
-                # 0-d scalar).
-                _amlpn = cfg.tellurics.airmass_limits_per_night
-                _aml_default = (cfg.tellurics.airmass_limits
-                                if cfg.tellurics.airmass_limits is not None
-                                else [1.2, 1.6])
-                airmass = [
-                    get_airmass(
-                        cfg.tellurics.airmass_evolution,
-                        syn_jd[n],
-                        (_amlpn[n] if _amlpn is not None
-                         and n < len(_amlpn)
-                         else _aml_default),
-                    )
-                    for n in range(cfg.observation.n_nights)
-                ]
+                # so it is always computed on each night's own JD grid,
+                # regardless of the telluric mode. It must never be left as
+                # None (which np.asarray later collapses to a 0-d scalar).
+                # Priority: (1) a per-night airmass.fits stored alongside the
+                # SkyCalc files (written by generate_skycalc_inputs.py), which
+                # is the airmass the telluric spectra were actually generated
+                # with, so pipelines that regress against airmass (Blain24)
+                # see a regressor consistent with the applied tellurics;
+                # (2) with accurate nights, the actual sec z from the site;
+                # (3) the parabolic model with the configured limits.
+                _am_files = []
+                if cfg.tellurics.use_full_skycalc:
+                    from astropy.io import fits as _fits_am
+                    for n in range(cfg.observation.n_nights):
+                        _amf = (f"{cfg.paths.inputs_dir}"
+                                f"Skycalc_{cfg.observation.flag_event}/"
+                                f"night_{n}/Fixed_PWV/airmass.fits")
+                        if os.path.exists(_amf):
+                            _arr = _fits_am.open(_amf)[0].data.astype(float)
+                            if len(_arr) != len(syn_jd[n]):
+                                raise ValueError(
+                                    f"night {n}: airmass.fits has "
+                                    f"{len(_arr)} entries but this night "
+                                    f"has {len(syn_jd[n])} exposures. "
+                                    f"Regenerate the SkyCalc inputs to "
+                                    f"match the observation cadence.")
+                            _am_files.append(_arr)
+                if len(_am_files) == cfg.observation.n_nights:
+                    print("  Per-night airmass read from the SkyCalc "
+                          "input directories (matches the telluric files).")
+                    airmass = _am_files
+                elif _accurate_nights:
+                    from exoplore.observation.ephemeris import (
+                        accurate_airmass as _acc_am)
+                    airmass = [
+                        _acc_am(syn_jd[n], planet.ra_deg, planet.dec_deg,
+                                cfg.instrument.observatory)
+                        for n in range(cfg.observation.n_nights)
+                    ]
+                else:
+                    _amlpn = cfg.tellurics.airmass_limits_per_night
+                    _aml_default = (cfg.tellurics.airmass_limits
+                                    if cfg.tellurics.airmass_limits is not None
+                                    else [1.2, 1.6])
+                    airmass = [
+                        get_airmass(
+                            cfg.tellurics.airmass_evolution,
+                            syn_jd[n],
+                            (_amlpn[n] if _amlpn is not None
+                             and n < len(_amlpn)
+                             else _aml_default),
+                        )
+                        for n in range(cfg.observation.n_nights)
+                    ]
             else:
                 airmass = airmass_og
 
         else:  # specific_event, single night
             phase = (syn_jd - cfg.observation.specific_T0_bjd) / planet.orbital_period_days
             airmass = airmass_og
+
+        # Per-night BERV for fully synthetic different_nights.  Each night
+        # sits at its own epoch, so the barycentric correction differs from
+        # night to night; stellar and planetary lines then shift against the
+        # telluric rest frame between nights, as they do between real epochs.
+        # Consumed by Blocks 4a (stellar matrix) and 4b (planet velocities).
+        _berv_pn = None
+        if (cfg.observation.different_nights
+                and not cfg.observation.use_real_data
+                and not cfg.observation.specific_event):
+            if (cfg.observation.use_accurate_berv
+                    and planet.ra_deg is not None
+                    and planet.dec_deg is not None):
+                from exoplore.observation.ephemeris import (
+                    accurate_berv as _acc_berv)
+                _berv_pn = [
+                    _acc_berv(syn_jd[n], planet.ra_deg, planet.dec_deg,
+                              cfg.instrument.observatory)
+                    for n in range(cfg.observation.n_nights)
+                ]
+                print("  Per-night BERV (mean): "
+                      + ", ".join(f"{np.mean(b):+.2f} km/s"
+                                  for b in _berv_pn))
+                if not _accurate_nights:
+                    print("  NOTE: nights sit at consecutive orbits "
+                          "(T0 + n * P), so per-night BERVs differ by "
+                          "less than they would between real epochs.")
+            elif cfg.observation.use_accurate_berv:
+                print("  WARNING: use_accurate_berv=True but the planet "
+                      "file lacks ra_deg/dec_deg; using constant berv_kms "
+                      "for all nights.")
 
         # ----------------------------------------------------------------
         # Block 2c, n_spectra and phase serialisation
@@ -1344,7 +1468,9 @@ class ExoploreSimulator:
                 for nn in range(cfg.observation.n_nights):
                     v_star.append(get_V(
                         planet.stellar_rv_semiamplitude_kms, phase[nn],
-                        _berv_ref, planet.systemic_velocity_kms, 0,
+                        (_berv_pn[nn] if _berv_pn is not None
+                         else _berv_ref),
+                        planet.systemic_velocity_kms, 0,
                     ))
                     mat_star.append(get_stellar_matrix(
                         spec_star_phoenix, v_star[nn], wave_ins,
@@ -1380,11 +1506,15 @@ class ExoploreSimulator:
                     if (_exp_pn is not None and not cfg.observation.use_real_data
                             or not cfg.observation.specific_event
                             and not cfg.observation.use_real_data):
-                        # Synthetic different_nights (no reference BERV files):
-                        # broadcast constant berv_kms for each night.
+                        # Synthetic different_nights (no reference BERV
+                        # files): per-night BERV from the epoch geometry
+                        # when available, else constant berv_kms.
                         berv.append(
-                            np.full(int(n_spectra[n]),
-                                    cfg.observation.berv_kms, dtype=float)
+                            np.asarray(_berv_pn[n], dtype=float)
+                            if _berv_pn is not None
+                            else np.full(int(n_spectra[n]),
+                                         cfg.observation.berv_kms,
+                                         dtype=float)
                         )
                     else:
                         _berv_file = (
@@ -2220,8 +2350,16 @@ class ExoploreSimulator:
                         _mask_b5, _n_passes_b5,
                         _inter_mask_b5, _inter_useful_b5,
                         _cor_b5,
-                        _U_sysrem[b, _sl],
+                        _U_ret_b5,
                     ) = _pp_result
+                    # With DeltaSigma halting the pipeline may stop before
+                    # sysrem_iterations passes; pad the U store accordingly.
+                    # Non-SYSREM pipelines return a broadcastable placeholder.
+                    _U_ret_b5 = np.asarray(_U_ret_b5)
+                    if _U_ret_b5.ndim == 2:
+                        _U_sysrem[b, _sl, :_U_ret_b5.shape[1]] = _U_ret_b5
+                    else:
+                        _U_sysrem[b, _sl] = _U_ret_b5
                     _sysrem_pass_b5 = None
                     # Record actual passes used for this order (may be < _si
                     # when DeltaSigma halting is active).
@@ -3011,6 +3149,8 @@ class ExoploreSimulator:
             "BERV":                  berv,
             "CCF_SNR":               cfg.cross_correlation.ccf_snr,
             "CCF_SNR_exclude":       cfg.cross_correlation.snr_exclude_kms,
+            "CCF_SNR_noise_source":  cfg.cross_correlation.snr_noise_source,
+            "CCF_SNR_kp_exclude":    cfg.cross_correlation.snr_noise_kp_exclude_kms,
             "ccf_snr_exclude_around": ("point"
                                        if cfg.pipeline.name == "Cheverall26"
                                        else "peak"),
@@ -3489,6 +3629,10 @@ class ExoploreSimulator:
                                 kp_range=_kp_range,
                                 sysrem_opt=bool(_opt_needs_injection),
                                 order_indices=np.asarray(order_selection),
+                                n_components_per_order=(
+                                    np.asarray(_sysrem_passes_per_order)
+                                    if _sysrem_passes_per_order is not None
+                                    else np.array([])),
                             )
                         except Exception as _e7:
                             print(f"  NOTE: per-night S/N map save skipped ({_e7})")
@@ -3531,6 +3675,10 @@ class ExoploreSimulator:
                             kp_range=_kp_range,
                             sysrem_opt=bool(_opt_needs_injection),
                             order_indices=np.asarray(order_selection),
+                            n_components_per_order=(
+                                np.asarray(_sysrem_passes_per_order)
+                                if _sysrem_passes_per_order is not None
+                                else np.array([])),
                         )
                     except Exception as _ec:
                         print(f"  NOTE: combined S/N map save skipped ({_ec})")

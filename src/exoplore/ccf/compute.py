@@ -450,6 +450,39 @@ def get_max_CCF_peak(inp_dat, ccf_tot, v_rest, kp_range,
         # sums (assumes a uniform v_rest grid).
         _excl_mode = inp_dat.get('ccf_snr_exclude_around', 'peak')
         _excl = inp_dat['CCF_SNR_exclude']
+
+        # Noise-source convention.  "peak_row" (default): the noise std is
+        # measured within each Kp row (below).  "signal_free_rows": one
+        # global std from the Kp rows more than CCF_SNR_kp_exclude away
+        # from the detected peak's Kp and beyond CCF_SNR_exclude of the
+        # peak velocity.  For strong detections the peak row's own noise
+        # region contains the signal's correlation wings, which repeat
+        # identically in every night and saturate the reported S/N; the
+        # signal-free rows share the map's noise statistics without that
+        # structure, so co-added significances recover the expected
+        # sqrt(N) scaling when the per-night noise is uncorrelated.
+        if inp_dat.get('CCF_SNR_noise_source', 'peak_row') == 'signal_free_rows':
+            _ipk = np.unravel_index(np.argmax(ccf_tot), ccf_tot.shape)
+            _kp_excl = float(inp_dat.get('CCF_SNR_kp_exclude', 120.0))
+            _rows = np.abs(kp_range - kp_range[_ipk[1]]) > _kp_excl
+            _vsel = np.abs(v_rest - v_rest[_ipk[0]]) > _excl
+            _reg = ccf_tot[np.ix_(_vsel, _rows)]
+            _mu, _sd = float(np.nanmean(_reg)), float(np.nanstd(_reg))
+            if _sd > 0:
+                ccf_tot_sig = (ccf_tot - _mu) / _sd
+                cc_values_std = np.full(ccf_tot.shape, _sd)
+                if not CCF_Noise:
+                    max_sig = float(np.nanmax(ccf_tot_sig))
+                    max_kp_idx = int(_ipk[1])
+                    max_v_rest = v_rest[_ipk[0]]
+                else:
+                    max_kp_idx = int(stats[b, 1] + len(kp_range) // 2)
+                    max_v_rest = stats[b, 2]
+                    max_sig = ccf_tot_sig[
+                        np.argwhere(v_rest == stats[b, 2])[0][0], max_kp_idx
+                    ]
+                return (ccf_tot_sig, max_sig, max_kp_idx, max_v_rest,
+                        cc_values_std)
         if _excl_mode == 'point':
             _dv = np.median(np.diff(v_rest))
             _W = int(round(_excl / _dv)) if _dv > 0 else 0

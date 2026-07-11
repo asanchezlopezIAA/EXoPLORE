@@ -128,6 +128,18 @@ class ObservationConfig:
         Use the eccentric Keplerian velocity formula (Wright & Howard 2009).
     berv_kms:
         Barycentric Earth Radial Velocity in km/s (0 for simulations).
+    use_accurate_berv:
+        Compute the per-exposure BERV from the target's sky coordinates
+        and the observatory location (Astropy barycentric correction).
+        Applies to fully synthetic ``different_nights`` simulations,
+        where each night is placed at its own observable transit epoch
+        and therefore carries its own BERV; stellar and planetary lines
+        then shift relative to the telluric rest frame from night to
+        night, as they do between real epochs.  Requires ``ra_deg`` and
+        ``dec_deg`` in the planet parameter file (falls back to
+        ``berv_kms`` with a warning if unavailable).  Single-night and
+        real-data runs are unaffected and keep using ``berv_kms`` or the
+        per-night BERV files.
     noiseless:
         Run a completely noiseless simulation (for testing).
     first_night_noiseless:
@@ -165,6 +177,7 @@ class ObservationConfig:
     scale_injection: float = 1.0
     significant_eccentricity: bool = False
     berv_kms: float = 0.0
+    use_accurate_berv: bool = True
     noiseless: bool = False
     first_night_noiseless: bool = False
     add_throughput_variations: bool = True
@@ -364,7 +377,15 @@ class TelluricConfig:
         Use individually downloaded Skycalc spectra (one per airmass/PWV).
     use_accurate_airmass:
         Compute precise airmass from sky coordinates and observation time
-        via Astropy.  If False, a simple parabolic model is used.
+        via Astropy.  If False, a simple parabolic model is used.  For
+        fully synthetic ``different_nights`` runs this also places each
+        night at its own observable transit epoch (target above 30 deg at
+        night, searched from the reference epoch), so successive nights
+        get genuinely different airmass curves and BERVs; with False the
+        nights fall on consecutive orbits at ``T0 + n * P`` and use the
+        parabolic model with ``airmass_limits`` /
+        ``airmass_limits_per_night``.  Single-night synthetic runs
+        currently always use the parabolic model.
     airmass_evolution:
         Simple airmass model: ``"up"``, ``"down"``, or ``"up_and_down"``.
     airmass_limits:
@@ -514,6 +535,22 @@ class CrossCorrelationConfig:
     snr_exclude_kms:
         Half-width of in-trail region excluded when computing CCF noise
         std (km/s).
+    snr_noise_source:
+        Where the noise std of the Kp-Vsys S/N map is measured.
+        ``"peak_row"`` (default): per Kp row, from the velocities more
+        than ``snr_exclude_kms`` away from that row's maximum (legacy
+        behaviour).  For strong detections this region contains the
+        signal's own correlation wings, which co-add coherently across
+        nights and saturate the reported S/N.  ``"signal_free_rows"``:
+        one global std from the rows more than
+        ``snr_noise_kp_exclude_kms`` away from the detected peak's Kp
+        (and beyond ``snr_exclude_kms`` of the peak velocity), a region
+        with the same noise statistics but no signal-locked structure.
+    snr_noise_kp_exclude_kms:
+        Half-width in Kp (km/s) of the region excluded around the
+        detected peak when ``snr_noise_source="signal_free_rows"``.
+        The signal's wing structure decays to the few-per-cent level
+        beyond ~100-150 km/s from the peak Kp.
     in_trail_left_right:
         Half-width (in pixels) of the in-trail window for significance
         metrics.  Total width = 2 * in_trail_left_right + 1.
@@ -546,6 +583,8 @@ class CrossCorrelationConfig:
     kp_max_kms: float = 320.0
     noise_velocity_max_kms: float = 250.0
     snr_exclude_kms: float = 25.0
+    snr_noise_source: str = "peak_row"
+    snr_noise_kp_exclude_kms: float = 120.0
     in_trail_left_right: int = 2
     normalized: bool = True
     use_inverse_variance_weighting: bool = True

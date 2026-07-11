@@ -338,7 +338,14 @@ def _build_airmass_astro(cfg: dict, search_from: str = None,
     except Exception:
         dur_h = _transit_duration_hours(p)  # fallback
 
-    exp_s     = float(obs_cfg.get("exposure_time_seconds", 198.0) or 198.0)
+    # Per-night cadence: with exposure_time_seconds_per_night set, each
+    # night has its own DIT and therefore its own number of exposures;
+    # skip_transits doubles as the night index here.
+    _exp_pn = obs_cfg.get("exposure_time_seconds_per_night")
+    if _exp_pn and skip_transits is not None and skip_transits < len(_exp_pn):
+        exp_s = float(_exp_pn[skip_transits])
+    else:
+        exp_s = float(obs_cfg.get("exposure_time_seconds", 198.0) or 198.0)
     readout_s = float(obs_cfg.get("readout_time_seconds",    0.0) or 0.0)
     overhead_s = float(obs_cfg.get("overhead_time_seconds",  0.0) or 0.0)
     cadence_s  = exp_s + readout_s + overhead_s
@@ -533,7 +540,11 @@ def generate(config_path: str, overwrite: bool = False,
                     _durh = _transit_duration_hours(_jn7.load(_pf7))
             except Exception:
                 _durh = 2.0
-        _exp = float(obs.get("exposure_time_seconds", 198.0) or 198.0)
+        _exp_pn = obs.get("exposure_time_seconds_per_night")
+        if _exp_pn and night_idx is not None and night_idx < len(_exp_pn):
+            _exp = float(_exp_pn[night_idx])
+        else:
+            _exp = float(obs.get("exposure_time_seconds", 198.0) or 198.0)
         _cad = _exp + float(obs.get("readout_time_seconds", 0.0) or 0.0) \
              + float(obs.get("overhead_time_seconds", 0.0) or 0.0)
         _pre = float(obs.get("pre_event_hours", 0.0) or 0.0) or _durh / 2.0
@@ -647,6 +658,15 @@ def generate(config_path: str, overwrite: bool = False,
         _save_hdul(hdul, out_path)
         hdul.close()
         print(f"{time.time()-t0:.1f}s")
+
+    # --- Per-night airmass array, as queried (rounded/clipped) ---
+    # Saved next to the tell_spec files so the simulator can use the exact
+    # airmass the telluric spectra were generated with (pipelines that
+    # regress against airmass then see a consistent regressor).
+    _am_path = os.path.join(out_dir, "airmass.fits")
+    fits.PrimaryHDU(np.round(np.clip(airmass, 1.0, _SKYCALC_AM_MAX), 1)
+                    ).writeto(_am_path, overwrite=True)
+    print(f"  airmass.fits written ({len(airmass)} exposures)")
 
     # --- Reference airmass file (shared, written only for night 0 or single) ---
     if night_idx is None or night_idx == 0:
