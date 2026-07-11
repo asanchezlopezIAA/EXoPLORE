@@ -943,9 +943,9 @@ the log-likelihood formulations in full.
 
 ## Tutorial 8: Detection significance and statistical validation
 
-> **Approximate run time:** the illustrative scripts (`illustrate_significance_sampling.py`, `illustrate_pp_calibration.py`) run in seconds; the full statistical study is ~20 to 30 min per velocity step; the real p-p calibration set (30 single-order retrievals) takes several hours.
+> **Approximate run time:** the illustrative script (`illustrate_significance_sampling.py`) runs in seconds; the full statistical study is ~20 to 30 min per velocity step.
 
-The significance of a detection has more than one defensible definition (see the [Concepts primer](concepts.md#6-detection-significance-three-complementary-measures)), and a careful analysis reports more than one. This tutorial covers the three significance metrics EXoPLORE provides, a subtle bias in the Welch t-test that depends on the cross-correlation velocity step, and the p-p (coverage) plot, which validates whether the uncertainties returned by a retrieval can be trusted.
+The significance of a detection has more than one defensible definition (see the [Concepts primer](concepts.md#6-detection-significance-three-complementary-measures)), and a careful analysis reports more than one. This tutorial covers the three significance metrics EXoPLORE provides and a subtle bias in the Welch t-test that depends on the cross-correlation velocity step.
 
 ### The significance metrics
 
@@ -1002,58 +1002,6 @@ Distributions of the recovered significance, K<sub>P</sub>, and V<sub>rest</sub>
 ```
 
 A single ANDES order yields only a marginal per-order signal from a strong absorber such as H₂O under realistic noise (here a median S/N of about 4), and at this modest significance the recovered peak position varies appreciably from one noise realisation to the next, as the scatter in the figure shows. The distribution is broad: in the most favourable realisations (a few percent of the sample) the single-order S/N exceeds 5, reaching about 5.7 at best, while in less favourable ones it drops well below the median, so no single realisation should be read as characteristic. This single-order case is deliberately conservative: it isolates the sampling effect with the smallest usable signal and is not representative of a real analysis. Co-adding the full set of ANDES orders (and, where available, multiple nights) raises the combined significance well above this floor and tightens the recovered K<sub>P</sub> and V<sub>rest</sub> correspondingly. The purpose of this study is not to quote a headline single-order significance but to show how the two metrics respond to the velocity sampling, and why a Welch value must always be read together with the step at which it was computed.
-
-### p-p plots: validating retrieval uncertainties
-
-A retrieval can return a tight, confident-looking posterior whose credible intervals are nonetheless wrong. A p-p plot (probability-probability plot, also called a coverage plot) tests whether the credible intervals mean what they claim. The construction repeats an injection-recovery experiment many times: for each realisation with a known truth, one records the posterior percentile at which the truth lies, and from those percentiles builds a coverage curve, the fraction of realisations in which the truth falls inside the central credible interval of each nominal level. A calibrated retrieval follows the diagonal; a curve below the diagonal indicates posteriors that are too narrow (over-confident, under-covering), and a curve above indicates posteriors that are too wide.
-
-The script `scripts/illustrate_pp_calibration.py` shows both cases on a fast linear-Gaussian toy, where the posterior is known analytically:
-
-```bash
-python scripts/illustrate_pp_calibration.py --output docs/figures/pp_calibration.png
-```
-
-```{figure} figures/pp_calibration.png
-:width: 100%
-:align: center
-
-Coverage (p-p) plots from 300 simulations. Left: a well-specified inference (the noise assumed by the posterior matches the data) follows the diagonal. Right: an over-confident inference (the posterior underestimates the noise) sits below the diagonal, the signature of credible intervals that are too tight. The grey bands are the 1σ and 2σ binomial confidence regions for a finite number of simulations.
-```
-
-This diagnostic is the calibration counterpart of the precision-versus-accuracy problem (Concepts primer, [Section 7](concepts.md#7-precision-is-not-accuracy)): a 1D retrieval of an inhomogeneous atmosphere can produce tight posteriors that do not cover the truth at the stated rate, which a p-p plot exposes directly.
-
-**The real retrieval version.** A true p-p plot requires running the retrieval on every realisation, so it is expensive. The example here uses the well-specified case: a one-dimensional atmosphere is injected and a one-dimensional Blain24 retrieval is performed (`configs/hd189733b_andes_retrieval_blain24_noisy.json`, a single ANDES order). Because the retrieval model matches the injected truth, the coverage curve should follow the diagonal, confirming that the Blain24 one-dimensional retrieval returns statistically calibrated uncertainties. We stress that this is a check of the inference machinery, not a scientific result: when the model matches the truth by construction, calibration is expected, and a diagonal coverage curve confirms only that the sampler and likelihood are statistically self-consistent. The scientifically relevant miscalibration arises from model mismatch, in particular from fitting a one-dimensional model to an atmosphere that is in reality multi-dimensional, and is not captured by this test. The well-specified p-p plot serves as a reference: it shows what a calibrated coverage curve looks like on real retrievals, and provides the baseline against which a genuine miscalibration would stand out.
-
-A p-p plot requires a single truth per parameter to compute the coverage. An inhomogeneous (pseudo-2D) injection has no single truth for, say, the H₂O abundance, since the two limbs differ, so the coverage of a one-dimensional retrieval against such an injection is not well defined. The bias of a one-dimensional retrieval on an inhomogeneous atmosphere is therefore better shown by comparing the retrieved value with the injected limb values directly (in the manner of the corner plots in Tutorial 7), rather than through a p-p plot.
-
-The driver `scripts/run_pp_calibration.py` automates the calibration test: it runs N independent noisy retrievals, each with its own noise seed (`base_seed + i`) and its own output directory (`pp_real_000`, `pp_real_001`, ...) so that nothing is overwritten, then computes the coverage curve for each parameter. It is **resumable**, so it can be left running and re-plotted at any time:
-
-```bash
-python scripts/run_pp_calibration.py \
-  --config configs/hd189733b_andes_retrieval_blain24_noisy.json \
-  --n 30 --base-seed 1000 --live-points 100 \
-  --output-root /path/to/pp_calibration \
-  --truths -3.0 149.4 1170.0 0.0 \
-  --param-names "log10(X_H2O)" "Kp" "T_eq" "v_wind" \
-  --figure docs/figures/pp_calibration_real.png
-```
-
-To rebuild the figure from whatever realisations have finished, without running anything further, add `--plot-only`. Thirty realisations at 100 live points on a single order are enough for a usable coverage curve; more realisations tighten it.
-
-```{figure} figures/pp_calibration_real.png
-:width: 75%
-:align: center
-
-Coverage (p-p) plot from 30 real Blain24 retrievals of HD 189733 b (ANDES, single order), one per independent noise realisation. The dynamical and thermal parameters (K_P, T_eq) lie close to the diagonal, while the H₂O abundance runs below it (over-confident) and the wind velocity slightly above it. The grey bands are the 1σ and 2σ ranges expected for 30 simulations. The curves are stepped because only 30 realisations were used.
-```
-
-This result is instructive precisely because it is **not** a clean diagonal. The example was set up to look well specified (a one-dimensional retrieval of a one-dimensional injection), but injection and retrieval are not in fact the same model, and the p-p plot, which is far more sensitive to model mismatch than a corner plot, exposes it. The atmosphere is injected with EasyChem equilibrium chemistry and the full set of opacity species, whereas the retrieval fits a single, pressure-independent H₂O abundance. A free constant abundance cannot reproduce an EasyChem profile, for several reasons that act together:
-
-- The injection contains additional absorbers (CH₄, NH₃, CO, H₂S, HCN, and others) whose lines remain in the data but are absent from the H₂O-only retrieval model, acting as nuisance opacity.
-- EasyChem produces a pressure-dependent abundance, while the retrieval fits a single constant value, so the retrieved number is an effective abundance.
-- The mean molecular weight in EasyChem follows the full composition, whereas an H₂O-dominated retrieval assumes a different value, changing the scale height.
-
-The dynamical and thermal parameters are recovered with calibrated uncertainties because the retrieval can match their injected behaviour (the temperature structure shares the same Guillot form and K_P is fixed by line positions), but the abundance is biased and over-confident. Read positively, the abundance miscalibration is a signature that the data carry information the constant-abundance model cannot absorb, including a sensitivity to the non-uniform vertical profile. Isolating that sensitivity cleanly would require a controlled experiment in which a single species is injected with an EasyChem profile and retrieved as a free constant, so that the nuisance-species and mean-molecular-weight confounders are removed.
 
 ---
 

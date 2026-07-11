@@ -44,7 +44,7 @@ high-resolution transmission and emission spectra of exoplanet atmospheres.
   Gibson et al. (2022), selected in the config via the `BL19`, `Blain24`, and
   `Gibson22` tags respectively.
 - Statistical validation tools: significance studies over many noise
-  realisations and p-p (coverage) calibration plots.
+  realisations.
 
 **Documentation**
 - Installation and quick-start guides, a concepts primer, eight tutorials,
