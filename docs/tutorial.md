@@ -1011,12 +1011,6 @@ A single ANDES order yields only a marginal per-order signal from a strong absor
 
 **`FileNotFoundError` for a PHOENIX file**, `paths.phoenix_wave_file` and `paths.phoenix_flux_file` must be set to the absolute paths on the local machine. These files are ∼500 MB each and are not included in the repository. Download from https://phoenix.astro.physik.uni-goettingen.de.
 
-**`FileNotFoundError` for petitRADTRANS opacity tables**, Set `paths.prt_input_data` to the `input_data/` directory inside the petitRADTRANS installation. Run `python -c "import petitRADTRANS; print(petitRADTRANS.__file__)"` to find the installation path.
-
-**macOS `ImportError` for petitRADTRANS**, Add `export SDKROOT="$(xcrun --show-sdk-path)"` to the shell profile. This sets the Fortran compiler SDK path required by petitRADTRANS on macOS.
-
-**Species not in pRT opacity database**, Not all species are available for all wavelength ranges. Check the [petitRADTRANS documentation](https://petitradtrans.readthedocs.io) for the list of available line lists. Unavailable species should be removed from the `species` list.
-
 **Kp-Vsys map peak at wrong location**, Check `planet_params/YourPlanet.json`: `kp_kms` should match the literature value for the planet's orbital velocity semi-amplitude. Furthermore, check `systemic_velocity_kms` sign: negative = blueshifted system. Also verify `atmosphere.planet_model.wind_velocity_kms`: a non-zero wind shifts the detected Vsys by that amount.
 
 **Slow simulation**, In order to speed up test runs, use `instrument.order_indices: [0, 5, 10, 20]` to run only a subset of orders, disable limb asymmetries (`limb_asymmetries: false`, which avoids the additional pRT calls for the morning and evening limbs), and use an isothermal profile while debugging.
@@ -1028,3 +1022,13 @@ A single ANDES order yields only a marginal per-order signal from a strong absor
 **Retrieval posterior is completely flat / log Z ≈ 0**, This means the log-likelihood function is returning the same value for every parameter combination. The run log should be checked for Python `Traceback` or `KeyError` lines printed before the MultiNest output, these are exceptions silently swallowed inside the Fortran/Python interface that cause [pymultinest](https://github.com/JohannesBuchner/PyMultiNest) to return a default constant value. Common causes are: i) a missing key in the configuration dict passed to `preparing_pipeline` or `call_pRT` (check that `instrument.order_indices` is set and the config is otherwise valid); ii) using a SYSREM-based pipeline with `noiseless: true` without a pinned β prior (over-subtraction may render data identically zero for all models, use BL19 or Blain24, or Gibson22 with `prior_bounds` pinning β near 1).
 
 **Retrieval corner plot shows `Too few points to create valid contours`**, The posterior is effectively flat (all 200 equal-weight samples uniformly cover the prior). See the point above. We caution that when using the Gibson22 likelihood with `noiseless: true`, the β hyperparameter diverges and the posterior cannot be constrained, switching to BL19 or Blain24 resolves this.
+
+### petitRADTRANS
+
+For anything petitRADTRANS-related (installation, opacity downloads, line lists, build problems), the [petitRADTRANS documentation](https://petitradtrans.readthedocs.io) is the absolute guide and should be checked first. The entries below only cover the issues most commonly seen from within EXoPLORE runs.
+
+**`FileNotFoundError` for petitRADTRANS opacity tables**, Set `paths.prt_input_data` to the `input_data/` directory inside the petitRADTRANS installation. Run `python -c "import petitRADTRANS; print(petitRADTRANS.__file__)"` to find the installation path.
+
+**macOS `ImportError` for petitRADTRANS**, Add `export SDKROOT="$(xcrun --show-sdk-path)"` to the shell profile. This sets the Fortran compiler SDK path required by petitRADTRANS on macOS.
+
+**Species not in pRT opacity database**, Not all species are available for all wavelength ranges. Check the petitRADTRANS documentation for the list of available line lists. Unavailable species should be removed from the `species` list.
