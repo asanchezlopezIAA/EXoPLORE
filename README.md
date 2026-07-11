@@ -31,11 +31,11 @@ observed spectra.
 <table>
 <tr>
 <td width="50%"><img src="docs/figures/tutorial1_kpvsys_andes.png" alt="Kp-Vsys detection map"/></td>
-<td width="50%"><img src="docs/figures/tutorial5c_1dccf_threenights.png" alt="Multi-night co-addition"/></td>
+<td width="50%"><img src="docs/figures/tutorial5a_stacking.png" alt="Multi-night co-addition"/></td>
 </tr>
 <tr>
 <td align="center"><b>Kp-Vsys detection map.</b> H<sub>2</sub>O detected at ~43σ in a single simulated ANDES transit of HD 189733 b, recovered at the correct orbital and rest velocity.</td>
-<td align="center"><b>Multi-night co-addition.</b> Two nights combine to a higher significance than either alone, following the expected √N improvement.</td>
+<td align="center"><b>Multi-night co-addition.</b> Three CARMENES NIR nights of HD 189733 b combine to a higher significance than any single night, close to the √N gain expected for photon-limited noise.</td>
 </tr>
 <tr>
 <td width="50%"><img src="docs/figures/tutorial6_retrieval_corner.png" alt="Bayesian retrieval posterior"/></td>
@@ -82,8 +82,8 @@ Kp-Vsys detection maps  and/or  atmospheric retrieval  (MultiNest / emcee)
 - [PHOENIX stellar models](https://phoenix.astro.physik.uni-goettingen.de), Husser et al. (2013, [A&A 553, A6](https://doi.org/10.1051/0004-6361/201219058)); download the wave grid and the flux file matching your target star
 - A Fortran compiler (gfortran) is required to build petitRADTRANS and EasyChem
 - petitRADTRANS opacity tables (several GB); see [docs/input_files.md](docs/input_files.md)
-- **For [SkyCalc](https://skycalc-ipy.readthedocs.io) telluric generation** (optional, Mode 2 only): [skycalc_ipy](https://skycalc-ipy.readthedocs.io), Noll et al. (2012, [A&A 543, A92](https://doi.org/10.1051/0004-6361/201219040)); [astroplan](https://astroplan.readthedocs.io), Morris et al. (2018, [AJ 155, 128](https://doi.org/10.3847/1538-3881/aaa47e))
-- **For Bayesian retrieval** (optional): [PyMultiNest](https://github.com/JohannesBuchner/PyMultiNest), Feroz et al. (2009, [MNRAS 398, 1601](https://doi.org/10.1111/j.1365-2966.2009.14548.x)); [emcee](https://emcee.readthedocs.io), Foreman-Mackey et al. (2013, [PASP 125, 306](https://doi.org/10.1086/670067)); [corner](https://corner.readthedocs.io), Foreman-Mackey (2016, [JOSS 1, 24](https://doi.org/10.21105/joss.00024))
+- For [SkyCalc](https://skycalc-ipy.readthedocs.io) telluric generation (optional, Mode 2 only): [skycalc_ipy](https://skycalc-ipy.readthedocs.io), Noll et al. (2012, [A&A 543, A92](https://doi.org/10.1051/0004-6361/201219040)); [astroplan](https://astroplan.readthedocs.io), Morris et al. (2018, [AJ 155, 128](https://doi.org/10.3847/1538-3881/aaa47e))
+- For Bayesian retrieval (optional): [PyMultiNest](https://github.com/JohannesBuchner/PyMultiNest), Feroz et al. (2009, [MNRAS 398, 1601](https://doi.org/10.1111/j.1365-2966.2009.14548.x)); [emcee](https://emcee.readthedocs.io), Foreman-Mackey et al. (2013, [PASP 125, 306](https://doi.org/10.1086/670067)); [corner](https://corner.readthedocs.io), Foreman-Mackey (2016, [JOSS 1, 24](https://doi.org/10.21105/joss.00024))
 
 ### Step-by-step
 
@@ -250,11 +250,30 @@ iv) Add a test in `tests/test_instruments.py` and document the input files in `d
 
 ## Citation
 
-If you use EXoPLORE in your research, please cite:
+If you use EXoPLORE in your research, please cite the primary reference
+(end-to-end simulator, 2D retrieval framework, ANDES detectability studies):
 
-> Sánchez-López, A., Pallé, E. & Millán, A. P. (A&A, submitted), *Resolving inhomogeneous hot and ultra-hot Jupiter atmospheres with ANDES: insights from simulated ELT observations*
+> Sánchez-López, A., Pallé, E., & Millán, A. P. (2026).
+> *Resolving inhomogeneous hot and ultra-hot Jupiter atmospheres with ANDES:
+> insights from simulated ELT observations.*
+> A&A, submitted.
 
-and the underlying tools relevant to your analysis, in particular:
+If your work builds on the published applications, please also cite the
+relevant one:
+
+> Peláez-Torres, A., Sánchez-López, A., Nortmann, L., et al. (2026).
+> *Tighter constraints on the atmosphere of GJ 436 b from combined
+> high-resolution CARMENES and CRIRES+ observations.*
+> A&A, 705, A256.
+> doi: [10.1051/0004-6361/202557570](https://doi.org/10.1051/0004-6361/202557570)
+
+> Peláez-Torres, A., Sánchez-López, A., Jiang, C., et al. (2026).
+> *Atmospheric constraints on GJ 1214 b from CRIRES+ and prospects for
+> characterisation with ANDES.*
+> A&A, 708, A184.
+> doi: [10.1051/0004-6361/202558426](https://doi.org/10.1051/0004-6361/202558426)
+
+Please also cite the underlying tools relevant to your analysis, in particular:
 
 > Mollière, P. et al. (2019), *petitRADTRANS*, A&A, 627, A67  
 > Lei, E. & Mollière, P. (2024), *EasyChem*, arXiv:2410.21364  
@@ -284,37 +303,9 @@ If you use these files in published work, please consider citing
 
 ---
 
-## License and attribution
+## License
 
-EXoPLORE is available under the **MIT License** (see `LICENSE` for details).
-
-The following papers document EXoPLORE and its applications.  Please cite
-those relevant to your work if you make use of this code.
-
-**Primary reference** (end-to-end simulator, 2D retrieval framework, ANDES
-detectability studies):
-
-> Sánchez-López, A., Pallé, E., & Millán, A. P. (2026).
-> *Resolving inhomogeneous hot and ultra-hot Jupiter atmospheres with ANDES:
-> insights from simulated ELT observations.*
-> A&A, submitted.
-
-**First published use**, GJ 436 b, five CARMENES nights + CRIRES+,
-Bayesian retrieval, ANDES simulations:
-
-> Peláez-Torres, A., Sánchez-López, A., Nortmann, L., et al. (2026).
-> *Tighter constraints on the atmosphere of GJ 436 b from combined
-> high-resolution CARMENES and CRIRES+ observations.*
-> A&A, 705, A256.
-> doi: [10.1051/0004-6361/202557570](https://doi.org/10.1051/0004-6361/202557570)
-
-**GJ 1214 b**, eight CRIRES+ transits, ANDES detectability simulations:
-
-> Peláez-Torres, A., Sánchez-López, A., Jiang, C., et al. (2026).
-> *Atmospheric constraints on GJ 1214 b from CRIRES+ and prospects for
-> characterisation with ANDES.*
-> A&A, 708, A184.
-> doi: [10.1051/0004-6361/202558426](https://doi.org/10.1051/0004-6361/202558426)
+EXoPLORE is available under the MIT License (see `LICENSE` for details).
 
 ---
 

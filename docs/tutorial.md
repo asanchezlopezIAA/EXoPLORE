@@ -604,27 +604,36 @@ Set `specific_event: true` so that per-night Julian dates from the files are use
 
 ### 5c: Distinct nights with ANDES (fully synthetic)
 
-`different_nights: true` is fully supported for ANDES. Because ANDES uses a theoretical ETC for the SNR model, no JD or airmass files are needed. The simulator synthesises the per-night JD grids automatically, placing successive transit epochs at T₀ + n × P and computing the real airmass from the planet's sky coordinates at those times (when `use_accurate_airmass: true`). Each night thus gets its own airmass evolution naturally. To control the airmass manually (for hypothetical scheduling studies), set `use_accurate_airmass: false` and adjust `airmass_limits`. The same `airmass_evolution` shape then applies to all nights, though the limits can differ by editing the config before each run.
+`different_nights: true` is fully supported for ANDES. Because ANDES uses a theoretical ETC for the SNR model, no JD or airmass files are needed. With `use_accurate_airmass: true` (the default), the simulator places each night at a real observable transit of the target from the site (target above 30 degrees with the Sun below the horizon, searched from the reference epoch), and computes the actual airmass evolution from the sky coordinates at those times. With `use_accurate_berv: true` (also the default), each night additionally receives its own Barycentric Earth Radial Velocity from the same geometry, so the stellar and planetary lines shift against the telluric rest frame from night to night, as they do between real epochs. To control the airmass manually instead (for hypothetical scheduling studies), set `use_accurate_airmass: false` and adjust `airmass_limits` or `airmass_limits_per_night`; the nights then fall on consecutive orbits at T₀ + n × P and follow the parabolic `airmass_evolution` shape.
 
-**What makes each simulated night different** (and why combining them helps):
+**What makes each simulated night different:**
 
+- **Transit epoch, airmass, and BERV:** each observable epoch has its own airmass evolution and its own barycentric velocity (successive observable transits are days to weeks apart, so the per-night BERVs typically differ by several km/s).
 - **PWV:** set independently per night via `tellurics.pwv_mm_per_night`, e.g. `[2.5, 3.5]`. Different PWV means different telluric depths per order. Orders that are heavily absorbed on a high-PWV night may be partially usable on a lower-PWV night, so the stacked dataset probes more of the spectrum than any single night.
-- **JD grid and airmass:** successive transit epochs give a different airmass profile per night (the target may transit at higher or lower airmass depending on the season).
-- **Noise realisation:** each night draws an independent noise realisation (`noise_seed` advances per night internally), so noise patterns do not correlate between nights.
+- **Cadence:** `exposure_time_seconds_per_night` assigns a different exposure time (and hence a different number of exposures) to each night.
+- **Noise realisation:** each night draws an independent noise realisation, so photon-noise patterns do not correlate between nights.
 
-Combining N independent nights therefore gives both a √N improvement in S/N and broader effective spectral coverage, as the per-night telluric masks partially complement each other.
+::::{caution}
+**Two conditions for multi-night stacking at ELT-like S/N.** In these simulations the co-added peak significance grows as √N only when both of the following hold.
+
+1. **The nights must differ genuinely.** If the per-night telluric inputs describe near-identical nights (same airmass evolution, only rescaled depths), the preparation leaves the same residual floor in every night's Kp-V<sub>rest</sub> map. For N nights whose off-peak floors correlate at r, the co-added peak S/N grows only as √(N / (1 + (N − 1) r)); with r ≈ 0.6-0.9, as measured for near-clone nights, the combination gains almost nothing, and no choice of noise region repairs it. Generating the SkyCalc inputs at different observable transits (different airmass evolution, different PWV) decorrelates the floors (r ≈ 0 in the runs below). At lower S/N the floor is photon-dominated and stacking approaches √N even for identical nights, which is why the CARMENES demonstration of Section 5a gains the full √3 without any of this.
+
+2. **The noise must be estimated away from the signal.** For strong detections, the signal's own correlation structure (its wings along the velocity axis and its aliases across K<sub>P</sub>) contaminates the same-row region the default S/N normalisation uses for the noise std. That structure repeats identically in every night, so the quoted S/N saturates even when the true noise averages down. Setting `cross_correlation.snr_noise_source: "signal_free_rows"` measures the std in rows far from the detected peak's K<sub>P</sub> (`snr_noise_kp_exclude_kms`, default 120), a region with the same noise statistics but no signal-locked structure; the co-added significance then recovers the expected √N scaling, and single-night values rise as well, since the planet's own wings no longer count as noise.
+
+**Pipeline dependence.** Preparations that preserve more of the planet signal leave more signal-locked structure across the whole map. At the S/N of this 76-order simulation, the Blain24 polynomial detrending preserves so much signal that its self-correlation becomes the map floor everywhere, and the peak-S/N metric saturates near the single-night level regardless of the noise region; Gibson22 with SYSREM sits in between, and its recovered K<sub>P</sub> is biased by the in-transit SYSREM filtering. These are properties of the significance metric at very high S/N, not a ranking of preparations (BL19 originates in narrow-band CRIRES emission work, and none of the three is native to broadband transmission). The co-added data keeps gaining information in all cases; likelihood-based analyses (Tutorials 6-7) remain the robust way to exploit it.
+::::
 
 **Step 1, Prepare per-night SkyCalc files**
 
 ```bash
 # Night 0: PWV = 2.5 mm (taken from pwv_mm_per_night[0])
-python scripts/generate_skycalc_inputs.py configs/hd189733b_andes_dn_run2.json --night 0
+python scripts/generate_skycalc_inputs.py configs/hd189733b_andes_dn_run2.json --night 0 --search-from 2026-06-08
 
 # Night 1: PWV = 3.5 mm (taken from pwv_mm_per_night[1])
-python scripts/generate_skycalc_inputs.py configs/hd189733b_andes_dn_run2.json --night 1
+python scripts/generate_skycalc_inputs.py configs/hd189733b_andes_dn_run2.json --night 1 --search-from 2026-06-08
 ```
 
-The script finds the next two observable transits from Paranal, builds the exposure JD grids using the config's `exposure_time_seconds` and `pre_event_hours`, and queries ESO SkyCalc for each exposure. Files are written to:
+The script finds the next observable transits from Paranal (skipping one more per night index), builds the exposure JD grids using the config's cadence (per night, when `exposure_time_seconds_per_night` is set), and queries ESO SkyCalc for each exposure. Pinning the search date with `--search-from` makes the generated inputs reproducible; the date above selects the transits of 2026-06-14 and 2026-06-23, whose airmass evolutions differ strongly (1.5 to 2.1 versus 1.5 to 3.0), which is what makes them worth combining (see the caution box above). The script also writes an `airmass.fits` per night with the exact airmass values the telluric spectra were generated with; the simulator uses it automatically, so pipelines that regress against airmass see a regressor consistent with the applied tellurics. (The simulator searches its own epochs deterministically from the planet's reference epoch, so the calendar dates in the run log and in the SkyCalc query may differ; the SkyCalc files provide the telluric spectrum and airmass per exposure for each night.) Files are written to:
 
 ```
 inputs/ANDES/HD189733b/Skycalc_full_event/
@@ -646,21 +655,22 @@ A ready-made two-transit config is provided at `configs/hd189733b_andes_dn_run2.
   "n_nights": 2,
   "different_nights": true,
   "specific_event": false,
-  "exposure_time_seconds": 30.0
+  "exposure_time_seconds": 30.0,
+  "use_accurate_berv": true
 },
 "tellurics": {
   "use_full_skycalc": true,
+  "use_accurate_airmass": true,
   "constant_pwv": true,
   "pwv_mm": 2.5,
-  "pwv_mm_per_night": [2.5, 3.5],
-  "airmass_limits_per_night": [[1.4, 1.7], [1.1, 1.5]]
+  "pwv_mm_per_night": [2.5, 3.5]
 },
 "paths": {
   "inputs_dir": "inputs/ANDES/HD189733b/"
 }
 ```
 
-The simulator constructs the per-night telluric path automatically as `{inputs_dir}Skycalc_{flag_event}/night_{n}/Fixed_PWV/`. No additional configuration is needed beyond `inputs_dir`.
+The simulator constructs the per-night telluric path automatically as `{inputs_dir}Skycalc_{flag_event}/night_{n}/Fixed_PWV/`. No additional configuration is needed beyond `inputs_dir`. At the start of the run the log reports the selected epochs and per-night BERVs, e.g. `Different nights at observable transit epochs: 2007-06-30, 2007-07-11` and `Per-night BERV (mean): +11.37 km/s, +7.44 km/s` for HD 189733 b from Paranal.
 
 **Step 3, Run**
 
@@ -668,16 +678,16 @@ The simulator constructs the per-night telluric path automatically as `{inputs_d
 python -u scripts/run_exoplore.py configs/hd189733b_andes_dn_run2.json --run 2>&1 | tee run_log.txt
 ```
 
-> **Validated result:** Night 0 (airmass 1.4 to 1.7, PWV 2.5 mm) gives 33.4σ; night 1 (airmass 1.1 to 1.5, PWV 3.5 mm) gives 30.0σ; combined 47.9σ (76 orders, BL19 pipeline, H₂O template). Night 1 is slightly lower despite the better airmass because the higher PWV masks more orders in the 1.4 µm water band. The combined result is consistent with the expected gain from stacking two independent nights with different observing conditions. For a single-order test use `instrument.order_indices: [35]`.
+> **Validated result:** Night 0 (airmass 1.5 to 2.1, PWV 2.5 mm, BERV +11.4 km/s) gives 57.6σ; night 1 (airmass 1.5 to 3.0, PWV 3.5 mm, BERV +7.4 km/s) gives 45.4σ; combined 76.3σ (76 orders, BL19 pipeline, H₂O template, `snr_noise_source: "signal_free_rows"`). Night 1 is lower because its higher airmass and PWV deepen the telluric absorption and mask more of the spectrum. The combination gains a factor 1.48 ≈ √2: the two nights' map floors are essentially uncorrelated (r ≈ 0.1), as the caution box above requires. Because the noise realisation is drawn independently per night, the exact values vary from run to run; the gain is the stable quantity. For a single-order test use `instrument.order_indices: [35]`.
 
 For a one-transit reference run (single night), use `configs/hd189733b_andes_dn_run1.json`.
 
 The simulator writes diagnostic products both per individual night and for the combined stack. For each night `b` the `plots/` subdirectory contains a CCF Earth-rest-frame matrix, a 1D CCF at the best-K<sub>P</sub> slice, and a Kp-Vsys S/N map labelled `..._night{b}_...`. The combined products appear alongside them. In addition, a single overlay figure showing all individual nights and the combined result is written as `1D_CCF_..._nights_combined.pdf/png`.
 
-:::{figure} figures/tutorial5c_1dccf_threenights.png
+:::{figure} figures/tutorial5c_1dccf_twonights.png
 :width: 90%
 :align: center
-1D CCFs (in units of S/N) at the K<sub>P</sub> of maximum significance in their respective maps, co-added over 76 ANDES YJHK spectral orders and the full in-transit sequence, for the two-night HD 189733 b simulation (Tutorial 5c). Night 0 (blue, airmass 1.4 to 1.7, PWV 2.5 mm) and night 1 (red, airmass 1.1 to 1.5, PWV 3.5 mm) are shown individually alongside their combined result (black). The dashed line marks v<sub>rest</sub> = 0. Night 1 is slightly lower in S/N despite the better airmass because the higher PWV increases the telluric opacity in the 1.4 µm water band, masking a larger fraction of the spectral orders. The combination recovers the expected improvement from stacking two independent nights with complementary observing conditions.
+1D CCFs (in units of S/N) at the K<sub>P</sub> of maximum significance in their respective maps, co-added over 76 ANDES YJHK spectral orders and the full in-transit sequence, for the two-night HD 189733 b simulation (Tutorial 5c). Night 0 (blue, airmass 1.5 to 2.1, PWV 2.5 mm) and night 1 (red, airmass 1.5 to 3.0, PWV 3.5 mm) use the SkyCalc tellurics of two real transits with strongly different airmass evolutions, and each night carries its own BERV. The dashed line marks v<sub>rest</sub> = 0. Night 1 is lower in S/N because its deeper telluric absorption masks more of the spectrum. The off-peak structure differs visibly between the two nights, so it averages down in the combination (black), and the co-added significance grows by the expected √2 (57.6σ and 45.4σ combine to 76.3σ, with the noise std measured in signal-free rows; see the caution box above).
 :::
 
 ---

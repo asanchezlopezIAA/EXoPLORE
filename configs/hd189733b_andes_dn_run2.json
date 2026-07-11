@@ -34,6 +34,7 @@
     "scale_injection": 1.0,
     "significant_eccentricity": false,
     "berv_kms": 0.0,
+    "use_accurate_berv": true,
     "noiseless": false,
     "first_night_noiseless": false,
     "add_throughput_variations": true,
@@ -398,7 +399,9 @@
     "all_significance_metrics": false,
     "ssim_metric": false,
     "study_velocity_ranges": false,
-    "plot_ccf_xstep": 50.0
+    "plot_ccf_xstep": 50.0,
+    "snr_noise_source": "signal_free_rows",
+    "snr_noise_kp_exclude_kms": 120.0
   },
   "retrieval": {
     "enabled": false,

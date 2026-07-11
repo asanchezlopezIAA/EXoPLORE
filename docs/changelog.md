@@ -14,7 +14,13 @@ high-resolution transmission and emission spectra of exoplanet atmospheres.
   light curve.
 - Instrument models for CARMENES NIR and ANDES, with per-exposure telluric
   contamination (airmass-scaled or full per-exposure SkyCalc), realistic
-  photon noise, and multi-night campaigns with night-specific conditions.
+  photon noise, and multi-night campaigns with night-specific conditions:
+  each synthetic night can be placed at a real observable transit epoch of
+  the target, with its own airmass evolution, barycentric velocity (BERV),
+  precipitable water vapour, and cadence.  Per-night SkyCalc inputs carry
+  their generation airmass (``airmass.fits``), which the simulator uses so
+  that airmass-regressing preparations see a regressor consistent with the
+  applied tellurics.
 
 **Analysis**
 - Preparation pipelines implementing the methods presented in
@@ -27,6 +33,10 @@ high-resolution transmission and emission spectra of exoplanet atmospheres.
   [Concepts primer, Section 3](concepts.md#3-the-preparation-pipeline-removing-the-contaminants-and-its-cost)).
 - Cross-correlation with Kp-Vsys mapping and three detection metrics
   (S/N, Welch t-test, and the cross-correlation-to-log-likelihood value).
+  The S/N noise std can be measured in the peak's own K<sub>P</sub> row
+  (legacy default) or in signal-free rows away from the detected peak
+  (``snr_noise_source``), which avoids counting the signal's own
+  correlation structure as noise for strong detections.
 
 **Retrieval**
 - Bayesian atmospheric retrieval with nested sampling (PyMultiNest) using the
