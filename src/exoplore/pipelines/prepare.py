@@ -751,10 +751,84 @@ def preparing_pipeline(
                 data_prepared[:, mask] = 1
                 propag_noise[:, mask] = 1
 
+        elif _pipeline == 'Nortmann26':
+            # -----------------------------------------------------------------
+            # Nortmann et al. (2026) CRIRES+ pipeline, per wavelength segment:
+            #   1. two step common blaze normalisation (Sec 3.1);
+            #   2. deepest telluric line mask, below 20% of the continuum
+            #      (Sec 3.1), on top of the NaN / column scatter mask;
+            #   3. SYSREM correcting by DIVISION (Sec 3.2), keeping the per
+            #      iteration time basis U for the Gibson 2022 model filter.
+            # The theoretical telluric transmittance from molecfit is used for
+            # the fit masks and the deep mask when the engine supplies it
+            # (inp_dat['nortmann_telluric_order']); otherwise the deep mask is
+            # taken from the out of transit master flux, the data driven
+            # equivalent of the below 20% continuum rule.
+            # -----------------------------------------------------------------
+            from exoplore.pipelines.nortmann26 import (
+                nortmann_normalise, nortmann_column_mask,
+                nortmann_sysrem_division,
+            )
+            _n_used = _n_sysrem
+            usp = np.asarray(useful_spectral_points, dtype=int)
+
+            # Pre scale to order unity for SYSREM numerical stability.
+            _scale = np.nanmedian(data[:, usp]) if usp.size else 1.0
+            _scale = _scale if _scale and np.isfinite(_scale) else 1.0
+            _d = data / _scale
+            _nz = noise / _scale
+
+            _tell = inp_dat.get('nortmann_telluric_order', None)
+            dn, nn, flagged = nortmann_normalise(
+                wave, _d, _nz, without_signal, telluric_transmittance=_tell,
+            )
+            di, colmask = nortmann_column_mask(flagged, dn)
+            # SYSREM inverse variance weighting needs strictly positive, finite
+            # uncertainties; reduction masked / edge pixels can carry zero or non
+            # finite noise.  Give them a very large uncertainty so they take
+            # effectively zero weight (equivalent to masking them).
+            _npos = nn[np.isfinite(nn) & (nn > 0)]
+            _fill = (np.median(_npos) * 1e6) if _npos.size else 1e6
+            nn = np.where(np.isfinite(nn) & (nn > 0), nn, _fill)
+            di = np.where(np.isfinite(di), di, 1.0)
+
+            if _tell is not None:
+                _tt = np.asarray(_tell)
+                _deep = (_tt.min(axis=0) if _tt.ndim == 2 else _tt) < 0.20
+            else:
+                _master = np.nanmedian(dn[without_signal], axis=0)
+                _mmed = np.nanmedian(_master[usp]) if usp.size else 1.0
+                _master = _master / (_mmed if _mmed else 1.0)
+                _deep = _master < 0.20
+
+            _bad = np.zeros(n_pixels, dtype=bool)
+            _bad[np.asarray(colmask, dtype=bool)] = True
+            _bad |= _deep
+            if mask is not None and np.asarray(mask).size:
+                _bad[np.asarray(mask, dtype=int)] = True
+            good = np.setdiff1d(usp, np.where(_bad)[0])
+
+            mask = np.where(_bad)[0].astype(int)
+            useful_spectral_points = good
+            inter_mask = np.copy(mask)
+            inter_useful = np.copy(useful_spectral_points)
+
+            _res = nortmann_sysrem_division(
+                di, nn, n_iterations=_n_sysrem, good_pixels=good,
+            )
+            data_prepared = _res["residual"]
+            propag_noise = _res["noise"]
+            cor = _res["model"]
+            U = _res["U"]
+
+            if mask.size:
+                data_prepared[:, mask] = 1
+                propag_noise[:, mask] = 1
+
         else:
             raise ValueError(
-                f"Unknown pipeline '{_pipeline}'. "
-                "Valid values: 'BL19', 'Blain24', 'ASL19', 'Gibson22'."
+                f"Unknown pipeline '{_pipeline}'. Valid values: 'BL19', "
+                "'Blain24', 'ASL19', 'Gibson22', 'Cheverall26', 'Nortmann26'."
             )
 
         # n_passes_used: actual SYSREM iterations consumed (slot 4).

@@ -139,7 +139,7 @@ def build_simulation_name(cfg: SimulationConfig) -> str:
     # Detrending flags. Only SYSREM/PCA-based pipelines carry a detrending
     # token in the run name. BL19 and Blain24 are polynomial fitting pipelines
     # and use neither SYSREM nor PCA, so they carry no such token.
-    if pipe.name not in {"ASL19", "Gibson22", "Cheverall26"}:
+    if pipe.name not in {"ASL19", "Gibson22", "Cheverall26", "Nortmann26"}:
         pca_flag = kp_flag = opt_flag = ""
     elif pipe.optimize_sysrem_order_by_order:
         pca_flag = "SYSREMopt_"
@@ -202,8 +202,9 @@ class SimulationSummary:
         "ASL19":        "ASL19         (Sanchez-Lopez et al. 2019, A&A, 630, A53)",
         "Gibson22":     "Gibson22      (Gibson et al. 2022, MNRAS, 512, 4618)",
         "Cheverall26":  "Cheverall26   (Cheverall et al. 2026, MNRAS, IGRINS pipeline)",
+        "Nortmann26":   "Nortmann26    (Nortmann et al. 2026, A&A, CRIRES+ division-SYSREM pipeline)",
     }
-    _SYSREM_PIPELINES = {"ASL19", "Gibson22", "Cheverall26"}
+    _SYSREM_PIPELINES = {"ASL19", "Gibson22", "Cheverall26", "Nortmann26"}
 
     def __str__(self) -> str:
         pipeline_str = self._PIPELINE_REFS.get(self.pipeline, self.pipeline)
@@ -1123,11 +1124,42 @@ class ExoploreSimulator:
         _fully_masked_orders: list = []
         _tel_coverage_checked = False  # run wavelength-coverage check once
 
+        # Per-frame wavelength solution (solution-only secondary wavecal):
+        # the flux is native (never resampled); the MODEL is interpolated onto
+        # each exposure's grid, following Line+2021 / Smith+2024.  Loaded once;
+        # absent => the common grid is used (identical to <0.2 px).
+        _wave_pf_all = None
+        if cfg.observation.use_real_data:
+            from astropy.io import fits as _fits_pf
+            _pf_file = (f"{cfg.paths.inputs_dir}reference_night/"
+                        f"wave_perframe_0.fits")
+            if os.path.exists(_pf_file):
+                _wave_pf_all = _fits_pf.open(_pf_file)[0].data.astype(np.float64)
+                print("  [wavecal] per-frame wavelength solution loaded "
+                      "(model interpolated per exposure; flux native).")
+
+        # Theoretical telluric transmittance per order (molecfit), for the
+        # Nortmann26 pipeline's 96% normalisation mask and 20% deep mask
+        # (Nortmann 2024/2026 Sec 3.1).  On the reference grid, one row per
+        # order; absent => the branch falls back to a data-driven deep mask.
+        _telluric_model = None
+        if cfg.observation.use_real_data and cfg.pipeline.name == "Nortmann26":
+            from astropy.io import fits as _fits_tt
+            _tt_file = (f"{cfg.paths.inputs_dir}reference_night/"
+                        f"telluric_model_0.fits")
+            if os.path.exists(_tt_file):
+                _telluric_model = _fits_tt.open(_tt_file)[0].data.astype(np.float64)
+                print("  [Nortmann26] molecfit telluric model loaded "
+                      "(96% normalisation mask + 20% deep mask).")
+
         for h in range(n_orders):
             # ----------------------------------------------------------
             # 3c, per-order wavelength and SNR setup
             # ----------------------------------------------------------
             wave_ins = wave_star[order_selection[h], :].astype(np.float64)
+            # per-exposure wavelength grid for this order (or None => common)
+            _wave_pf_ord = (_wave_pf_all[:, order_selection[h], :]
+                            if _wave_pf_all is not None else None)
             if spec_star_ins is not None:
                 spec_star_phoenix = spec_star_ins[order_selection[h], :]
             else:
@@ -1454,6 +1486,19 @@ class ExoploreSimulator:
             from astropy.io import fits as _fits
             _berv_ref = (cfg.observation.berv_kms
                          if cfg.observation.berv_kms is not None else 0.0)
+            # Real data: the analysis/injection velocity track (v_planet, the
+            # stellar model, and any injected signal) must use the SAME
+            # per-exposure BERV that the Kp-Vsys map co-add uses (loaded later
+            # from observations_berv).  Otherwise an injected signal is placed
+            # with berv=0 but recovered along a berv-shifted trail, so it lands
+            # displaced by the full BERV (a real ~+18 km/s offset on a
+            # large-BERV night).  Load the real BERV here for consistency.
+            if (cfg.observation.use_real_data
+                    and not cfg.observation.different_nights):
+                _berv_file = (f"{cfg.paths.inputs_dir}reference_night/"
+                              f"observations_berv_0.fits")
+                if os.path.exists(_berv_file):
+                    _berv_ref = _fits.open(_berv_file)[0].data
             if not cfg.observation.different_nights:
                 v_star = get_V(
                     planet.stellar_rv_semiamplitude_kms, phase,
@@ -1601,11 +1646,42 @@ class ExoploreSimulator:
             # ----------------------------------------------------------
             # Block 4d, spectral matrix (planet signal time-series)
             # ----------------------------------------------------------
+            # Injection placement: when a simulated planet is injected into
+            # REAL data (injection-recovery tests), honour the
+            # (dKp, dV_rest) offsets of pipeline.kp_vrest_injection so the
+            # signal can be placed at an offset velocity.  [0, 0] keeps the
+            # nominal track (default; all other paths unchanged).  The
+            # offsets apply ONLY to the injected matrix — the analysis
+            # reference track (v_planet) is untouched.
+            _inj_off = cfg.pipeline.kp_vrest_injection
+            if (cfg.observation.use_real_data
+                    and cfg.observation.simulate_planet
+                    and not cfg.observation.different_nights
+                    and not cfg.atmosphere.limb_asymmetries
+                    and (_inj_off[0] != 0.0 or _inj_off[1] != 0.0)):
+                if not cfg.observation.significant_eccentricity:
+                    _v_inject = get_V(
+                        planet.kp_kms + _inj_off[0], phase, berv,
+                        planet.systemic_velocity_kms + _inj_off[1],
+                        v_wind,
+                    )
+                else:
+                    _v_inject = get_V_eccentric(
+                        planet.kp_kms + _inj_off[0], phase,
+                        planet.eccentricity,
+                        planet.argument_of_periastron_deg,
+                        berv,
+                        planet.systemic_velocity_kms + _inj_off[1],
+                        v_wind,
+                    )
+            else:
+                _v_inject = v_planet
+
             if not cfg.atmosphere.limb_asymmetries:
                 if not cfg.observation.different_nights:
                     spec_mat, spec_mat_shift = \
                         spec_to_mat_fraction(
-                            _mini_stmf, syn_jd, T_0, v_planet,
+                            _mini_stmf, syn_jd, T_0, _v_inject,
                             wave_ins, wave_pRT, syn_spec, mat_star,
                             with_signal, without_signal, fraction,
                             include_star=False,
@@ -1852,7 +1928,69 @@ class ExoploreSimulator:
             # ----------------------------------------------------------
             # Block 5b, CCF template spectrum
             # ----------------------------------------------------------
-            if cfg.atmosphere.cc_with_true_model:
+            if cfg.cross_correlation.ccf_template_source == "telluric":
+                # Telluric-template CCF: use the Earth-transmittance
+                # spectrum as the cross-correlation template, handled
+                # downstream exactly like a planetary template (same
+                # normalisation, Doppler track, weighting and S/N map).
+                # Stored as a depth (1 - T**airmass) so telluric
+                # absorption carries the same sign as planetary
+                # absorption in 5d.12 (mat = 1 - depth).
+                from astropy.io import fits as _fits_tt
+                with _fits_tt.open(_tell_ref_file) as _th_tt:
+                    _lam_tt = _th_tt[1].data['lam'] * 1e-3
+                    _trn_tt = _th_tt[1].data['trans']
+                _sel_tt = ((_lam_tt >= wave_ins.min() - 0.01)
+                           & (_lam_tt <= wave_ins.max() + 0.01))
+                if not np.any(_sel_tt):
+                    raise ValueError(
+                        "ccf_template_source='telluric': the reference "
+                        f"telluric file {_tell_ref_file} does not cover "
+                        f"this order ({wave_ins.min():.3f}-"
+                        f"{wave_ins.max():.3f} um).")
+                wave_pRT_cc = np.asarray(_lam_tt[_sel_tt], dtype=np.float64)
+                try:
+                    _am_tt = float(np.mean(
+                        np.concatenate([np.atleast_1d(a) for a in airmass])
+                        if isinstance(airmass, list) else airmass))
+                except Exception:
+                    # No usable airmass in scope (e.g. fully synthetic
+                    # multi-night setups): fall back to zenith.
+                    _am_tt = 1.0
+                _trn_tt = np.clip(
+                    np.asarray(_trn_tt[_sel_tt], dtype=np.float64),
+                    0.0, 1.0) ** _am_tt
+                if cfg.instrument.convolve_to_resolution:
+                    _trn_tt = convolve(wave_pRT_cc, _trn_tt, inst.res)
+                spec_cc = 1.0 - _trn_tt
+            elif cfg.cross_correlation.ccf_template_source == "stellar":
+                # Stellar-template CCF (contamination diagnostic): use the
+                # PHOENIX stellar spectrum as the cross-correlation
+                # template, handled downstream exactly like a planetary
+                # template.  Stored as a depth (1 - F/median) so stellar
+                # absorption carries the same sign as planetary absorption
+                # in 5d.12; the chev26 template normalisation removes the
+                # continuum as it does for the data.
+                from astropy.io import fits as _fits_st
+                _wv_st = 1.0e-4 * _fits_st.getdata(
+                    cfg.paths.phoenix_wave_file)
+                _fl_st = _fits_st.getdata(cfg.paths.phoenix_flux_file)
+                _sel_st = ((_wv_st >= wave_ins.min() - 0.01)
+                           & (_wv_st <= wave_ins.max() + 0.01))
+                if not np.any(_sel_st):
+                    raise ValueError(
+                        "ccf_template_source='stellar': the PHOENIX file "
+                        "does not cover this order "
+                        f"({wave_ins.min():.3f}-{wave_ins.max():.3f} um).")
+                wave_pRT_cc = np.ascontiguousarray(
+                    _wv_st[_sel_st], dtype=np.float64)
+                _fl_sel = np.ascontiguousarray(
+                    _fl_st[_sel_st], dtype=np.float64)
+                if cfg.instrument.convolve_to_resolution:
+                    _fl_sel = convolve(wave_pRT_cc, _fl_sel, inst.res)
+                _fl_sel /= np.median(_fl_sel)
+                spec_cc = 1.0 - _fl_sel
+            elif cfg.atmosphere.cc_with_true_model:
                 wave_pRT_cc = wave_pRT
                 spec_cc     = syn_spec
             else:
@@ -1907,6 +2045,7 @@ class ExoploreSimulator:
             _std_noise_b5    = None
             _mat_res_b5      = None
             _propag_noise_b5 = None
+            _cor_b5          = None
             _sysrem_pass_b5  = None
             _mat_cc_b5       = None
             _mat_back_b5     = None
@@ -2178,7 +2317,8 @@ class ExoploreSimulator:
                     # no PCA), so this stays None and is saved as an empty array.
                     _sysrem_passes_per_order = (
                         np.full(n_orders, _si, int)
-                        if cfg.pipeline.name in {"ASL19", "Gibson22", "Cheverall26"}
+                        if cfg.pipeline.name in {"ASL19", "Gibson22",
+                                                 "Cheverall26", "Nortmann26"}
                         else None
                     )
                     _mask_store = np.full(
@@ -2237,6 +2377,9 @@ class ExoploreSimulator:
                     "Different_nights":      _dn,
                     "n_nights":              _nn,
                     "n_orders":              n_orders,
+                    "nortmann_telluric_order": (
+                        _telluric_model[order_selection[h]]
+                        if _telluric_model is not None else None),
                 }
                 _mini_sysrem = {
                     "Different_nights": _dn,
@@ -2516,8 +2659,15 @@ class ExoploreSimulator:
                                 _syn_mat_res_b5[without_signal, :] = 1.01
 
                             for _i in range(n_spectra):
+                                # Interpolate the (velocity-shifted) template
+                                # onto exposure i's own wavelength grid so it
+                                # aligns with the native-flux data columns
+                                # (per-frame solution; falls back to common).
+                                _out_grid = (_wave_pf_ord[_i]
+                                             if _wave_pf_ord is not None
+                                             else wave_ins)
                                 _mat_back_b5[_i, :] = np.interp(
-                                    wave_ins,
+                                    _out_grid,
                                     wave_ins * (
                                         1. - _v_cc_b5[_i]
                                         / (_cst_b5.c / 1e5)
@@ -2920,6 +3070,11 @@ class ExoploreSimulator:
                 # SYSREM eigenvectors for retrieval projector (ASL19/Gibson22)
                 "U_sysrem": (np.copy(_U_sysrem)
                              if _U_sysrem is not None else None),
+                # Structure removed by the detrending (empirical telluric/
+                # stellar template); single-night shape (n_spectra,
+                # n_pixels).  Used by the "embedded" model-reprocessing
+                # mode in Block 9.
+                "cor": (np.copy(_cor_b5) if _cor_b5 is not None else None),
             })
 
             if (h + 1) % max(1, n_orders // 5) == 0 or h == n_orders - 1:
@@ -3197,6 +3352,7 @@ class ExoploreSimulator:
             "Ret_dim":               cfg.retrieval.dimensionality,
             "logL_choice":           cfg.retrieval.log_likelihood,
             "ret_error_model":       getattr(cfg.retrieval, "error_model", "propagated"),
+            "model_reprocessing":    getattr(cfg.retrieval, "model_reprocessing", "bare"),
             # Normalise sampler string to internal canonical form
             "Sampler_choice":        (
                 "Nested_sampling"
@@ -3361,12 +3517,15 @@ class ExoploreSimulator:
             _plots_subdir_b7 = str(dirs["plots"])
             os.makedirs(_plots_subdir_b7, exist_ok=True)
 
+            _zoom = cfg.cross_correlation.plot_velocity_zoom_kms
+            _erf_xlims = [-_zoom, _zoom] if _zoom else None
             if not _dn:
                 ccf_complete = np.nansum(ccf_nights, 0)
                 CCF_matrix_ERF(
                     _mini_b7, _v_ccf, phase, ccf_complete,
                     with_signal, without_signal, v_planet,
                     show_plot=False, save_plot=True, CCF_Noise=False,
+                    xlims=_erf_xlims,
                 )
             else:
                 ccf_complete = ccf_nights
@@ -3379,7 +3538,7 @@ class ExoploreSimulator:
                         with_signal[_bb7], without_signal[_bb7],
                         v_planet[_bb7],
                         show_plot=False, save_plot=False,
-                        CCF_Noise=False,
+                        CCF_Noise=False, xlims=_erf_xlims,
                     )
 
             # -------------------------------------------------------
@@ -3506,6 +3665,10 @@ class ExoploreSimulator:
                                 np.asarray(_sysrem_passes_per_order)
                                 if _sysrem_passes_per_order is not None
                                 else np.array([])),
+                            # v_rest is an OFFSET from the expected planet
+                            # trail: a signal at the nominal (Kp, V_sys)
+                            # peaks at v_rest = 0 (not at V_sys).
+                            v_rest_convention="offset_from_expected_trail",
                         )
                     except Exception as _e:
                         print(f"  NOTE: S/N map save skipped ({_e})")
@@ -3679,6 +3842,10 @@ class ExoploreSimulator:
                                 np.asarray(_sysrem_passes_per_order)
                                 if _sysrem_passes_per_order is not None
                                 else np.array([])),
+                            # v_rest is an OFFSET from the expected planet
+                            # trail: a signal at the nominal (Kp, V_sys)
+                            # peaks at v_rest = 0 (not at V_sys).
+                            v_rest_convention="offset_from_expected_trail",
                         )
                     except Exception as _ec:
                         print(f"  NOTE: combined S/N map save skipped ({_ec})")
@@ -3772,6 +3939,10 @@ class ExoploreSimulator:
                                 np.asarray(_sysrem_passes_per_order)
                                 if _sysrem_passes_per_order is not None
                                 else np.array([])),
+                            # v_rest is an OFFSET from the expected planet
+                            # trail: a signal at the nominal (Kp, V_sys)
+                            # peaks at v_rest = 0 (not at V_sys).
+                            v_rest_convention="offset_from_expected_trail",
                         )
                     except Exception as _e:
                         print(f"  NOTE: S/N map save skipped ({_e})")
@@ -4328,7 +4499,16 @@ class ExoploreSimulator:
             # our code defaulted to all planet species → len mismatch in pRT.
             _ret_dim_b9 = cfg.retrieval.dimensionality
             if _ret_dim_b9 in ("1D", "1D_Gibson22"):
-                _mini_b7["species_ret"] = ["H2", "He", "H2O"]
+                # Single-species abundance retrieval: honour the species
+                # named in retrieval.atmosphere when provided (H2/He filler
+                # + one line species, matching the abundances array built in
+                # the loglike); default to H2O for backward compatibility.
+                if (cfg.retrieval.atmosphere is not None
+                        and cfg.retrieval.atmosphere.species):
+                    _mini_b7["species_ret"] = [
+                        "H2", "He", cfg.retrieval.atmosphere.species[-1]]
+                else:
+                    _mini_b7["species_ret"] = ["H2", "He", "H2O"]
             elif _ret_dim_b9 in ("1D_alpha", "1D_alpha_Gibson22"):
                 # Amplitude scaling: nominal model uses the config's species
                 # opacity (the same line list as the CCF template).
@@ -4417,12 +4597,26 @@ class ExoploreSimulator:
                     mat_star_b9 = _ms_stack[:, np.newaxis, :, :]
                 else:
                     mat_star_b9 = _ms_stack
+                _mrp_b9 = getattr(cfg.retrieval, "model_reprocessing", "bare")
+                if _mrp_b9 != "bare" and _mini_b7["Retrieval_choice"] == 6:
+                    raise NotImplementedError(
+                        f"retrieval.model_reprocessing='{_mrp_b9}' is not "
+                        "implemented for time-resolved retrievals "
+                        "(retrieval_choice=6).")
                 _U_b9 = None
-                if cfg.pipeline.name in ["ASL19", "Gibson22"]:
+                if (cfg.pipeline.name in ["ASL19", "Gibson22"]
+                        or _mrp_b9 == "projector"):
                     if per_order_results[0].get("U_sysrem") is not None:
                         _U_b9 = np.stack(
                             [per_order_results[h]["U_sysrem"]
                              for h in _good_h_b9])
+                # Empirical removed-structure matrices for the "embedded"
+                # model-reprocessing mode.
+                _cor_b9 = None
+                if (_mrp_b9 == "embedded"
+                        and per_order_results[0].get("cor") is not None):
+                    _cor_b9 = np.stack(
+                        [per_order_results[h]["cor"] for h in _good_h_b9])
             else:
                 _max_sp_b9 = int(np.max(_n_spectra_store_b5))
                 mat_res_b9   = np.full(
@@ -4439,6 +4633,13 @@ class ExoploreSimulator:
                     propag_b9[_hb9_idx,    :, :_pn_h.shape[1], :] = _pn_h
                     std_noise_b9[_hb9_idx, :, :_sn_h.shape[1], :] = _sn_h
                     mat_star_b9[_hb9_idx,  :, :_ms_h.shape[1], :] = _ms_h
+                _mrp_b9 = getattr(cfg.retrieval, "model_reprocessing", "bare")
+                _cor_b9 = None
+                if _mrp_b9 != "bare":
+                    raise NotImplementedError(
+                        f"retrieval.model_reprocessing='{_mrp_b9}' is only "
+                        "implemented for single-night retrievals "
+                        "(different_nights=false).")
                 _U_b9 = None
                 if cfg.pipeline.name in ["ASL19", "Gibson22"]:
                     if "U_sysrem" in per_order_results[0]:
@@ -4674,7 +4875,8 @@ class ExoploreSimulator:
             # 9g, SYSREM filtering projector (lines 6024-6035)
             # ------------------------------------------------------------------
             P = None
-            if (_mini_b7["preparing_pipeline"] in ["ASL19", "Gibson22"]
+            if ((_mini_b7["preparing_pipeline"] in ["ASL19", "Gibson22"]
+                 or _mini_b7.get("model_reprocessing", "bare") == "projector")
                     and _U_b9 is not None):
                 if not _mini_b7["Different_nights"]:
                     P = SYSREM_filtering_projector(
@@ -4682,6 +4884,17 @@ class ExoploreSimulator:
                 else:
                     P = SYSREM_filtering_projector(
                         _mini_b7, _n_spectra_store_b5, propag_b9, _U_b9)
+            if (_mini_b7.get("model_reprocessing", "bare") == "projector"
+                    and P is None):
+                raise RuntimeError(
+                    "model_reprocessing='projector' requires the detrending "
+                    "temporal modes (U), which this run did not produce.")
+            if (_mini_b7.get("model_reprocessing", "bare") == "embedded"
+                    and _cor_b9 is None):
+                raise RuntimeError(
+                    "model_reprocessing='embedded' requires the removed-"
+                    "structure matrices (cor), which this run did not "
+                    "produce.")
 
             # ------------------------------------------------------------------
             # 9h, Sampler definitions (lines 6052-6087)
@@ -4876,10 +5089,54 @@ class ExoploreSimulator:
                             if _mini_b7["prepare_template"]:
                                 if not _mini_b7["SYSREM_robust_halt"]:
                                     _sysrem_pass = None
-                                if _mini_b7["preparing_pipeline"] != "Gibson22":
+                                _mrp_ll = _mini_b7.get(
+                                    "model_reprocessing", "bare")
+                                if (_mini_b7["preparing_pipeline"] == "Gibson22"
+                                        or _mrp_ll == "projector"):
+                                    # Linear filter: project the data-derived
+                                    # temporal modes out of the model only;
+                                    # the template carries no background
+                                    # structure.
+                                    _usp_i9 = np.where(
+                                        useful_spectral_points_inter_aux[
+                                            _night_index, hh, :])[0]
+                                    model_mat_prepared[hh] = \
+                                        filter_model_singleorder(
+                                            P[hh, _night_index, :, :],
+                                            model_mat[hh], _usp_i9,
+                                        )
+                                    if (_mrp_ll == "projector"
+                                            and _mini_b7["preparing_pipeline"]
+                                                != "Gibson22"):
+                                        # Subtraction-convention pipelines
+                                        # compare zero-centred residuals to
+                                        # the template, so filter the model
+                                        # DEVIATION: by linearity,
+                                        # filt(m-1) = filt(m) - filt(1).
+                                        # Without this, the filtered constant
+                                        # level survives as a spurious
+                                        # time-structured baseline.
+                                        model_mat_prepared[hh] -= \
+                                            filter_model_singleorder(
+                                                P[hh, _night_index, :, :],
+                                                np.ones_like(model_mat[hh]),
+                                                _usp_i9,
+                                            )
+                                else:
+                                    # "bare": re-run the preparing pipeline on
+                                    # the model matrix alone.  "embedded":
+                                    # multiply the model into the structure the
+                                    # detrending removed from the data (the
+                                    # empirical telluric/stellar template) and
+                                    # re-run the pipeline on the combination.
+                                    _mm_in = (
+                                        _cor_b9[hh, :_n_sp_ll, :]
+                                        * model_mat[hh]
+                                        if _mrp_ll == "embedded"
+                                        else model_mat[hh])
                                     model_mat_prepared[hh] = \
                                         preparing_pipeline(
-                                            _mini_b7, model_mat[hh],
+                                            _mini_b7, _mm_in,
                                             _std_noise_ret[_night_index,
                                                            :_n_sp_ll,
                                                            hh*_n_px_b9:(hh+1)*_n_px_b9],
@@ -4904,15 +5161,6 @@ class ExoploreSimulator:
                                                 mask_inter_ret_aux[
                                                     _night_index, hh, :])[0],
                                             useful_spectral_points_inter_retrieval=np.where(
-                                                useful_spectral_points_inter_aux[
-                                                    _night_index, hh, :])[0],
-                                        )
-                                else:
-                                    model_mat_prepared[hh] = \
-                                        filter_model_singleorder(
-                                            P[hh, _night_index, :, :],
-                                            model_mat[hh],
-                                            np.where(
                                                 useful_spectral_points_inter_aux[
                                                     _night_index, hh, :])[0],
                                         )
@@ -6019,6 +6267,87 @@ class ExoploreSimulator:
                                             line_opacity_mode="lbl",
                                         )
                                         _ctx["atmosphere_ret_list"].append(_atm9)
+
+                        # 1D_alpha with a telluric template: the fixed nominal
+                        # "model" is the Earth-transmittance depth spectrum
+                        # (same construction as the CCF template in Block 5b);
+                        # the sampler then treats it exactly like a planetary
+                        # model (α scale, Doppler shift, lightcurve weighting,
+                        # PCA reprocessing, same likelihood).  A contamination
+                        # diagnostic: a model-vs-null Bayes factor >> 1 for a
+                        # non-planetary template means the detection machinery
+                        # responds to residual telluric structure.
+                        if (_mini_b7["Ret_dim"] in ("1D_alpha", "1D_alpha_Gibson22")
+                                and _ctx.get("nominal_spec") is None
+                                and cfg.cross_correlation.ccf_template_source
+                                    == "telluric"):
+                            from astropy.io import fits as _fits_t9
+                            with _fits_t9.open(_tell_ref_file) as _th9:
+                                _lam9 = np.asarray(
+                                    _th9[1].data['lam'], float) * 1e-3
+                                _trn9 = np.asarray(
+                                    _th9[1].data['trans'], float)
+                            try:
+                                _am9 = float(np.mean(
+                                    np.concatenate([np.atleast_1d(a)
+                                                    for a in airmass])
+                                    if isinstance(airmass, list) else airmass))
+                            except Exception:
+                                _am9 = 1.0
+                            _ctx["nominal_wave"] = []
+                            _ctx["nominal_spec"] = []
+                            for hh in range(_n_orders_b9):
+                                _wo9 = wave_star[
+                                    _mini_b7["order_selection"][hh], :]
+                                _sel9 = ((_lam9 >= _wo9.min() - 0.01)
+                                         & (_lam9 <= _wo9.max() + 0.01))
+                                _wn9 = np.ascontiguousarray(
+                                    _lam9[_sel9], dtype=np.float64)
+                                _tn9 = np.clip(
+                                    np.asarray(_trn9[_sel9], float),
+                                    0.0, 1.0) ** _am9
+                                if cfg.instrument.convolve_to_resolution:
+                                    _tn9 = convolve(_wn9, _tn9, inst.res)
+                                _ctx["nominal_wave"].append(_wn9)
+                                _ctx["nominal_spec"].append(1.0 - _tn9)
+                            print(f"  [1D_alpha] fixed nominal TELLURIC "
+                                  f"template built for {_n_orders_b9} orders "
+                                  f"(airmass^{_am9:.3f}; α scales it "
+                                  f"in-sampler; no pRT in the loop).")
+
+                        # 1D_alpha with a stellar template: the fixed nominal
+                        # "model" is the PHOENIX stellar depth spectrum, treated
+                        # exactly like a planetary model by the sampler.  A
+                        # contamination diagnostic for structure at the stellar
+                        # velocity (which coincides with the planet cell).
+                        if (_mini_b7["Ret_dim"] in ("1D_alpha", "1D_alpha_Gibson22")
+                                and _ctx.get("nominal_spec") is None
+                                and cfg.cross_correlation.ccf_template_source
+                                    == "stellar"):
+                            from astropy.io import fits as _fits_s9
+                            _wv_s9 = 1.0e-4 * _fits_s9.getdata(
+                                cfg.paths.phoenix_wave_file)
+                            _fl_s9 = _fits_s9.getdata(cfg.paths.phoenix_flux_file)
+                            _ctx["nominal_wave"] = []
+                            _ctx["nominal_spec"] = []
+                            for hh in range(_n_orders_b9):
+                                _wo9 = wave_star[
+                                    _mini_b7["order_selection"][hh], :]
+                                _sel9 = ((_wv_s9 >= _wo9.min() - 0.01)
+                                         & (_wv_s9 <= _wo9.max() + 0.01))
+                                _wn9 = np.ascontiguousarray(
+                                    _wv_s9[_sel9], dtype=np.float64)
+                                _sn9 = np.ascontiguousarray(
+                                    _fl_s9[_sel9], dtype=np.float64)
+                                if cfg.instrument.convolve_to_resolution:
+                                    _sn9 = convolve(_wn9, _sn9, inst.res)
+                                _sn9 = _sn9 / np.median(_sn9)
+                                _ctx["nominal_wave"].append(_wn9)
+                                _ctx["nominal_spec"].append(1.0 - _sn9)
+                            print(f"  [1D_alpha] fixed nominal STELLAR "
+                                  f"template built for {_n_orders_b9} orders "
+                                  f"(α scales it in-sampler; no pRT in the "
+                                  f"loop).")
 
                         # 1D_alpha: precompute the fixed nominal model ONCE per
                         # order (no pRT inside the sampler; α just scales its

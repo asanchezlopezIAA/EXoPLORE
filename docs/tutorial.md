@@ -1,6 +1,6 @@
 # EXoPLORE Tutorial
 
-This tutorial walks through eight progressively more involved analyses. In particular, by the end the reader will know how to run the default HD 189733 b ANDES simulation, change the target planet, configure the atmospheric forward model, run a CARMENES NIR simulation, combine multiple nights, enable the Bayesian retrieval, assess retrieval pipeline bias, and validate detection significances and retrieval uncertainties. We note that each tutorial builds on the previous one, so we recommend following them in order on a first reading. Readers new to the technique may wish to read the [Concepts primer](concepts.md) first.
+This tutorial walks through ten progressively more involved analyses. In particular, by the end the reader will know how to run the default HD 189733 b ANDES simulation, change the target planet, configure the atmospheric forward model, run a CARMENES NIR simulation, combine multiple nights, enable the Bayesian retrieval, assess retrieval pipeline bias, validate detection significances and retrieval uncertainties, and analyse real CRIRES+ and IGRINS data reduced from archive frames (WASP-127 b and L 98-59 d). We note that each tutorial builds on the previous one, so we recommend following them in order on a first reading. Readers new to the technique may wish to read the [Concepts primer](concepts.md) first.
 
 ---
 
@@ -1002,6 +1002,147 @@ Distributions of the recovered significance, K<sub>P</sub>, and V<sub>rest</sub>
 ```
 
 A single ANDES order yields only a marginal per-order signal from a strong absorber such as H₂O under realistic noise (here a median S/N of about 4), and at this modest significance the recovered peak position varies appreciably from one noise realisation to the next, as the scatter in the figure shows. The distribution is broad: in the most favourable realisations (a few percent of the sample) the single-order S/N exceeds 5, reaching about 5.7 at best, while in less favourable ones it drops well below the median, so no single realisation should be read as characteristic. This single-order case is deliberately conservative: it isolates the sampling effect with the smallest usable signal and is not representative of a real analysis. Co-adding the full set of ANDES orders (and, where available, multiple nights) raises the combined significance well above this floor and tightens the recovered K<sub>P</sub> and V<sub>rest</sub> correspondingly. The purpose of this study is not to quote a headline single-order significance but to show how the two metrics respond to the velocity sampling, and why a Welch value must always be read together with the step at which it was computed.
+
+---
+
+## Tutorial 9: Analyse real CRIRES+ data (WASP-127 b)
+
+Tutorials 1 to 8 simulate observations. This tutorial and the next analyse **real** data reduced from raw archive frames and run through the pipeline end to end. Here we use the single CRIRES+ K2148 transit of the hot Saturn WASP-127 b (ESO programme 108.22PH, 2022-03-24), for which Nortmann et al. (2025) report H₂O and CO with a resolved supersonic-jet signature. The CRIRES+ analysis recipe is the `Nortmann26` pipeline (Nortmann et al. 2025, 2026); see [The Nortmann26 pipeline](nortmann26_pipeline.md) for the method and [Reducing CRIRES+ data](crires_reduction.md) for the upstream reduction.
+
+> **Approximate run time:** the analysis step is ~4 min on an Apple Mac Studio M2 Ultra (64 GB RAM), running `configs/wasp127b_crires_h2oco.json` (18 K2148 segments, division SYSREM with 9 iterations, real data, no retrieval); the petitRADTRANS template and the Kp-Vsys maps (Block 7) dominate. The one-off raw reduction ([`cr2res`](https://www.eso.org/sci/software/pipelines/cr2res/) + [`molecfit`](https://www.eso.org/sci/software/pipelines/molecfit/)) is separate and much longer (tens of minutes to a few hours; molecfit is the slow part). With `timing: true` each run writes a `timing_report_<date>.txt` with the exact per-block breakdown.
+
+### Step 1: Reduce and prepare the night (once)
+
+Follow [Reducing CRIRES+ data](crires_reduction.md): install the ESO [`cr2res`](https://www.eso.org/sci/software/pipelines/cr2res/) and [`molecfit`](https://www.eso.org/sci/software/pipelines/molecfit/) pipelines (EXoPLORE only wraps them), then
+
+```bash
+python scripts/reduce_crires_night.py /path/to/WASP127b/raw all
+python scripts/prepare_crires_night.py /path/to/WASP127b inputs/CRIRES_PLUS/WASP127b/reference_night
+```
+
+Two practical points about real ESO deliveries, both covered on the reduction page: the raw frames arrive `.fits.Z`-compressed and a single delivery may bundle several nights, so decompress and keep **each night in its own directory**; and `cr2res_cal_wave` requires the per-setting static `M.CRIRES.*.fits` catalogs (emission-line list and trace-wave) that come with the download to be **present in the frame directory**, or the wavelength step fails.
+
+### Step 2: The telluric correction (molecfit)
+
+[`molecfit`](https://www.eso.org/sci/software/pipelines/molecfit/) fits the telluric transmittance per detector segment; the wrapper anchors the wavelength solution on water and the analysis masks the saturated line cores (the deep-line mask of Nortmann et al. 2025). The bundled `plot_telluric_correction` routine (`exoplore.plotting`) illustrates the fit for one K-band segment:
+
+```{figure} figures/tutorial9_telluric_wasp127.png
+:width: 85%
+:align: center
+
+Telluric correction for one CRIRES+ K2148 segment of the WASP-127 b night. Top: the extracted spectrum (black) and the molecfit transmittance model (blue), which reproduces every telluric line. Bottom: the corrected spectrum (observed divided by the model), flat at unity apart from the saturated line cores, which are blanked (transmittance below 0.1) because dividing two near-zero numbers is unreliable there. Produced with `exoplore.plotting.plot_telluric_correction`.
+```
+
+### Step 3: The effective resolution (super-resolution)
+
+`prepare_crires_night.py` measures the effective resolving power per order from the stellar PSF width in the `cr2res` headers (Nortmann et al. 2024, App. A.2). When the seeing-limited PSF underfills the 0.2″ slit the star acts as a narrower entrance aperture and the resolution exceeds the nominal R = 100 000 (super-resolution); when it overfills the slit (poor seeing) the resolution is slit-limited and clamped to the nominal value. The engine then convolves all templates to the measured median R:
+
+```{figure} figures/tutorial9_resolution_wasp127.png
+:width: 80%
+:align: center
+
+Measured effective resolving power per order for the WASP-127 b night (median R ≈ 163 000, above the nominal 100 000: this was a tight-seeing night). R declines toward the red as the diffraction PSF widens. Produced with `exoplore.plotting.plot_resolution_per_order`.
+```
+
+### Step 4: Inspect the config
+
+`configs/wasp127b_crires_h2oco.json` selects the real-data analysis. The key blocks:
+
+```json
+"planet":       { "name": "WASP127b", "parameter_file": "planet_params/WASP127b.json" },
+"instrument":   { "name": "CRIRES+", "observatory": "paranal",
+                  "pixels_per_resolution_element": 3.0, "convolve_to_resolution": true },
+"observation":  { "event_type": "transit", "use_real_data": true,
+                  "simulate_planet": false, "n_nights": 1, "noiseless": true },
+"pipeline":     { "name": "Nortmann26", "sysrem_iterations": 9 },
+"atmosphere":   { "ccf_template": { "species": ["H2", "He", "H2O", "CO"],
+                                    "isothermal_temperature_K": 1400 } },
+"cross_correlation": { "velocity_max_kms": 400, "kp_max_kms": 150,
+                       "plot_velocity_zoom_kms": 60 },
+"paths":        { "inputs_dir": "inputs/CRIRES_PLUS/WASP127b/" }
+```
+
+Set your local `paths` (and the PHOENIX files, as in Tutorial 1). The template here is a combined H₂O + CO model; single-species runs use `["H2", "He", "H2O"]` or `["H2", "He", "CO"]`.
+
+### Step 5: Run
+
+```bash
+python -u scripts/run_exoplore.py configs/wasp127b_crires_h2oco.json --run
+```
+
+The engine ingests the reference night, applies the common-blaze normalisation, the deep-telluric mask and division SYSREM, cross-correlates the petitRADTRANS template convolved to the measured resolution, and writes the Kp-Vsys maps and diagnostic plots.
+
+### Step 6: The result
+
+```{figure} figures/tutorial9_ccf_erf_wasp127.png
+:width: 75%
+:align: center
+
+Cross-correlation of the combined H₂O + CO template with the WASP-127 b residuals, in the Earth rest frame (phase × velocity), zoomed to ±60 km/s (`plot_velocity_zoom_kms`). The planetary signal follows the diagonal trail; the double-peaked structure around the trail is the resolved evening/morning terminator split of the supersonic equatorial jet reported by Nortmann et al. (2025). Produced by the run as `CC_ERF_<run>.pdf`.
+```
+
+```{figure} figures/tutorial9_kpvsys_wasp127.png
+:width: 80%
+:align: center
+
+Kp-Vsys cross-correlation S/N map for WASP-127 b. The combined H₂O + CO signal peaks at K<sub>P</sub> ≈ 133 km s⁻¹ and v<sub>rest</sub> ≈ −7.5 km s⁻¹ at ~8.6σ; the blueshift is the jet signature (the map is normalised over |v| ∈ [20, 75] km s⁻¹ following Nortmann et al. 2025, which excludes the residual telluric band near v = 0). Produced by the run as `sn_map_<run>_SNR.pdf`.
+```
+
+**Disk footprint:** with the default output settings a single-night CRIRES+ analysis writes ~80 MB (the per-segment CCF and matrix `.npz` products), plus a few MB of diagnostic PDFs. See [Outputs](outputs.md) to control which matrices are kept.
+
+---
+
+## Tutorial 10: Analyse real IGRINS data (L 98-59 d)
+
+The same real-data workflow applies to IGRINS. The `Cheverall26` pipeline implements the IGRINS high-resolution cross-correlation recipe of Cheverall et al. (2026), building on the IGRINS analysis lineage of Line et al. (2021), Brogi et al. (2023) and Smith et al. (2024). We use it here on the IGRINS/Gemini-South transit of the temperate super-Earth L 98-59 d (2021-03-12), the target and dataset of Cheverall et al. (2026), searching for H₂S.
+
+> **Approximate run time:** ~30 s on an Apple Mac Studio M2 Ultra (64 GB RAM), running `configs/l9859d_igrins_h2s.json` (26 IGRINS H- and K-band orders, one night, PCA/SYSREM detrending, no retrieval). The forward model (Blocks 3 to 6) is ~87% of the total; the Kp-Vsys maps are ~2 s. With `timing: true` the run writes a `timing_report_<date>.txt`.
+
+### Step 1: The reference night
+
+IGRINS data reduced with the public IGRINS Pipeline Package are assembled into the `reference_night/` layout EXoPLORE consumes (per-order flux, uncertainty, wavelength, and per-exposure BJD/BERV/airmass); see [Input files](input_files.md) for the format. Point the config at that directory via `paths.inputs_dir`.
+
+### Step 2: Inspect the config
+
+`configs/l9859d_igrins_h2s.json`:
+
+```json
+"planet":       { "name": "L9859d", "parameter_file": "planet_params/L9859d.json" },
+"instrument":   { "name": "IGRINS", "observatory": "cerropachon",
+                  "pixels_per_resolution_element": 3.3, "convolve_to_resolution": true },
+"observation":  { "event_type": "transit", "use_real_data": true,
+                  "specific_event": true, "specific_T0_bjd": 2459286.6373,
+                  "exposure_time_seconds": 120.0, "simulate_planet": false },
+"pipeline":     { "name": "Cheverall26", "sysrem_iterations": 1, "snr_mask_threshold": 10.0 },
+"atmosphere":   { "ccf_template": { "species": ["H2", "He", "H2S"] } },
+"cross_correlation": { "velocity_max_kms": 400, "kp_max_kms": 150, "snr_exclude_kms": 15 }
+```
+
+The `Cheverall26` pipeline uses a data-driven per-channel noise estimate (the median absolute deviation of each wavelength channel over time) and a single detrending component (`sysrem_iterations: 1`), matching the choices of Cheverall et al. (2026). The `snr_exclude_kms` window sets the velocity band excluded when estimating the CCF noise.
+
+### Step 3: Run
+
+```bash
+python -u scripts/run_exoplore.py configs/l9859d_igrins_h2s.json --run
+```
+
+### Step 4: The result
+
+```{figure} figures/tutorial10_pipeline_l9859d.png
+:width: 90%
+:align: center
+
+Pipeline stages for one IGRINS order of the L 98-59 d transit: the 1-D spectrum, the spectral time series (phase × wavelength) before and after detrending, and the residual matrix passed to the cross-correlation. Produced by the run as `pipeline_steps_<run>.pdf`.
+```
+
+```{figure} figures/tutorial10_kpvsys_l9859d.png
+:width: 80%
+:align: center
+
+Kp-Vsys cross-correlation S/N map for the H₂S template on the L 98-59 d transit. The red cross marks the expected planet position (v<sub>rest</sub> = 0). A marginal peak appears near the expected velocity, consistent with the tentative H₂S signal reported by Cheverall et al. (2026); at this per-transit significance the map is noise-dominated and no strong claim follows from one night. Produced by the run as `sn_map_<run>_SNR.pdf`.
+```
+
+**Disk footprint:** a single IGRINS night writes a few tens of MB (per-order CCF and matrix products) plus the diagnostic PDFs.
 
 ---
 

@@ -53,3 +53,6 @@ inputs/CARMENES_NIR/HD189733b/reference_night/snr_*.fits
 
 # Sphinx build output
 docs/_build/
+
+# Local target-specific CRIRES+ reference nights (do not publish)
+inputs/CRIRES_PLUS/

@@ -501,8 +501,7 @@ class PipelineConfig:
     # Continuum-normalisation estimator for the Cheverall26 pipeline:
     #   "maxima", 2nd-order polynomial through the maxima of 80 bins
     #   "polyfit", per-exposure iterative 2nd-order polynomial fit to the
-    #               continuum (rejecting absorption), as literally described in
-    #               Cheverall et al. (2026) Sect. 2.3.
+    #               continuum (rejecting absorption lines).
     continuum_method: str = "maxima"
 
     # detrend_method: detrending operator used to remove telluric/stellar
@@ -595,6 +594,10 @@ class CrossCorrelationConfig:
     ssim_metric: bool = False
     study_velocity_ranges: bool = False
     plot_ccf_xstep: float = 50.0
+    # Velocity zoom (km/s) for the CCF trail (Earth rest frame) plot:
+    # [-zoom, +zoom].  None keeps the full CCF range; set a small value to
+    # zoom in around the planet trail.
+    plot_velocity_zoom_kms: "float | None" = None
     # CCF kernel form (weighted, large-instrument path):
     #   "normalized", inverse-variance-weighted Pearson CCF (default)
     #   "matched_filter", un-normalised Σ R·M/E² (Nortmann et al. 2024 Eq. 1)
@@ -604,6 +607,15 @@ class CrossCorrelationConfig:
     #   "mad_residual", per-wavelength-channel MAD of the time-series
     #                    residuals (Gibson+20; Nortmann+24; Cheverall+26)
     ccf_error_estimate: str = "propagated"
+    # Spectrum used as the cross-correlation template:
+    #   "planet", planetary atmospheric model (default)
+    #   "telluric", Earth-transmittance spectrum from the reference telluric
+    #               file, processed and Doppler-shifted exactly like a
+    #               planetary template.  A contamination diagnostic: a CCF
+    #               response at the planet velocity with a telluric template
+    #               indicates residual telluric structure rather than an
+    #               atmospheric signal.
+    ccf_template_source: str = "planet"
 
 
 # ---------------------------------------------------------------------------
@@ -630,6 +642,10 @@ class RetrievalConfig:
 
         ``"1D"``, log10(X_H2O), Kp, T_eq, v_wind  [use with BL19/Blain24]
         ``"1D_Gibson22"``, same + β noise scaling           [use with Gibson22 only]
+        ``"1D_alpha"``, Kp, V_rest, α on a FIXED nominal model
+            (amplitude scaling, no pRT in the sampler)  [use with Blain24/BL19]
+        ``"1D_alpha_Gibson22"``, Kp, V_rest, α, β on a FIXED nominal model
+            (α detection + Gibson22 β noise-rescaling)       [use with Gibson22 only]
         ``"1D_CtoO_met"``, C/O ratio, log10(Z/Z☉) via easyCHEM
         ``"1D_extended"``, log10(X_H2O,CH4,NH3,CO,CO2,HCN) + Kp + T_eq + v_wind + β
         ``"1D_extended_fast"``, same abundances + T_eq only (Kp/v_wind fixed)
@@ -692,6 +708,24 @@ class RetrievalConfig:
     # detrended residuals per wavelength channel over time, time-independent;
     # the Cheverall et al. 2026 / Gibson-style choice).  Only used by Cheverall26.
     error_model: str = "propagated"
+    # How the model template is distorted by the detrending inside the
+    # retrieval likelihood ("model reprocessing"):
+    #   "bare"      (default) re-run the preparing pipeline on the model
+    #               matrix alone.  The processed template carries no
+    #               background structure, but the removed component is
+    #               driven by the model itself.
+    #   "embedded"  embed the model in the empirical telluric/stellar
+    #               template (the structure the detrending removed from the
+    #               data) and re-run the pipeline on the combination.  The
+    #               processed template then carries background residuals,
+    #               which may correlate with the data's own background
+    #               residuals in the likelihood.
+    #   "projector" linear filter: project the data-derived temporal modes
+    #               (U) out of the model only.  Exact for unweighted PCA
+    #               detrending of an additive signal; the template carries
+    #               no telluric/stellar structure.  Single-night retrievals
+    #               only.
+    model_reprocessing: str = "bare"
     n_walkers: int = 32
     n_steps: int = 5000
     burnin: int = 1000
@@ -985,6 +1019,19 @@ class SimulationConfig:
             atm_raw = kwargs.pop("atmosphere", None)
             if isinstance(atm_raw, dict):
                 kwargs["atmosphere"] = _region(atm_raw)
+            # "Cheverall26" is an accepted alias for the likelihood of
+            # Cheverall et al. (2026), their Eq. 1: the Gaussian chi-squared
+            # form (engine name "Blain24") with the data-driven per-channel
+            # noise (error_model "mad_residual").  The alias sets both, and
+            # rejects a contradictory explicit error_model.
+            if str(kwargs.get("log_likelihood", "")).lower() == "cheverall26":
+                _em = kwargs.get("error_model")
+                if _em not in (None, "mad_residual"):
+                    raise ValueError(
+                        "retrieval.log_likelihood='Cheverall26' implies "
+                        f"error_model='mad_residual'; got '{_em}'.")
+                kwargs["log_likelihood"] = "Blain24"
+                kwargs["error_model"] = "mad_residual"
             return RetrievalConfig(**{
                 k: v for k, v in kwargs.items()
                 if k in RetrievalConfig.__dataclass_fields__

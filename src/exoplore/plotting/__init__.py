@@ -11,6 +11,9 @@ kpvsys
     Kp-Vsys detection maps, 1-D CCF slices, and combined detection panels.
 matrices
     Spectral time-series matrices and CCF time-series heatmaps.
+calibration
+    CRIRES+ calibration stages: molecfit telluric correction and the
+    per-order effective (super-)resolution measurement.
 """
 
 from exoplore.plotting.kpvsys import (
@@ -31,6 +34,11 @@ from exoplore.plotting.matrices import (
     plot_steps,
     plot_matrix_difference,
 )
+from exoplore.plotting.calibration import (
+    plot_telluric_correction,
+    plot_resolution_per_order,
+    telluric_correction_from_night,
+)
 
 __all__ = [
     # kpvsys (clean API)
@@ -49,4 +57,8 @@ __all__ = [
     "plot_mat_with_collapse",
     "plot_steps",
     "plot_matrix_difference",
+    # calibration
+    "plot_telluric_correction",
+    "plot_resolution_per_order",
+    "telluric_correction_from_night",
 ]

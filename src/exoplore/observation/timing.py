@@ -294,7 +294,13 @@ def get_event(inp_dat, JD_og):
 
     # Find in/out-of-event indices
     if event == 'transit':
-        transit_mid_JD = t_0
+        # Fold the reference epoch to the transit nearest the observed data.
+        # A transit ephemeris is periodic, so the event that matters is the one
+        # closest to the night, regardless of whether T_0 precedes or follows it
+        # (e.g. a JWST T_0 measured years after a ground-based run).  Using T_0
+        # verbatim would place the window far from the data and flag nothing.
+        transit_mid_JD = t_0 + period * int(
+            np.round((np.median(syn_jd) - t_0) / period))
         transit_begin_JD = transit_mid_JD - transit_duration / 2.0
         transit_end_JD = transit_mid_JD + transit_duration / 2.0
         in_transit = np.where(
@@ -306,7 +312,10 @@ def get_event(inp_dat, JD_og):
         return syn_jd, in_transit, out_transit, transit_mid_JD
 
     elif event == 'dayside':
+        # Fold to the secondary eclipse nearest the data (see transit note).
         eclipse_mid_JD = t_0 + period / 2.0
+        eclipse_mid_JD = eclipse_mid_JD + period * int(
+            np.round((np.median(syn_jd) - eclipse_mid_JD) / period))
         eclipse_begin_JD = eclipse_mid_JD - transit_duration / 2.0
         eclipse_end_JD = eclipse_mid_JD + transit_duration / 2.0
         in_eclipse = np.where(

@@ -84,8 +84,30 @@ def get_instrument_info(inp_dat: dict) -> InstrumentInfo:
     """
     inputs   = inp_dat.get("inputs_dir", "inputs/")
     planet   = inp_dat.get("Exoplanet_name", "")
+    ref      = _os.path.join(inputs, "reference_night")
 
-    # Allow absolute paths or paths relative to inputs_dir
+    # Mode C, real-data analysis (or reference-night mode): read the reduced
+    # night written by scripts/prepare_crires_night.py, exactly like IGRINS.
+    _real = (inp_dat.get("use_real_data", False)
+             or inp_dat.get("Use_real_data", False)
+             or inp_dat.get("specific_event", False))
+    if _real:
+        wave_file = _os.path.join(ref, "wave.fits")
+        sig_file      = _os.path.join(ref, "sig_0.fits")
+        snr_file      = _os.path.join(ref, "snr_0.fits")
+        JD_file       = _os.path.join(ref, "julian_date_0.fits")
+        airmass_file  = _os.path.join(ref, "airmass_0.fits")
+        n_orders_total = _read_n_orders(wave_file)
+        # Effective resolution measured from the slit function at prepare time
+        # (Nortmann A.1 super-resolution check); nominal 1e5 as a fallback.
+        res = _measured_resolution(_os.path.join(ref, "resolution_0.fits"))
+        return InstrumentInfo(
+            observatory=_OBS, wave_file=wave_file, sig_file=sig_file,
+            snr_file=snr_file, JD_file=JD_file, airmass_file=airmass_file,
+            gaps=None, n_orders_total=n_orders_total, res=res,
+        )
+
+    # Mode A, ETC-based simulation (no real data).
     def _resolve(key, default_name):
         val = inp_dat.get(key, "")
         if val and _os.path.isabs(val):
@@ -94,16 +116,6 @@ def get_instrument_info(inp_dat: dict) -> InstrumentInfo:
 
     wave_file = _resolve("wave_file", f"CRIRES_ETC_WAVE_{planet}.fits")
     snr_file  = _resolve("snr_file",  f"CRIRES_ETC_SNR_{planet}.fits")
-
-    # JD / airmass for specific_event mode (_0 suffix convention)
-    if inp_dat.get("specific_event", False):
-        ref = _os.path.join(inputs, "reference_night")
-        JD_file      = _os.path.join(ref, "julian_date_0.fits")
-        airmass_file = _os.path.join(ref, "airmass_0.fits")
-    else:
-        JD_file = airmass_file = ""
-
-    # Try to read n_orders from the ETC FITS file
     n_orders_total = _read_n_orders(wave_file)
 
     return InstrumentInfo(
@@ -111,12 +123,28 @@ def get_instrument_info(inp_dat: dict) -> InstrumentInfo:
         wave_file=wave_file,
         sig_file="",
         snr_file=snr_file,
-        JD_file=JD_file,
-        airmass_file=airmass_file,
+        JD_file="",
+        airmass_file="",
         gaps=None,
         n_orders_total=n_orders_total,
         res=_RES,
     )
+
+
+def _measured_resolution(path: str) -> float:
+    """Median effective resolution from the per segment resolution file written
+    by prepare_crires_night.py (Nortmann A.1 super-resolution check).  Returns
+    the nominal CRIRES+ resolution if the file is absent or unreadable."""
+    if not _os.path.exists(path):
+        return _RES
+    try:
+        from astropy.io import fits
+        import numpy as np
+        R = np.asarray(fits.getdata(path), float)
+        R = R[np.isfinite(R) & (R > 0)]
+        return float(np.median(R)) if R.size else _RES
+    except Exception:
+        return _RES
 
 
 def _read_n_orders(wave_file: str) -> int:

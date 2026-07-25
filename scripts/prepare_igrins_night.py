@@ -285,6 +285,101 @@ def _airmass_checked(hdr: dict, tol: float = 0.05) -> tuple[float, bool, float, 
     return (am_astro if corrupt else am_hdr), corrupt, am_hdr, am_astro
 
 
+def _secondary_wavelength_calibration_solution(
+    all_flux: np.ndarray,
+    all_sigma: np.ndarray,
+    all_wave: np.ndarray,
+    n_segments: int = 10,
+    poly_deg: int = 2,
+    max_lag: int = 3,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Secondary wavelength calibration applied to the SOLUTION (no flux resample).
+
+    Faithful to the IGRINS HRCCS lineage (Line et al. 2021; Brogi et al. 2023;
+    Smith et al. 2024; Cheverall et al. 2026): the flux is kept in pixel space
+    and is NEVER interpolated; instead the per-frame wavelength *solution* is
+    refined so that each frame's features align with the reference (last)
+    exposure.  Interpolating the flux would correlate neighbouring pixels and
+    inflate the downstream S/N; adjusting the solution avoids that entirely.
+    The model is later interpolated onto each frame's solution in the CCF and
+    likelihood.
+
+    Procedure, per exposure i and order h: measure the per-segment sub-pixel
+    shift Δx(p) of frame i relative to the reference (same cross-correlation as
+    the resampling version), fit a ``poly_deg``-order polynomial, then set the
+    frame's wavelength solution to ``wave_i[p] = interp(p + Δx(p), p, wave_ref)``
+    so that frame-i pixel p now carries the wavelength the reference assigns to
+    the aligned position.  Flux and sigma are returned unchanged.
+
+    Returns
+    -------
+    all_flux, all_sigma : ndarray
+        Unchanged (native pixel-space flux and sigma).
+    wave_perframe : ndarray, shape (n_spectra, n_orders, n_pixels)
+        Per-frame refined wavelength solution (µm).
+    """
+    n_spectra, n_orders, n_pixels = all_flux.shape
+    ref_idx  = n_spectra - 1
+    wave_ref = all_wave[ref_idx]
+    px       = np.arange(n_pixels, dtype=float)
+    centres  = np.linspace(0.08 * n_pixels, 0.92 * n_pixels, n_segments).astype(int)
+    half     = max(64, n_pixels // (2 * n_segments))
+    lags     = np.arange(-max_lag, max_lag + 1)
+
+    wave_out = np.broadcast_to(wave_ref, (n_spectra, n_orders, n_pixels)).copy()
+    drift_kms = []
+    for i in range(n_spectra):
+        if i == ref_idx:
+            continue
+        for h in range(n_orders):
+            f_ref = all_flux[ref_idx, h]
+            f_exp = all_flux[i, h]
+            good_exp = np.isfinite(f_exp)
+            if good_exp.sum() < 0.3 * n_pixels:
+                continue
+            seg_px, seg_shift = [], []
+            for c in centres:
+                a, b = max(0, c - half), min(n_pixels, c + half)
+                sr, se = f_ref[a:b].copy(), f_exp[a:b].copy()
+                mr, me = np.isfinite(sr), np.isfinite(se)
+                if mr.sum() < 0.5 * (b - a) or me.sum() < 0.5 * (b - a):
+                    continue
+                sr[~mr] = np.nanmedian(sr[mr]); se[~me] = np.nanmedian(se[me])
+                sr -= sr.mean(); se -= se.mean()
+                if sr.std() < 1e-12 or se.std() < 1e-12:
+                    continue
+                cc = np.array([np.dot(np.roll(se, L), sr) for L in lags])
+                k  = int(np.argmax(cc))
+                if k == 0 or k == len(cc) - 1:
+                    continue
+                y0, y1, y2 = cc[k-1], cc[k], cc[k+1]
+                den = 2.0 * y1 - y0 - y2
+                sub = 0.5 * (y2 - y0) / den if abs(den) > 1e-12 else 0.0
+                seg_px.append(c); seg_shift.append(lags[k] + sub)
+            if len(seg_shift) < poly_deg + 1:
+                continue
+            seg_px_a, seg_shift_a = np.array(seg_px, float), np.array(seg_shift, float)
+            med = np.median(seg_shift_a)
+            keep = np.abs(seg_shift_a - med) < 1.0
+            if keep.sum() < poly_deg + 1:
+                continue
+            seg_px_a, seg_shift_a = seg_px_a[keep], seg_shift_a[keep]
+            deg = min(poly_deg, len(seg_shift_a) - 1)
+            coeff = np.polyfit(seg_px_a, seg_shift_a, deg)
+            shift_px = np.clip(np.polyval(coeff, px), -1.0, 1.0)
+            # Refine the SOLUTION: frame-i pixel p carries the wavelength the
+            # reference assigns at the aligned position p + Δx(p).  Flux native.
+            wave_out[i, h] = np.interp(px + shift_px, px, wave_ref[h])
+            dlam = np.nanmean(np.diff(wave_ref[h]))
+            drift_kms.append(np.nanmax(np.abs(shift_px)) * dlam
+                             / np.nanmean(wave_ref[h]) * 299792.458)
+    if drift_kms:
+        print(f"  secondary wavecal (solution, no resample): max |Δv| = "
+              f"{np.nanmax(drift_kms):.3f} km/s (median "
+              f"{np.nanmedian(drift_kms):.3f}); reference = last exposure")
+    return all_flux, all_sigma, wave_out
+
+
 def _secondary_wavelength_calibration(
     all_flux: np.ndarray,
     all_sigma: np.ndarray,
@@ -654,21 +749,36 @@ def prepare(
         # exposure, applied by resampling flux & sigma onto the reference grid
         # (following Line+2021; Brogi+2023; Smith+2024).
         # ------------------------------------------------------------------
+        # wave_perframe: per-frame refined solution (n_spectra, n_orders,
+        # n_pixels), used by the engine to interpolate the MODEL onto each
+        # frame's grid.  None => engine falls back to the common wave_ref.
+        wave_perframe = None
         if apply_wavecal and wavecal_method == "doppler":
             print("Applying secondary wavelength calibration (per-order single "
                   "Doppler velocity, wave*(1+v/c)) ...")
             all_flux, all_sigma, wave_ref = _wavecal_doppler(
                 all_flux, all_sigma, all_wave
             )
+        elif apply_wavecal and wavecal_method == "resample":
+            _ord_name = {1: "linear (1st-order, Line+2021)",
+                         2: "2nd-order (Cheverall+2026)"}.get(
+                            wavecal_poly_deg, f"{wavecal_poly_deg}-order")
+            print(f"Applying secondary wavelength calibration ({_ord_name} stretch+shift, "
+                  "RESAMPLED to last-exposure grid) [legacy; correlates pixels] ...")
+            all_flux, all_sigma, wave_ref = _secondary_wavelength_calibration(
+                all_flux, all_sigma, all_wave, poly_deg=wavecal_poly_deg
+            )
         elif apply_wavecal:
             _ord_name = {1: "linear (1st-order, Line+2021)",
                          2: "2nd-order (Cheverall+2026)"}.get(
                             wavecal_poly_deg, f"{wavecal_poly_deg}-order")
             print(f"Applying secondary wavelength calibration ({_ord_name} stretch+shift, "
-                  "resampled to last-exposure grid) ...")
-            all_flux, all_sigma, wave_ref = _secondary_wavelength_calibration(
-                all_flux, all_sigma, all_wave, poly_deg=wavecal_poly_deg
-            )
+                  "SOLUTION-only, flux kept in pixel space) ...")
+            all_flux, all_sigma, wave_perframe = \
+                _secondary_wavelength_calibration_solution(
+                    all_flux, all_sigma, all_wave, poly_deg=wavecal_poly_deg
+                )
+            wave_ref = wave_perframe[-1]   # reference (last) grid for wave.fits
         else:
             print("Secondary wavelength calibration: SKIPPED (--no-wavecal); "
                   "using PLP wavelength solution directly.")
@@ -705,7 +815,13 @@ def prepare(
         fits.writeto(os.path.join(output_dir, _name("snr")),
                      all_flux / all_sigma, overwrite=True)
         fits.writeto(os.path.join(output_dir, _name("wave")),
-                     wave_ref, overwrite=True)  # reference (last-exposure) grid; all flux resampled onto it
+                     wave_ref, overwrite=True)  # reference (last-exposure) grid
+        # Per-frame refined wavelength solution (solution-only wavecal). The
+        # engine interpolates the MODEL onto this per exposure; the flux is
+        # never resampled.  Absent => engine uses the common wave grid.
+        if wave_perframe is not None:
+            fits.writeto(os.path.join(output_dir, _name("wave_perframe")),
+                         wave_perframe, overwrite=True)  # (n_spectra,n_orders,n_pixels)
 
         # Per-order observation files (only needed for Mode C real-data analysis)
         n_idx = n if multi else 0
@@ -758,10 +874,14 @@ def _parse_args() -> argparse.Namespace:
              "solution directly), as in analyses that omit it."
     )
     p.add_argument(
-        "--wavecal-method", choices=["stretch", "doppler"], default="stretch",
-        help="Drift-correction method: 'stretch' (per-segment polynomial pixel "
-             "stretch+shift, default) or 'doppler' (per-order single velocity, "
-             "wave*(1+v/c))."
+        "--wavecal-method", choices=["stretch", "resample", "doppler"],
+        default="stretch",
+        help="Drift-correction method: 'stretch' (default; per-segment "
+             "polynomial applied to the wavelength SOLUTION, flux kept in "
+             "pixel space, faithful to Line+2021/Smith+2024/Cheverall+2026), "
+             "'resample' (legacy: same polynomial but resamples the flux onto "
+             "a common grid; correlates pixels and inflates S/N), or 'doppler' "
+             "(per-order single velocity, resampled)."
     )
     p.add_argument(
         "--wavecal-poly-deg", type=int, default=2,
