@@ -936,6 +936,62 @@ class PathConfig:
     inputs_dir: str = ""
 
 
+@dataclass
+class DetectabilityConfig:
+    """Detectability-map sweep: run the simulation over a 2-D grid of two
+    atmospheric variables and record the recovered cross-correlation
+    significance at each grid point, one map per molecule.
+
+    Driven by ``scripts/run_detectability_maps.py`` (one subprocess per grid
+    point).  Two variable pairs are supported: metallicity vs C/O
+    (``x_variable='metallicity_wrt_solar'``, ``y_variable='carbon_to_oxygen_ratio'``)
+    and metallicity vs cloud-top pressure
+    (``y_variable='cloud_pressure_bar'``).
+
+    Attributes
+    ----------
+    enabled:
+        Turn the sweep on.
+    x_variable, y_variable:
+        The two AtmosphereRegionConfig fields swept (the pair must be one of
+        the two supported combinations above).
+    x_values, y_values:
+        Grid values for each axis.  Metallicity is ``metallicity_wrt_solar`` =
+        log10(Z/Zsun); cloud values are the cloud-top pressures in bar.
+        **Leave a list empty to use the built-in default grid for the chosen
+        pair**, or set it to tune the sampling.  Defaults:
+
+        * metallicity vs C/O -- log10 Z in
+          ``[-1.5, -1.0, -0.7, -0.5, -0.3, 0.0, 0.3, 0.5, 0.7, 1.0, 1.5]``
+          and C/O in
+          ``[0.30, 0.35, 0.40, 0.41, 0.50, 0.60, 0.70, 0.80, 0.90, 1.00, 1.10]``
+          (an 11x11 grid).
+        * metallicity vs clouds -- log10 Z in
+          ``[0, 0.33, 0.67, 1, 1.33, 1.67, 2, 2.33, 2.67, 3]`` (1-1000x solar)
+          and cloud-top pressure in
+          ``[1e-4, 2.78e-4, 7.74e-4, 2.15e-3, 6e-3, 1.67e-2, 4.64e-2, 0.129,
+          0.359, 1.0]`` bar (a 10x10 grid).
+    molecules:
+        Species to build a map for (one single-species template per map);
+        defaults to water only.
+    significance:
+        ``"cell_box"`` (default) reads the maximum significance in a small box
+        around the injected planet position, robust to the Kp-Vrest
+        degeneracy; ``"injected_point"`` reads only the injected cell.
+    box_half_vrest_kms, box_half_kp_kms:
+        Half-widths of that box (used when ``significance='cell_box'``).
+    """
+    enabled: bool = False
+    x_variable: str = "metallicity_wrt_solar"
+    y_variable: str = "carbon_to_oxygen_ratio"
+    x_values: List[float] = field(default_factory=list)
+    y_values: List[float] = field(default_factory=list)
+    molecules: List[str] = field(default_factory=lambda: ["H2O"])
+    significance: str = "cell_box"
+    box_half_vrest_kms: float = 3.0
+    box_half_kp_kms: float = 10.0
+
+
 # ---------------------------------------------------------------------------
 # Top-level SimulationConfig
 # ---------------------------------------------------------------------------
@@ -973,6 +1029,9 @@ class SimulationConfig:
     plotting: PlottingConfig = field(default_factory=PlottingConfig)
     output: OutputConfig = field(default_factory=OutputConfig)
     paths: PathConfig = field(default_factory=PathConfig)
+    detectability: DetectabilityConfig = field(
+        default_factory=DetectabilityConfig
+    )
     timing: bool = False
 
     # ------------------------------------------------------------------
@@ -1059,6 +1118,8 @@ class SimulationConfig:
             plotting=_safe(PlottingConfig, d.get("plotting", {})),
             output=_safe(OutputConfig, d.get("output", {})),
             paths=_safe(PathConfig, d.get("paths", {})),
+            detectability=_safe(
+                DetectabilityConfig, d.get("detectability", {})),
             timing=bool(d.get("timing", False)),
         )
 

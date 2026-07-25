@@ -39,6 +39,9 @@ from exoplore.plotting.calibration import (
     plot_resolution_per_order,
     telluric_correction_from_night,
 )
+from exoplore.plotting.detectability import (
+    plot_detectability_map,
+)
 
 __all__ = [
     # kpvsys (clean API)
@@ -61,4 +64,6 @@ __all__ = [
     "plot_telluric_correction",
     "plot_resolution_per_order",
     "telluric_correction_from_night",
+    # detectability
+    "plot_detectability_map",
 ]

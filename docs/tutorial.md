@@ -1,6 +1,6 @@
 # EXoPLORE Tutorial
 
-This tutorial walks through ten progressively more involved analyses. In particular, by the end the reader will know how to run the default HD 189733 b ANDES simulation, change the target planet, configure the atmospheric forward model, run a CARMENES NIR simulation, combine multiple nights, enable the Bayesian retrieval, assess retrieval pipeline bias, validate detection significances and retrieval uncertainties, and analyse real CRIRES+ and IGRINS data reduced from archive frames (WASP-127 b and L 98-59 d). We note that each tutorial builds on the previous one, so we recommend following them in order on a first reading. Readers new to the technique may wish to read the [Concepts primer](concepts.md) first.
+This tutorial walks through eleven progressively more involved analyses. In particular, by the end the reader will know how to run the default HD 189733 b ANDES simulation, change the target planet, configure the atmospheric forward model, run a CARMENES NIR simulation, combine multiple nights, enable the Bayesian retrieval, assess retrieval pipeline bias, validate detection significances and retrieval uncertainties, analyse real CRIRES+ and IGRINS data reduced from archive frames (WASP-127 b and L 98-59 d), and produce molecule detectability maps over a grid of atmospheric compositions. We note that each tutorial builds on the previous one, so we recommend following them in order on a first reading. Readers new to the technique may wish to read the [Concepts primer](concepts.md) first.
 
 ---
 
@@ -1085,7 +1085,7 @@ Cross-correlation of the combined H₂O + CO template with the WASP-127 b residu
 :width: 80%
 :align: center
 
-Kp-Vsys cross-correlation S/N map for WASP-127 b. The combined H₂O + CO signal peaks at K<sub>P</sub> ≈ 133 km s⁻¹ and v<sub>rest</sub> ≈ −7.5 km s⁻¹ at ~8.6σ; the blueshift is the jet signature (the map is normalised over |v| ∈ [20, 75] km s⁻¹ following Nortmann et al. 2025, which excludes the residual telluric band near v = 0). Produced by the run as `sn_map_<run>_SNR.pdf`.
+Kp-Vsys cross-correlation S/N map for WASP-127 b. The combined H₂O + CO signal peaks at K<sub>P</sub> ≈ 133 km s⁻¹ and v<sub>rest</sub> ≈ −7.5 km s⁻¹ at ~8.6σ; the blueshift is the jet signature. Following Nortmann et al. (2025), the map is normalised by the standard deviation over v ∈ [−75, −20] ∪ [+20, +75] km s⁻¹ across the whole K<sub>P</sub> range — the region outside the planetary signal — so the colour scale reads directly in σ. Produced by the run as `sn_map_<run>_SNR.pdf`.
 ```
 
 **Disk footprint:** with the default output settings a single-night CRIRES+ analysis writes ~80 MB (the per-segment CCF and matrix `.npz` products), plus a few MB of diagnostic PDFs. See [Outputs](outputs.md) to control which matrices are kept.
@@ -1142,7 +1142,69 @@ Pipeline stages for one IGRINS order of the L 98-59 d transit: the 1-D spectrum,
 Kp-Vsys cross-correlation S/N map for the H₂S template on the L 98-59 d transit. The red cross marks the expected planet position (v<sub>rest</sub> = 0). A marginal peak appears near the expected velocity, consistent with the tentative H₂S signal reported by Cheverall et al. (2026); at this per-transit significance the map is noise-dominated and no strong claim follows from one night. Produced by the run as `sn_map_<run>_SNR.pdf`.
 ```
 
+The `Cheverall26` pipeline also writes a **duration ("N_in") test**, a temporal diagnostic of the same kind as Fig. 4 of Cheverall et al. (2026): the in-transit exposures are ranked by proximity to mid-transit and the N_in most-central ones are co-added, for increasing N_in. A signal that is genuinely tied to the transit builds up as more in-transit exposures are added and peaks when N_in reaches the number of exposures spanning the transit duration (T₁₄), then dilutes as out-of-transit exposures enter.
+
+```{figure} figures/tutorial10_duration_l9859d.png
+:width: 95%
+:align: center
+
+Duration ("N_in") test for the H₂S template on L 98-59 d. **Left:** cross-correlation S/N as a function of systemic velocity and N<sub>in</sub> (the number of most-central in-transit spectra co-added). **Right:** the S/N-versus-N<sub>in</sub> curve at the expected velocity (red) and at the map peak (orange); both rise and peak at N<sub>in</sub> ≈ 13, the number of exposures spanning the transit duration T₁₄ (red dashed line). The build-up-then-peak-at-T₁₄ behaviour is what a transit-tied signal should show. Produced by the run as `duration_test_fig4_<run>.png`.
+```
+
 **Disk footprint:** a single IGRINS night writes a few tens of MB (per-order CCF and matrix products) plus the diagnostic PDFs.
+
+---
+
+## Tutorial 11: Detectability maps
+
+A detectability map answers a planning question: **across a range of atmospheric compositions, at what significance would my simulated observation recover a given molecule?** EXoPLORE sweeps two atmosphere variables on a grid, runs the full forward model + cross-correlation at each grid point, and records the recovered S/N at the injected planet position, producing one map per molecule. This is driven by the `detectability` config block and the `scripts/run_detectability_maps.py` runner, which launches **one subprocess per grid point** (memory-isolated and trivially parallel — ideal for a cluster job array).
+
+> **Approximate run time:** each grid point is a full simulation, so the total scales with the grid size. For the HD 189733 b ANDES case each point is ~32 min (all 76 YJHK orders), so the default 11×11 grid (121 points) is tens of hours run serially. This is meant to be **parallelised** — every grid point is an independent subprocess, so distribute them across cores/nodes (a cluster job array is ideal); an interrupted sweep also resumes, recomputing only the missing points. For a quick look, shrink the grid (`x_values`/`y_values`) or restrict `instrument.order_indices`. Each point writes only the Kp-Vsys map (per-order matrices are switched off), so the sweep is light on disk; the results themselves are one-line text files.
+
+### Step 1: Configure the sweep
+
+`configs/hd189733b_andes_detectability_h2o.json` is Tutorial 1's config plus a `detectability` block:
+
+```json
+"detectability": {
+  "enabled": true,
+  "x_variable": "metallicity_wrt_solar",
+  "y_variable": "carbon_to_oxygen_ratio",
+  "x_values": [-1.5, -1.0, -0.7, -0.5, -0.3, 0.0, 0.3, 0.5, 0.7, 1.0, 1.5],
+  "y_values": [0.30, 0.35, 0.40, 0.41, 0.50, 0.60, 0.70, 0.80, 0.90, 1.00, 1.10],
+  "molecules": ["H2O"],
+  "significance": "cell_box",
+  "box_half_vrest_kms": 5.0,
+  "box_half_kp_kms": 12.0
+}
+```
+
+- **`x_variable` / `y_variable`** — two supported pairs: **metallicity vs C/O** (above) and **metallicity vs cloud-top pressure** (`"y_variable": "cloud_pressure_bar"`). Metallicity is always `metallicity_wrt_solar` = log₁₀(Z/Z⊙). The swept variables are set on both the injected planet model and the matched-filter template, with equilibrium chemistry on, so metallicity and C/O map to abundances.
+- **`x_values` / `y_values`** — the grid on each axis. **Tune them freely, or leave a list empty (`[]`) to use the built-in default grid** for the chosen pair:
+    - *metallicity vs C/O* — log₁₀ Z in `[-1.5 … +1.5]` and C/O in `[0.30 … 1.10]` (the 11×11 grid shown above);
+    - *metallicity vs clouds* — log₁₀ Z in `[0 … 3]` (1–1000× solar) and cloud-top pressure in `[1e-4 … 1.0]` bar, log-spaced (10×10).
+  The map resolution is entirely yours to set here — a coarse grid for a quick survey, a fine one for a publication figure.
+- **`molecules`** — one single-species map per entry; defaults to `["H2O"]`. List several (e.g. `["H2O", "CO", "CH4"]`) to get one map each.
+- **`significance`** — `"cell_box"` (default) takes the maximum S/N in a small box around the injected position (`box_half_vrest_kms`, `box_half_kp_kms`), robust to the Kp-Vrest degeneracy over a single transit; `"injected_point"` reads only the exact injected cell.
+
+### Step 2: Run the sweep
+
+```bash
+python -u scripts/run_detectability_maps.py configs/hd189733b_andes_detectability_h2o.json --plot
+```
+
+For each molecule and grid point this writes a temporary single-point config, runs the engine as a subprocess, reads the resulting Kp-Vsys map, and appends one line `x  y  S/N` to `<output_root>/detectability/<molecule>/detectability_x<...>_y<...>.txt`. With `--plot` it renders the map at the end (or call `exoplore.plotting.plot_detectability_map` yourself on the results directory).
+
+### Step 3: The map
+
+```{figure} figures/tutorial11_detectability_hd189733b.png
+:width: 80%
+:align: center
+
+H₂O detectability for a single HD 189733 b ANDES transit (all 76 YJHK orders), over metallicity ([Fe/H]) and C/O, shown on a coarse grid for illustration — the bundled config uses the finer 11×11 default. The colour scale is the recovered cross-correlation S/N at the injected planet position; white contours mark the S/N = 3 and 5 detection thresholds. This tells the observer which compositions are recoverable in one transit and which require co-adding several. Produced with `exoplore.plotting.plot_detectability_map`.
+```
+
+To resume an interrupted sweep, just re-run the command: existing grid points are already saved as text files and only the missing points are recomputed (and `plot_detectability_map(..., )` can render a partial grid). Because each grid point is an independent process, the fastest way to fill a large grid is to run several points concurrently — the runner is a thin wrapper over per-point subprocesses precisely so this parallelises cleanly.
 
 ---
 

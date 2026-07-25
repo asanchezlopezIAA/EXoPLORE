@@ -565,9 +565,17 @@ def plot_Kp_Vrest(
         plot_variable = np.transpose(ccf_tot_sn, (1, 0))
         levels = np.arange(np.floor(ccf_tot_sn.min()),
                            np.ceil(ccf_tot_sn.max()) - 0.7, 1)
+        # x-axis ticks: keep the configured PLOT_CCF_XSTEP when it yields a
+        # readable number of labels; otherwise widen to the smallest "nice"
+        # step giving <= ~12 ticks over the displayed velocity range, so a
+        # small step over a wide v_rest range does not cram the axis.
+        _vspan = 2.0 * inp_dat['MAX_CCF_V_STD']
+        _xstep = inp_dat['PLOT_CCF_XSTEP']
+        if _vspan / max(_xstep, 1e-9) > 12:
+            _xstep = next((s for s in (10, 20, 25, 50, 100, 200, 500)
+                           if _vspan / s <= 12), 500)
         xlabels = np.arange(-inp_dat['MAX_CCF_V_STD'],
-                            inp_dat['MAX_CCF_V_STD'] + inp_dat['PLOT_CCF_XSTEP'],
-                            inp_dat['PLOT_CCF_XSTEP'])
+                            inp_dat['MAX_CCF_V_STD'] + _xstep, _xstep)
         ylabels = np.arange(-inp_dat['kp_max'], inp_dat['kp_max'] + 80, 80)
 
         kp_plot = ax.contourf(v_rest, kp_range, plot_variable, levels,
