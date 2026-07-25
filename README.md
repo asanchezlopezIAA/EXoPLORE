@@ -2,7 +2,7 @@
 
 [![Documentation Status](https://readthedocs.org/projects/exoplore/badge/?version=latest)](https://exoplore.readthedocs.io/en/latest/)
 
-**High-Resolution Exoplanet Atmosphere Simulator and Retrieval Framework**
+**High-Resolution Exoplanet Atmosphere Simulator and Retrieval Framework.**
 
 EXoPLORE is a Python framework for simulating and analysing this kind of
 observation end to end. It builds a full atmospheric forward model
