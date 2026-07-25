@@ -123,7 +123,7 @@ def plot_telluric_correction(
     ax0.legend(loc="lower left", fontsize=9, frameon=False)
     ttl = "Telluric correction (molecfit)"
     if segment_label:
-        ttl += f" — {segment_label}"
+        ttl += f" ({segment_label})"
     ax0.set_title(ttl, fontsize=11)
 
     ax1.plot(w, corrected, color="tab:red", lw=0.7,

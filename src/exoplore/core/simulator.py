@@ -1651,8 +1651,8 @@ class ExoploreSimulator:
             # (dKp, dV_rest) offsets of pipeline.kp_vrest_injection so the
             # signal can be placed at an offset velocity.  [0, 0] keeps the
             # nominal track (default; all other paths unchanged).  The
-            # offsets apply ONLY to the injected matrix — the analysis
-            # reference track (v_planet) is untouched.
+            # offsets apply ONLY to the injected matrix (the analysis
+            # reference track, v_planet, is untouched).
             _inj_off = cfg.pipeline.kp_vrest_injection
             if (cfg.observation.use_real_data
                     and cfg.observation.simulate_planet

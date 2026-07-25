@@ -30,10 +30,10 @@ series:
    (`pipeline.sysrem_iterations`).
 5. **Model filtering for retrievals** (`nortmann_model_filter`): the
    Gibson et al. (2022) filter in the division form of Nortmann 2026
-   Appendix A.3 (Eqs. A.1–A.3), so forward models suffer the same SYSREM
+   Appendix A.3 (Eqs. A.1 to A.3), so forward models suffer the same SYSREM
    distortions as the data.
 
-The Kp–Vsys maps, in/out-of-trail statistics and significance metrics are the
+The Kp-Vsys maps, in/out-of-trail statistics and significance metrics are the
 engine's standard CCF machinery; the map convention is
 `v_rest = offset from the expected planet trail`.
 
@@ -109,7 +109,7 @@ makes a complete end-to-end example.
    `timeseries_manifest.txt`.
 4. **Prepare**:
    `python scripts/prepare_crires_night.py mynight inputs/CRIRES_PLUS/L98-59c/reference_night`
-   — runs molecfit per nodding position if not cached (slow, once), then the
+   which runs molecfit per nodding position if not cached (slow, once), then the
    quality cut, cosmic-ray rejection, wavelength refinement and gating,
    resolution measurement and drift check, and writes the `reference_night/`
    files.
@@ -133,10 +133,10 @@ makes a complete end-to-end example.
 
    with the remaining blocks (atmosphere template species, cross_correlation)
    as in [the config reference](config_reference.md).
-6. **Run**: `python scripts/run_exoplore.py myconfig.json --run` — the engine
+6. **Run**: `python scripts/run_exoplore.py myconfig.json --run`. The engine
    ingests the reference night, detrends with division SYSREM, cross-correlates
    the petitRADTRANS template convolved to the measured resolution, and writes
-   Kp–Vsys maps and matrices under `paths.output_root`.
+   Kp-Vsys maps and matrices under `paths.output_root`.
 
 The reduced GJ 1214 b spectra of Nortmann et al. (2026) are also public
 (Zenodo record 19387252) and can be used to validate the analysis stage
