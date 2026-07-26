@@ -574,9 +574,17 @@ def plot_Kp_Vrest(
         if _vspan / max(_xstep, 1e-9) > 12:
             _xstep = next((s for s in (10, 20, 25, 50, 100, 200, 500)
                            if _vspan / s <= 12), 500)
-        xlabels = np.arange(-inp_dat['MAX_CCF_V_STD'],
-                            inp_dat['MAX_CCF_V_STD'] + _xstep, _xstep)
-        ylabels = np.arange(-inp_dat['kp_max'], inp_dat['kp_max'] + 80, 80)
+        # x-axis (v_rest) ticks anchored on 0 (so 0 is always labelled even when
+        # the step does not divide the velocity range evenly); ticks beyond the
+        # range are clipped by the axis limits.
+        _vmax_tick = int(np.ceil(inp_dat['MAX_CCF_V_STD'] / _xstep) * _xstep)
+        xlabels = np.arange(-_vmax_tick, _vmax_tick + _xstep, _xstep)
+        # y-axis (Kp) ticks: a clean 50 km/s grid anchored on 0 (so 0 is always
+        # labelled), spanning at least -200 to 200 km/s inclusive; ticks beyond
+        # the Kp range are clipped by the axis limits.
+        _kstep = 50
+        _kmax = max(200, int(np.ceil(inp_dat['kp_max'] / _kstep) * _kstep))
+        ylabels = np.arange(-_kmax, _kmax + _kstep, _kstep)
 
         kp_plot = ax.contourf(v_rest, kp_range, plot_variable, levels,
                               cmap=cm.viridis)
@@ -630,10 +638,18 @@ def plot_Kp_Vrest(
                 plot_variable = np.transpose(ccf_tot_sn[:, :, j, i], (1, 0))
                 levels = np.arange(np.floor(ccf_tot_sn.min()),
                                    np.ceil(ccf_tot_sn.max()) - 0.7, 1)
-                xlabels = np.arange(-inp_dat['MAX_CCF_V_STD'],
-                                    inp_dat['MAX_CCF_V_STD'] + inp_dat['PLOT_CCF_XSTEP'],
-                                    inp_dat['PLOT_CCF_XSTEP'])
-                ylabels = np.arange(-inp_dat['kp_max'], inp_dat['kp_max'] + 80, 80)
+                # x-axis ticks anchored on 0 (see 2D path), so 0 is labelled
+                # even when the step does not divide the velocity range evenly.
+                _xstep_m = inp_dat['PLOT_CCF_XSTEP']
+                _vmax_tick = int(np.ceil(inp_dat['MAX_CCF_V_STD'] / _xstep_m)
+                                 * _xstep_m)
+                xlabels = np.arange(-_vmax_tick, _vmax_tick + _xstep_m, _xstep_m)
+                # y-axis (Kp) ticks on a clean 50 km/s grid anchored on 0,
+                # spanning at least -200 to 200 km/s inclusive (see 2D path).
+                _kstep = 50
+                _kmax = max(200,
+                            int(np.ceil(inp_dat['kp_max'] / _kstep) * _kstep))
+                ylabels = np.arange(-_kmax, _kmax + _kstep, _kstep)
                 kp_plot = ax.contourf(v_rest, kp_range, plot_variable, levels,
                                       cmap=cm.viridis)
                 ax.tick_params(axis='both', width=1.5, direction='out', labelsize=16)

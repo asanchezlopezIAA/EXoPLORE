@@ -17,9 +17,10 @@ Pipeline steps (applied in this order per spectral order):
         the maxima in 80 wavelength bins (``pipeline_pseudocontinuum_norm``
         from ``exoplore.pipelines.bl19``), tracing the blaze/throughput
         envelope without distortion from absorption lines.
-    4.  SYSREM detrending with Max_Diff/ΔCCF optimisation, inject H2S
+    4.  PCA detrending (unweighted SVD, de Kok et al. 2013;
+        ``detrend_method='pca'``) with Max_Diff/ΔCCF optimisation, inject H2S
         model at offset velocity (+19 km/s, ``kp_vrest_injection=[70, 19]``),
-        run SYSREM for N=1..max, select N where marginal ΔCCF gain is
+        remove N=1..max common modes, select N where marginal ΔCCF gain is
         maximised (Holmberg & Madhusudhan 2022; Cheverall et al. 2023; 2026).
 
 Notes

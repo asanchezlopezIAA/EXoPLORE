@@ -344,7 +344,7 @@
   "all_significance_metrics": true,
   "ssim_metric": false,
   "study_velocity_ranges": false,
-  "plot_ccf_xstep": 50.0,
+  "plot_ccf_xstep": 100.0,
   "ccf_kernel": "matched_filter",
   "ccf_error_estimate": "mad_residual",
   "plot_velocity_zoom_kms": 60.0

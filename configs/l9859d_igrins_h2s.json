@@ -329,7 +329,8 @@
   ],
   "inject_scale_factor": 1.0,
   "sysrem_robust_halt": false,
-  "sysrem_delta_sigma_threshold": 0.01
+  "sysrem_delta_sigma_threshold": 0.01,
+  "detrend_method": "pca"
  },
  "cross_correlation": {
   "velocity_max_kms": 400.0,

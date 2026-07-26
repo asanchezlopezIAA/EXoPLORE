@@ -1096,7 +1096,7 @@ Kp-Vsys cross-correlation S/N map for WASP-127 b. The combined H₂O + CO signal
 
 The same real-data workflow applies to IGRINS. The `Cheverall26` pipeline implements the IGRINS high-resolution cross-correlation recipe of Cheverall et al. (2026), building on the IGRINS analysis lineage of Line et al. (2021), Brogi et al. (2023) and Smith et al. (2024). We use it here on the IGRINS/Gemini-South transit of the temperate super-Earth L 98-59 d (2021-03-12), the target and dataset of Cheverall et al. (2026), searching for H₂S.
 
-> **Approximate run time:** ~30 s on an Apple Mac Studio M2 Ultra (64 GB RAM), running `configs/l9859d_igrins_h2s.json` (26 IGRINS H- and K-band orders, one night, PCA/SYSREM detrending, no retrieval). The forward model (Blocks 3 to 6) is ~87% of the total; the Kp-Vsys maps are ~2 s. With `timing: true` the run writes a `timing_report_<date>.txt`.
+> **Approximate run time:** ~30 s on an Apple Mac Studio M2 Ultra (64 GB RAM), running `configs/l9859d_igrins_h2s.json` (26 IGRINS H- and K-band orders, one night, PCA detrending with one component, no retrieval). The forward model (Blocks 3 to 6) is ~87% of the total; the Kp-Vsys maps are ~2 s. With `timing: true` the run writes a `timing_report_<date>.txt`.
 
 ### Step 1: The reference night
 
@@ -1113,12 +1113,12 @@ IGRINS data reduced with the public IGRINS Pipeline Package are assembled into t
 "observation":  { "event_type": "transit", "use_real_data": true,
                   "specific_event": true, "specific_T0_bjd": 2459286.6373,
                   "exposure_time_seconds": 120.0, "simulate_planet": false },
-"pipeline":     { "name": "Cheverall26", "sysrem_iterations": 1, "snr_mask_threshold": 10.0 },
+"pipeline":     { "name": "Cheverall26", "detrend_method": "pca", "sysrem_iterations": 1, "snr_mask_threshold": 10.0 },
 "atmosphere":   { "ccf_template": { "species": ["H2", "He", "H2S"] } },
 "cross_correlation": { "velocity_max_kms": 400, "kp_max_kms": 150, "snr_exclude_kms": 15 }
 ```
 
-The `Cheverall26` pipeline uses a data-driven per-channel noise estimate (the median absolute deviation of each wavelength channel over time) and a single detrending component (`sysrem_iterations: 1`), matching the choices of Cheverall et al. (2026). The `snr_exclude_kms` window sets the velocity band excluded when estimating the CCF noise.
+The `Cheverall26` pipeline uses a data-driven per-channel noise estimate (the median absolute deviation of each wavelength channel over time) and removes a single common mode by unweighted PCA (`detrend_method: "pca"`, de Kok et al. 2013; Cheverall et al. 2023), with `sysrem_iterations: 1` setting the component count, matching the choices of Cheverall et al. (2026). The `snr_exclude_kms` window sets the velocity band excluded when estimating the CCF noise.
 
 ### Step 3: Run
 
