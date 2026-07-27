@@ -55,7 +55,7 @@ from exoplore.ccf.compute import (
     get_shifted_ccf_matrix,
 )
 from exoplore.ccf.statistics import Welch_ttest_map
-from exoplore.instruments.andes import (
+from exoplore.instruments.wavegrid import (
     From1OrderTo1Detector,
     get_WaveGrid,
     pixel_snr_one_order,

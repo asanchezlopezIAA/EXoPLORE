@@ -1,10 +1,12 @@
 """
-exoplore.instruments.andes
-==========================
+exoplore.instruments.wavegrid
+=============================
 
-Instrument model for the ANDES spectrograph at the ELT.
+Wavelength-grid and reference-night reader shared by every instrument
+(CARMENES, CRIRES, CRIRES+, IGRINS, ANDES) via ``get_WaveGrid``, plus the
+ANDES ETC-based instrument model (bands below).
 
-ANDES (formerly HIRES) covers five photometric bands at R ≈ 100,000:
+ANDES covers five photometric bands at R ≈ 100,000:
 
     +--------------+----------+---------+-------------------------------+
     | Config name  | Coverage | Orders  | ETC file extension            |
@@ -683,11 +685,12 @@ def get_WaveGrid(inp_dat, wave_file, sig_file, snr_file, JD_file,
         airmass_og = fits.open(airmass_file)[0].data if airmass_file != '' else None
         return wvl, wvl.shape[1], sig_og, snr_og, JD_og, airmass_og, wave_mid_og
 
-    elif inp_dat['instrument'] in ('IGRINS', 'IGRINS2'):
+    elif inp_dat['instrument'] in ('IGRINS', 'IGRINS2', 'CRIRES+'):
         # 'IGRINS' is the clean reference-night format written by
         # scripts/prepare_igrins_night.py (wave shape (n_orders, n_pixels),
         # sig/snr cubes (n_spectra, n_orders, n_pixels)); 'IGRINS2' is the
-        # single-target setup.  Both share the same read logic.
+        # single-target setup.  'CRIRES+' shares the identical layout from
+        # scripts/prepare_crires_night.py.  All share the same read logic.
         wvl = fits.open(wave_file)[0].data
         sig_og = fits.open(sig_file)[0].data if sig_file != '' else None
         snr_og = fits.open(snr_file)[0].data if snr_file != '' else None

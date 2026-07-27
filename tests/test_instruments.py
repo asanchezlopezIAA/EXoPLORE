@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from exoplore.instruments.andes import (
+from exoplore.instruments.wavegrid import (
     make_log_wave_grid,
     compute_pixel_velocity_scale,
     FromOrdersToDetectors,

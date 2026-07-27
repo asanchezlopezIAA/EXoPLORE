@@ -36,7 +36,7 @@ from __future__ import annotations
 from .base import InstrumentInfo
 
 # Per-instrument get_instrument_info() functions
-from .andes import (
+from .wavegrid import (
     get_instrument_info_YJHK,
     get_instrument_info_YJH,
     get_instrument_info_K,
@@ -49,7 +49,7 @@ from .igrins       import get_instrument_info as _igrins_info
 from .crires_plus  import get_instrument_info as _crires_plus_info
 
 # Utilities still used by the simulator
-from .andes import (
+from .wavegrid import (
     ANDESInstrument,
     Load_Instrumental_Info,
     get_WaveGrid,

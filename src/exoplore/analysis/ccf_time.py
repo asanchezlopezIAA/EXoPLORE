@@ -14,7 +14,7 @@ from typing import Optional, List, Dict, Tuple, Union, Set
 
 from exoplore.atmosphere.prt import convolve
 from exoplore.ccf.compute import get_max_CCF_peak
-from exoplore.instruments.andes import make_log_wave_grid
+from exoplore.instruments.wavegrid import make_log_wave_grid
 
 def plot_time_resolved_1D_CCFs(inp_dat,
     ccf_values_shift,

@@ -62,8 +62,8 @@ Every instrument module is responsible for returning the correct
     ANDES YJHK    →  76 orders
     ANDES YJH     →  64 orders
     ANDES K       →  21 orders
-    ANDES RIZ     →  (defined in andes.py)
-    ANDES UBV     →  (defined in andes.py)
+    ANDES RIZ     →  (defined in wavegrid.py)
+    ANDES UBV     →  (defined in wavegrid.py)
     CARMENES NIR  →  28 orders
     CARMENES VIS  →  44 orders
     CRIRES+       →  determined by the user-supplied ETC file
@@ -83,7 +83,7 @@ Adding a new instrument
 1.  Create ``src/exoplore/instruments/my_instrument.py``.
 2.  Implement ``get_instrument_info(inp_dat)`` returning an ``InstrumentInfo``
     named tuple (see below).  Follow the docstring conventions in
-    ``carmenes_nir.py`` or ``andes.py`` as a template.
+    ``carmenes_nir.py`` or ``wavegrid.py`` as a template.
 3.  Register the instrument name in ``instruments/__init__.py`` inside the
     ``_REGISTRY`` dictionary, one line.
 4.  Add a test in ``tests/test_instruments.py``.

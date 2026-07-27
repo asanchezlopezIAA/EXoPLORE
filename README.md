@@ -235,7 +235,7 @@ Edit the `USER INPUT` block at the top of the script with the planet's parameter
 
 ## Adding a new instrument
 
-i) Create `src/exoplore/instruments/my_instrument.py` implementing `get_instrument_info()`. Follow the pattern in `instruments/carmenes_nir.py` or `instruments/andes.py`.
+i) Create `src/exoplore/instruments/my_instrument.py` implementing `get_instrument_info()`. Follow the pattern in `instruments/carmenes_nir.py` or `instruments/wavegrid.py`.
 
 ii) Add one entry to `_REGISTRY` in `src/exoplore/instruments/__init__.py`:
 ```python
