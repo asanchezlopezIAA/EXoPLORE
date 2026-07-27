@@ -596,7 +596,11 @@ def plot_Kp_Vrest(
         norm = matplotlib.colors.Normalize(vmin=smin, vmax=smax)
         sm = plt.cm.ScalarMappable(norm=norm, cmap=kp_plot.cmap)
         sm.set_array([])
-        _cbar_step = 5
+        # Colorbar tick step adapts to the S/N range so a small (non-detection)
+        # range does not collapse to a single "0" tick (step 5 leaves only 0
+        # when the whole map sits within +/-5).
+        _cbar_span = smax - smin
+        _cbar_step = 1 if _cbar_span <= 8 else (2 if _cbar_span <= 20 else 5)
         _cbar_ticks = np.arange(
             int(np.ceil(smin / _cbar_step)) * _cbar_step,
             int(np.floor(smax / _cbar_step)) * _cbar_step + _cbar_step,

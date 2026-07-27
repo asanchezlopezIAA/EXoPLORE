@@ -1,5 +1,5 @@
 {
- "_description": "L 98-59 d IGRINS H2S \u2014 Cheverall26 N=1, HITRAN, matched-filter CCF (Nortmann/Gibson Eq.1), MAD-of-residuals error weighting. Fully faithful CCF recipe.",
+ "_description": "L 98-59 d IGRINS OBSERVED - Cheverall26 N=1 faithful CCF, AYT2 R=1e6 H2S template. Baseline rerun on the current engine.",
  "_setup": [
   "Isothermal atmosphere, T = 300 K.",
   "H2S cross-correlation template: fixed VMR 1e-4 (~10x solar; Cheverall et al. 2026, Sect. 2.5) -> mass fraction ~1.46e-3 in an H2/He continuum; use_easychem=false to isolate the H2S opacity for the single-species CCF.",
@@ -58,7 +58,7 @@
   "readout_time_seconds": 0.0,
   "overhead_time_seconds": 0.0,
   "specific_event": true,
-  "specific_T0_bjd": 2459286.6373,
+  "specific_T0_bjd": 2459286.63136,
   "use_real_data": true,
   "noise_scaling_factor": 1.0,
   "simulate_planet": false,
@@ -87,17 +87,17 @@
    "species": [
     "H2",
     "He",
-    "H2S"
+    "1H2-32S__AYT2.R1e+06_0.3-28.0mu"
    ],
    "use_easychem": false,
    "metallicity_wrt_solar": 10.0,
    "carbon_to_oxygen_ratio": 0.55,
    "mass_fractions": [
-    0.75,
-    0.2432,
-    0.00146
+    0.74655,
+    0.25198,
+    0.001473
    ],
-   "mean_molecular_weight": 2.33,
+   "mean_molecular_weight": 2.3078,
    "reference_pressure_bar": 0.01,
    "cloud_pressure_bar": null,
    "pressure_min_bar": 1e-06,
@@ -123,17 +123,17 @@
    "species": [
     "H2",
     "He",
-    "H2S"
+    "1H2-32S__AYT2.R1e+06_0.3-28.0mu"
    ],
    "use_easychem": false,
    "metallicity_wrt_solar": 10.0,
    "carbon_to_oxygen_ratio": 0.55,
    "mass_fractions": [
-    0.75,
-    0.2432,
-    0.00146
+    0.74655,
+    0.25198,
+    0.001473
    ],
-   "mean_molecular_weight": 2.33,
+   "mean_molecular_weight": 2.3078,
    "reference_pressure_bar": 0.01,
    "cloud_pressure_bar": null,
    "pressure_min_bar": 1e-06,
@@ -159,17 +159,17 @@
    "species": [
     "H2",
     "He",
-    "H2S"
+    "1H2-32S__AYT2.R1e+06_0.3-28.0mu"
    ],
    "use_easychem": false,
    "metallicity_wrt_solar": 10.0,
    "carbon_to_oxygen_ratio": 0.55,
    "mass_fractions": [
-    0.75,
-    0.2432,
-    0.00146
+    0.74655,
+    0.25198,
+    0.001473
    ],
-   "mean_molecular_weight": 2.33,
+   "mean_molecular_weight": 2.3078,
    "reference_pressure_bar": 0.01,
    "cloud_pressure_bar": null,
    "pressure_min_bar": 1e-06,
@@ -195,17 +195,17 @@
    "species": [
     "H2",
     "He",
-    "H2S"
+    "1H2-32S__AYT2.R1e+06_0.3-28.0mu"
    ],
    "use_easychem": false,
    "metallicity_wrt_solar": 10.0,
    "carbon_to_oxygen_ratio": 0.55,
    "mass_fractions": [
-    0.75,
-    0.2432,
-    0.00146
+    0.74655,
+    0.25198,
+    0.001473
    ],
-   "mean_molecular_weight": 2.33,
+   "mean_molecular_weight": 2.3078,
    "reference_pressure_bar": 0.01,
    "cloud_pressure_bar": null,
    "pressure_min_bar": 1e-06,
@@ -231,17 +231,17 @@
    "species": [
     "H2",
     "He",
-    "H2S"
+    "1H2-32S__AYT2.R1e+06_0.3-28.0mu"
    ],
    "use_easychem": false,
    "metallicity_wrt_solar": 10.0,
    "carbon_to_oxygen_ratio": 0.55,
    "mass_fractions": [
-    0.75,
-    0.2432,
-    0.00146
+    0.74655,
+    0.25198,
+    0.001473
    ],
-   "mean_molecular_weight": 2.33,
+   "mean_molecular_weight": 2.3078,
    "reference_pressure_bar": 0.01,
    "cloud_pressure_bar": null,
    "pressure_min_bar": 1e-06,
@@ -267,17 +267,17 @@
    "species": [
     "H2",
     "He",
-    "H2S"
+    "1H2-32S__AYT2.R1e+06_0.3-28.0mu"
    ],
    "use_easychem": false,
    "metallicity_wrt_solar": 10.0,
    "carbon_to_oxygen_ratio": 0.55,
    "mass_fractions": [
-    0.75,
-    0.2432,
-    0.00146
+    0.74655,
+    0.25198,
+    0.001473
    ],
-   "mean_molecular_weight": 2.33,
+   "mean_molecular_weight": 2.3078,
    "reference_pressure_bar": 0.01,
    "cloud_pressure_bar": null,
    "pressure_min_bar": 1e-06,
@@ -330,21 +330,22 @@
   "inject_scale_factor": 1.0,
   "sysrem_robust_halt": false,
   "sysrem_delta_sigma_threshold": 0.01,
-  "detrend_method": "pca"
+  "detrend_method": "pca",
+  "continuum_method": "cm2024"
  },
  "cross_correlation": {
-  "velocity_max_kms": 400.0,
+  "velocity_max_kms": 420.0,
   "velocity_step_kms": 0.5,
   "kp_max_kms": 150.0,
-  "noise_velocity_max_kms": 250.0,
+  "noise_velocity_max_kms": 400.0,
   "snr_exclude_kms": 15.0,
   "in_trail_left_right": 2,
   "normalized": true,
   "use_inverse_variance_weighting": true,
   "cc_metric": true,
   "ccf_snr": true,
-  "welch_ttest": true,
-  "all_significance_metrics": true,
+  "welch_ttest": false,
+  "all_significance_metrics": false,
   "ssim_metric": false,
   "study_velocity_ranges": false,
   "plot_ccf_xstep": 10.0,

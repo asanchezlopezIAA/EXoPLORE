@@ -332,7 +332,7 @@
  "cross_correlation": {
   "velocity_max_kms": 400.0,
   "velocity_step_kms": 0.5,
-  "kp_max_kms": 150.0,
+  "kp_max_kms": 200.0,
   "noise_velocity_max_kms": 250.0,
   "snr_exclude_kms": 15.0,
   "in_trail_left_right": 2,

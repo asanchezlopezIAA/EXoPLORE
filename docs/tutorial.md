@@ -1111,14 +1111,16 @@ IGRINS data reduced with the public IGRINS Pipeline Package are assembled into t
 "instrument":   { "name": "IGRINS", "observatory": "cerropachon",
                   "pixels_per_resolution_element": 3.3, "convolve_to_resolution": true },
 "observation":  { "event_type": "transit", "use_real_data": true,
-                  "specific_event": true, "specific_T0_bjd": 2459286.6373,
+                  "specific_event": true, "specific_T0_bjd": 2459286.63136,
                   "exposure_time_seconds": 120.0, "simulate_planet": false },
-"pipeline":     { "name": "Cheverall26", "detrend_method": "pca", "sysrem_iterations": 1, "snr_mask_threshold": 10.0 },
-"atmosphere":   { "ccf_template": { "species": ["H2", "He", "H2S"] } },
-"cross_correlation": { "velocity_max_kms": 400, "kp_max_kms": 150, "snr_exclude_kms": 15 }
+"pipeline":     { "name": "Cheverall26", "detrend_method": "pca", "continuum_method": "cm2024", "sysrem_iterations": 1, "snr_mask_threshold": 10.0 },
+"atmosphere":   { "ccf_template": { "species": ["H2", "He", "1H2-32S__AYT2.R1e+06_0.3-28.0mu"] } },
+"cross_correlation": { "velocity_max_kms": 420, "kp_max_kms": 150, "snr_exclude_kms": 15 }
 ```
 
 The `Cheverall26` pipeline uses a data-driven per-channel noise estimate (the median absolute deviation of each wavelength channel over time) and removes a single common mode by unweighted PCA (`detrend_method: "pca"`, de Kok et al. 2013; Cheverall et al. 2023), with `sysrem_iterations: 1` setting the component count, matching the choices of Cheverall et al. (2026). The `snr_exclude_kms` window sets the velocity band excluded when estimating the CCF noise.
+
+**Line list matters here.** The H₂S template uses the ExoMol AYT2 line list (`1H2-32S__AYT2.R1e+06_0.3-28.0mu`), not the default HITRAN H₂S opacity. For this temperate, near-threshold signal the line list is decisive: HITRAN does not recover the detection, while AYT2 reproduces the CCF S/N of Cheverall et al. (2026). Make sure the AYT2 opacity is present in your petitRADTRANS `input_data` (from the [ExoMol database](https://www.exomol.com/), converted to the petitRADTRANS line-by-line format, or fetched from the petitRADTRANS opacity server) before running.
 
 ### Step 3: Run
 
