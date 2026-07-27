@@ -20,11 +20,12 @@ from typing import Optional, Sequence, Tuple
 
 import numpy as np
 
-# Human-readable axis labels and whether the axis is log-scaled.
+# Axis labels (as in the reference implementation) and whether the plotted
+# values are log10 of the stored ones.  Metallicity is already log10 Z/Zsun.
 _AXIS_LABEL = {
-    "metallicity_wrt_solar": (r"[Fe/H] (log$_{10}$ Z/Z$_\odot$)", False),
+    "metallicity_wrt_solar": ("[Fe/H]", False),
     "carbon_to_oxygen_ratio": ("C/O", False),
-    "cloud_pressure_bar": (r"cloud-top pressure (bar)", True),
+    "cloud_pressure_bar": (r"log$_{10}$ P$_{\rm cloud}$ (bar)", True),
 }
 
 
@@ -42,34 +43,55 @@ def _read_points(data_dir: str) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     return np.asarray(xs), np.asarray(ys), np.asarray(sn)
 
 
+def _auto_last3_levels(snr_max: float) -> np.ndarray:
+    """The detection contour levels: the last three multiples of 5 at or below
+    the map maximum (so contours appear even when the whole map is high S/N).
+    Matches the ``auto_last3`` default of the reference implementation."""
+    highest = int(np.floor(snr_max / 5.0) * 5)
+    if highest < 5:
+        return np.array([], dtype=float)
+    return np.arange(5, highest + 1, 5)[-3:].astype(float)
+
+
 def plot_detectability_map(
     data_dir: str,
     x_variable: str = "metallicity_wrt_solar",
     y_variable: str = "carbon_to_oxygen_ratio",
     molecule: str = "",
-    contour_levels: Sequence[float] = (3.0, 5.0),
+    contour_levels="auto_last3",
     truth: Optional[Tuple[float, float]] = None,
     cmap: str = "viridis",
-    grid_size: int = 200,
+    grid_size: int = 280,
+    contour_linewidth: float = 3.0,
+    contour_fontsize: float = 27.0,
     fname: Optional[str] = None,
-    figsize: Tuple[float, float] = (7.0, 5.5),
+    figsize: Tuple[float, float] = (6.0, 7.0),
     save_plot: bool = True,
     show_plot: bool = False,
 ):
     """Filled-contour detectability map for one molecule.
+
+    A faithful port of the reference detectability plot: linear + nearest
+    ``griddata`` interpolation with light Gaussian smoothing, a 0-to-maximum
+    colour scale, dashed black detection contours, an optional gold truth star,
+    and a horizontal colorbar.
 
     Parameters
     ----------
     data_dir : str
         Directory holding the ``detectability_*.txt`` files for this molecule.
     x_variable, y_variable : str
-        The swept atmosphere variables (for axis labels / log scaling).
+        The swept atmosphere variables (for axis labels and log scaling; the
+        cloud-pressure axis is plotted in log10).
     molecule : str
         Species name, used in the title.
-    contour_levels : sequence of float
-        Significance levels to overlay as line contours (e.g. S/N = 3, 5).
+    contour_levels : "auto_last3", sequence of float, or None
+        Detection contours to overlay.  ``"auto_last3"`` (default) draws the
+        last three multiples of 5 at or below the map maximum, so contours
+        appear even when the whole map is well above 5 sigma; a sequence draws
+        those explicit S/N levels (kept if 0 < level < max); ``None`` draws none.
     truth : (x, y), optional
-        A reference point to mark with a star (e.g. the true composition).
+        Composition to mark with a gold star.
 
     Returns
     -------
@@ -77,6 +99,7 @@ def plot_detectability_map(
     """
     import matplotlib.pyplot as plt
     from scipy.interpolate import griddata
+    from scipy.ndimage import gaussian_filter
 
     x, y, sn = _read_points(data_dir)
     if x.size == 0:
@@ -87,48 +110,75 @@ def plot_detectability_map(
     xp = np.log10(x) if xlog else x
     yp = np.log10(y) if ylog else y
 
-    # regular grid for the filled contours
+    # Interpolation grid: linear, nearest-fill for the convex-hull edges, then a
+    # light Gaussian smooth (as in the reference implementation).
     gx = np.linspace(xp.min(), xp.max(), grid_size)
     gy = np.linspace(yp.min(), yp.max(), grid_size)
     GX, GY = np.meshgrid(gx, gy)
-    if np.unique(xp).size > 1 and np.unique(yp).size > 1:
-        GZ = griddata((xp, yp), sn, (GX, GY), method="cubic")
-        GZ = np.where(np.isnan(GZ),
-                      griddata((xp, yp), sn, (GX, GY), method="nearest"), GZ)
-    else:  # degenerate (1-D) grid: nearest only
-        GZ = griddata((xp, yp), sn, (GX, GY), method="nearest")
+    GZ_lin = griddata((xp, yp), sn, (GX, GY), method="linear")
+    GZ_near = griddata((xp, yp), sn, (GX, GY), method="nearest")
+    GZ = np.where(np.isnan(GZ_lin), GZ_near, GZ_lin)
+    GZ = gaussian_filter(GZ, sigma=0.4)
+    GZ = np.nan_to_num(GZ, nan=float(np.nanmin(sn)))
+
+    # Colour scale 0 to max, 30 filled levels.
+    vmin, vmax = 0.0, max(1.0, float(np.nanmax(sn)))
+    levels = np.linspace(vmin, vmax, 30)
 
     plt.rcParams.update({"font.size": 12, "axes.linewidth": 0.8})
     fig, ax = plt.subplots(figsize=figsize)
-    pcm = ax.contourf(GX, GY, GZ, levels=24, cmap=cmap)
-    cb = fig.colorbar(pcm, ax=ax)
-    cb.set_label("cross-correlation S/N")
+    cf = ax.contourf(GX, GY, GZ, levels=levels, cmap=cmap, vmin=vmin, vmax=vmax,
+                     extend="both", alpha=0.95, antialiased=False)
 
-    levels = sorted(L for L in contour_levels
-                    if np.nanmin(GZ) < L < np.nanmax(GZ))
-    if levels:
-        cs = ax.contour(GX, GY, GZ, levels=levels, colors="white",
-                        linewidths=2.0)
-        ax.clabel(cs, fmt=lambda v: f"S/N={v:.0f}", fontsize=10)
+    # Detection contours.
+    if contour_levels is None:
+        clev = np.array([], dtype=float)
+    elif isinstance(contour_levels, str) and contour_levels == "auto_last3":
+        clev = _auto_last3_levels(float(np.nanmax(GZ)))
+    else:
+        clev = np.asarray(contour_levels, dtype=float)
+        clev = np.unique(clev[(clev > 0.0) & (clev < float(np.nanmax(GZ)))])
+    if clev.size:
+        cs = ax.contour(GX, GY, GZ, levels=clev, colors="k", linestyles="--",
+                        linewidths=contour_linewidth)
+        fmt = {lev: f"S/N={lev:.0f}" for lev in clev}
+        texts = ax.clabel(cs, levels=clev, fmt=fmt, inline=False,
+                          inline_spacing=8, fontsize=contour_fontsize,
+                          colors="k", rightside_up=True)
+        for txt in texts:
+            txt.set_bbox(dict(facecolor="none", edgecolor="none", pad=0.0))
 
-    ax.scatter(xp, yp, s=8, c="k", alpha=0.35)  # sampled grid points
     if truth is not None:
         tx = np.log10(truth[0]) if xlog else truth[0]
         ty = np.log10(truth[1]) if ylog else truth[1]
-        ax.plot(tx, ty, marker="*", ms=18, color="gold",
-                markeredgecolor="k", label="truth")
-        ax.legend(loc="best", fontsize=10, frameon=False)
+        ax.scatter(tx, ty, marker="*", s=1500, facecolor="none",
+                   edgecolor="k", linewidth=1.0, zorder=40)
+        ax.scatter(tx, ty, marker="*", s=1500, facecolor="gold",
+                   edgecolor="k", linewidth=1.4, zorder=41)
 
-    ax.set_xlabel((r"log$_{10}$ " + xlabel) if xlog else xlabel)
-    ax.set_ylabel((r"log$_{10}$ " + ylabel) if ylog else ylabel)
-    imax = int(np.nanargmax(sn))
-    ax.set_title(
-        f"{molecule} detectability  (peak S/N {sn[imax]:.1f} at "
-        f"{x_variable.split('_')[0]}={x[imax]:g}, {y[imax]:g})", fontsize=11)
+    # Horizontal colorbar with adaptive integer ticks (step 1 / 2 / 5).
+    vmax_int = int(np.floor(vmax))
+    step = 1 if vmax_int <= 10 else (2 if vmax_int <= 20 else 5)
+    ticks = np.arange(0, vmax_int + 1, step)
+    # Add the exact maximum as a tick only when it is at least a full step past
+    # the last multiple, so the two labels do not overlap (e.g. "45 48").
+    if ticks.size == 0 or (vmax_int - ticks[-1]) >= step:
+        ticks = np.append(ticks, vmax_int)
+    cb = fig.colorbar(cf, ax=ax, orientation="horizontal", pad=0.14,
+                      fraction=0.06, ticks=ticks)
+    cb.set_label("S/N", fontsize=18)
+    cb.ax.tick_params(labelsize=17)
+
+    ax.set_title(molecule, fontsize=20)
+    ax.set_xlabel(xlabel, fontsize=20)
+    ax.set_ylabel(ylabel, fontsize=20)
+    ax.set_xlim(xp.min(), xp.max())
+    ax.set_ylim(yp.min(), yp.max())
+    ax.tick_params(axis="both", which="both", labelsize=16, width=1.2, length=6)
 
     if save_plot:
         out = fname or os.path.join(data_dir, f"detectability_{molecule}.png")
-        fig.savefig(out, bbox_inches="tight", dpi=150)
+        fig.savefig(out, bbox_inches="tight", dpi=300)
     if show_plot:
         plt.show()
     return fig, ax

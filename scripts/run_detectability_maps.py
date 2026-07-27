@@ -112,11 +112,80 @@ def _significance_from_map(map_npz: str, kp_planet: float, det) -> float:
     return float(np.nanmax(np.where(m, sn, np.nan)))
 
 
+def _run_grid_point(molecule, xv, yv, base, det, kp_planet, runner,
+                    runs_dir, mol_dir):
+    """Run one grid point in its own subprocess and record its significance.
+
+    Independent of every other point (own config, own output directory, own
+    result file), so points can run concurrently.  Returns a one-line status.
+    """
+    tag = f"x{_tag(xv)}_y{_tag(yv)}"
+    point = copy.deepcopy(base)
+    atm = point.setdefault("atmosphere", {})
+    # Injected atmosphere: push ONLY the swept metallicity / C-O onto every
+    # region that builds the injected model, and change nothing else, exactly
+    # as the legacy sweep did (it set Metallicity_wrt_solar and C_to_O on both
+    # limbs at each grid point and left species, chemistry mode, mass fractions
+    # and the per-region temperature untouched).  Each limb keeps its own
+    # temperature, so equilibrium chemistry gives a different abundance per limb
+    # and the combined transit spectrum stays asymmetric.  When the base config
+    # simulates limb asymmetries the injected model is built from the four
+    # terminator regions (not planet_model), so all of them must follow the
+    # grid; otherwise the injected atmosphere stays fixed and the map is flat.
+    inject_regions = ["planet_model"]
+    for limb in ("morning_day", "morning_night", "evening_day", "evening_night"):
+        if limb in atm:
+            inject_regions.append(limb)
+    for region in inject_regions:
+        r = atm.setdefault(region, {})
+        r[det.x_variable] = xv
+        r[det.y_variable] = yv
+    # Cross-correlation template: a single-species template for this molecule at
+    # the same swept composition (legacy species_cc = ['H2','He',<molecule>]
+    # with use_easyCHEM_cc = True).
+    tpl = atm.setdefault("ccf_template", {})
+    tpl["species"] = ["H2", "He", molecule]
+    tpl["use_easychem"] = True
+    tpl["mass_fractions"] = []
+    tpl[det.x_variable] = xv
+    tpl[det.y_variable] = yv
+    run_out = os.path.join(runs_dir, tag) + os.sep
+    point.setdefault("paths", {})["output_root"] = run_out
+    # keep only what we need to read the peak (small on disk): switch off every
+    # per-order matrix product; the Kp-Vsys S/N map is written regardless.
+    out = point.setdefault("output", {})
+    for _flag in ("save_mat_res", "save_mat_back", "save_ccf_store",
+                  "save_propag_noise", "save_U_sysrem", "save_mat_cc",
+                  "save_mat_noise", "save_std_noise"):
+        out[_flag] = False
+    point.setdefault("cross_correlation", {})["ccf_snr"] = True
+    point.setdefault("retrieval", {})["enabled"] = False
+    point.setdefault("detectability", {})["enabled"] = False
+    tmp_cfg = os.path.join(runs_dir, f"_cfg_{tag}.json")
+    Path(tmp_cfg).write_text(json.dumps(point, indent=1))
+
+    r = subprocess.run([sys.executable, runner, tmp_cfg, "--run"],
+                       capture_output=True, text=True)
+    maps = glob.glob(os.path.join(run_out, "**", "matrices",
+                                  "ccf_tot_sn_map_*.npz"), recursive=True)
+    if r.returncode != 0 or not maps:
+        return f"  {tag}: FAILED (rc={r.returncode}); {r.stderr.strip()[-200:]}"
+    sig = _significance_from_map(maps[0], kp_planet, det)
+    with open(os.path.join(mol_dir, f"detectability_{tag}.txt"), "w") as f:
+        f.write(f"{xv:.6g} {yv:.6g} {sig:.4f}\n")
+    return (f"  {tag}: {det.x_variable}={xv:g} {det.y_variable}={yv:g} "
+            f"-> S/N {sig:+.2f}")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("config")
     ap.add_argument("--plot", action="store_true",
                     help="render the maps at the end")
+    ap.add_argument("--workers", type=int, default=1,
+                    help="number of grid-point simulations to run concurrently "
+                         "(each is an independent subprocess; raise on a machine "
+                         "with spare cores and RAM)")
     args = ap.parse_args()
 
     repo_root = Path(__file__).resolve().parent.parent
@@ -141,64 +210,26 @@ def main() -> int:
     out_root = base.get("paths", {}).get("output_root", "outputs/")
     runner = str(repo_root / "scripts" / "run_exoplore.py")
 
+    from concurrent.futures import ThreadPoolExecutor, as_completed
     for molecule in det.molecules:
         mol_dir = os.path.join(out_root, "detectability", molecule)
         runs_dir = os.path.join(mol_dir, "runs")
         os.makedirs(runs_dir, exist_ok=True)
+        # resume: only the grid points without a result file are (re)run.
+        pending = [(xv, yv) for xv in x_values for yv in y_values
+                   if not os.path.isfile(os.path.join(
+                       mol_dir, f"detectability_x{_tag(xv)}_y{_tag(yv)}.txt"))]
+        ndone = len(x_values) * len(y_values) - len(pending)
         print(f"\n=== detectability map: {molecule} "
               f"({det.x_variable} x {det.y_variable}), "
-              f"{len(det.x_values)}x{len(det.y_values)} grid ===", flush=True)
-
-        for xv in x_values:
-            for yv in y_values:
-                tag0 = f"x{_tag(xv)}_y{_tag(yv)}"
-                done_file = os.path.join(mol_dir, f"detectability_{tag0}.txt")
-                if os.path.isfile(done_file):        # resume: skip finished points
-                    print(f"  {tag0}: already done, skipping", flush=True)
-                    continue
-                point = copy.deepcopy(base)
-                atm = point.setdefault("atmosphere", {})
-                # single-species template + injected atmosphere for this point
-                for region in ("planet_model", "ccf_template"):
-                    r = atm.setdefault(region, {})
-                    r["species"] = ["H2", "He", molecule]
-                    # metallicity / C-O only map to abundances via equilibrium
-                    # chemistry, so ensure it is on for the swept variables.
-                    r["use_easychem"] = True
-                    r[det.x_variable] = xv
-                    r[det.y_variable] = yv
-                tag = f"x{_tag(xv)}_y{_tag(yv)}"
-                run_out = os.path.join(runs_dir, tag) + os.sep
-                point.setdefault("paths", {})["output_root"] = run_out
-                # keep only what we need to read the peak (small on disk):
-                # switch off every per-order matrix product; the Kp-Vsys S/N
-                # map is written regardless and is all we read.
-                out = point.setdefault("output", {})
-                for _flag in ("save_mat_res", "save_mat_back", "save_ccf_store",
-                              "save_propag_noise", "save_U_sysrem",
-                              "save_mat_cc", "save_mat_noise", "save_std_noise"):
-                    out[_flag] = False
-                point.setdefault("cross_correlation", {})["ccf_snr"] = True
-                point.setdefault("retrieval", {})["enabled"] = False
-                point.setdefault("detectability", {})["enabled"] = False
-                tmp_cfg = os.path.join(runs_dir, f"_cfg_{tag}.json")
-                Path(tmp_cfg).write_text(json.dumps(point, indent=1))
-
-                r = subprocess.run([sys.executable, runner, tmp_cfg, "--run"],
-                                   capture_output=True, text=True)
-                maps = glob.glob(os.path.join(
-                    run_out, "**", "matrices", "ccf_tot_sn_map_*.npz"),
-                    recursive=True)
-                if r.returncode != 0 or not maps:
-                    print(f"  {tag}: FAILED (rc={r.returncode}); "
-                          f"{r.stderr.strip()[-200:]}", flush=True)
-                    continue
-                sig = _significance_from_map(maps[0], kp_planet, det)
-                with open(os.path.join(mol_dir,
-                                       f"detectability_{tag}.txt"), "w") as f:
-                    f.write(f"{xv:.6g} {yv:.6g} {sig:.4f}\n")
-                print(f"  {tag}: {det.x_variable}={xv:g} {det.y_variable}={yv:g}"
-                      f" -> S/N {sig:+.2f}", flush=True)
+              f"{len(x_values)}x{len(y_values)} grid; {len(pending)} to run, "
+              f"{ndone} already done, {args.workers} worker(s) ===", flush=True)
+        with ThreadPoolExecutor(max_workers=max(1, args.workers)) as ex:
+            futures = [ex.submit(_run_grid_point, molecule, xv, yv, base, det,
+                                 kp_planet, runner, runs_dir, mol_dir)
+                       for xv, yv in pending]
+            for fut in as_completed(futures):
+                print(fut.result(), flush=True)
 
     if args.plot:
         from exoplore.plotting import plot_detectability_map
