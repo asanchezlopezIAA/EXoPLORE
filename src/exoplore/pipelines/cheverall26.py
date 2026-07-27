@@ -515,9 +515,12 @@ def chev26_plot_duration_map(snmap, vsys_axis, vsys_expected, out_path,
     axL.axvline(vsys_expected, color="r", ls="--", lw=1.2, alpha=0.85)
     if n_in_expected is not None:
         axL.axhline(n_in_expected, color="r", ls="--", lw=1.2, alpha=0.85)
-    axL.set_xlabel(r"$V_{\rm sys}$ (km s$^{-1}$)", fontsize=13)
-    axL.set_ylabel(r"$N_{\rm in}$ (in-transit spectra co-added)", fontsize=13)
-    fig.colorbar(im, ax=axL, label="S/N")
+    axL.set_xlabel(r"$V_{\rm sys}$ (km s$^{-1}$)", fontsize=15)
+    axL.set_ylabel(r"$N_{\rm in}$ (in-transit spectra co-added)", fontsize=15)
+    axL.tick_params(labelsize=12)
+    _cb = fig.colorbar(im, ax=axL)
+    _cb.set_label("S/N", fontsize=14)
+    _cb.ax.tick_params(labelsize=11)
     # Right: slices vs N_in
     axR.plot(col, n_axis, color="#c1121f", lw=1.5, zorder=3,
              label=f"expected $V_{{\\rm sys}}$ ({vsys_expected:.1f})")
@@ -528,15 +531,16 @@ def chev26_plot_duration_map(snmap, vsys_axis, vsys_expected, out_path,
     if n_in_expected is not None:
         axR.axhline(n_in_expected, color="r", ls="--", lw=1.2, alpha=0.85,
                     label=f"$T_{{14}}$: $N_{{\\rm in}}$={n_in_expected}")
-    axR.set_xlabel(r"S/N vs $N_{\rm in}$", fontsize=12)
+    axR.set_xlabel(r"S/N vs $N_{\rm in}$", fontsize=14)
+    axR.tick_params(labelsize=12)
     axR.set_title(f"@expected: {sbest:.2f}@N={kbest}\n"
-                  f"@max: {smax:.2f}@N={kmx+1}", fontsize=9)
-    axR.legend(fontsize=7.5, loc="lower right", framealpha=0.9)
+                  f"@max: {smax:.2f}@N={kmx+1}", fontsize=11)
+    axR.legend(fontsize=9.5, loc="lower right", framealpha=0.9)
     axR.grid(alpha=0.25)
     if title is None:
         title = ("H$_2$S duration test"
                  + (f" (Kp={kp:.0f})" if kp is not None else ""))
-    fig.suptitle(title, fontsize=13)
+    fig.suptitle(title, fontsize=15)
     fig.tight_layout()
     fig.savefig(out_path, dpi=140)
     plt.close(fig)

@@ -53,6 +53,13 @@ def _auto_last3_levels(snr_max: float) -> np.ndarray:
     return np.arange(5, highest + 1, 5)[-3:].astype(float)
 
 
+def _mathtext_molecule(name: str) -> str:
+    """Render a plain molecule name with subscripted digits for a title,
+    e.g. ``H2O`` -> ``H$_2$O``, ``CO2`` -> ``CO$_2$``."""
+    import re
+    return re.sub(r"(\d+)", r"$_{\1}$", name)
+
+
 def plot_detectability_map(
     data_dir: str,
     x_variable: str = "metallicity_wrt_solar",
@@ -169,7 +176,7 @@ def plot_detectability_map(
     cb.set_label("S/N", fontsize=18)
     cb.ax.tick_params(labelsize=17)
 
-    ax.set_title(molecule, fontsize=20)
+    ax.set_title(_mathtext_molecule(molecule), fontsize=20)
     ax.set_xlabel(xlabel, fontsize=20)
     ax.set_ylabel(ylabel, fontsize=20)
     ax.set_xlim(xp.min(), xp.max())
