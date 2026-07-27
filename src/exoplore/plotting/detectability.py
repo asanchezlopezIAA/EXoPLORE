@@ -142,7 +142,7 @@ def plot_detectability_map(
         cs = ax.contour(GX, GY, GZ, levels=clev, colors="k", linestyles="--",
                         linewidths=contour_linewidth)
         fmt = {lev: f"S/N={lev:.0f}" for lev in clev}
-        texts = ax.clabel(cs, levels=clev, fmt=fmt, inline=False,
+        texts = ax.clabel(cs, levels=clev, fmt=fmt, inline=True,
                           inline_spacing=8, fontsize=contour_fontsize,
                           colors="k", rightside_up=True)
         for txt in texts:
