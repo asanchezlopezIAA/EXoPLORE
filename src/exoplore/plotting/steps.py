@@ -306,13 +306,17 @@ def _plot_sysrem_waterfall(
     _colvis = (wave_ins >= _mxlo) & (wave_ins <= _mxhi)
 
     plt.close('all')
+    # Publication export: retain the same artists and data while increasing
+    # all diagnostic typography by 1.4 for manuscript readability.
+    _pub_scale = 1.4
     plt.rcParams.update({
         "font.family": "DejaVu Sans",
-        "xtick.labelsize": 12, "ytick.labelsize": 12,
+        "xtick.labelsize": 12 * _pub_scale,
+        "ytick.labelsize": 12 * _pub_scale,
     })
     heights = [1.0] + [1.25] * (n_panels - 1)
     fig, axes = plt.subplots(
-        n_panels, 1, figsize=(9, 1.8 * n_panels),
+        n_panels, 1, figsize=(9 * _pub_scale, 1.8 * n_panels * _pub_scale),
         gridspec_kw={"height_ratios": heights, "hspace": 0.0})
     plt.subplots_adjust(hspace=0.0)
 
@@ -320,7 +324,7 @@ def _plot_sysrem_waterfall(
     ax = axes[0]
     _g1 = (wave_ins >= _mxlo) & (wave_ins <= _mxhi)
     if use_real_data:
-        ax.plot(wave_ins[_g1], mat_noisy[spec_idx, _g1], 'k', lw=1.0,
+        ax.plot(wave_ins[_g1], mat_noisy[spec_idx, _g1], 'k', lw=1.0 * _pub_scale,
                 label='Measured')
         _ylab = 'Measured flux (a.u.)'
     else:
@@ -329,13 +333,13 @@ def _plot_sysrem_waterfall(
         # visibly distinct from the noiseless one in this diagnostic. The data
         # and all matrices are unchanged; this affects the top panel only.
         _ny = _nl + 1.4 * (mat_noisy[spec_idx, _g1] - _nl)
-        ax.plot(wave_ins[_g1], _nl, 'k', lw=1.2, label='Noiseless')
+        ax.plot(wave_ins[_g1], _nl, 'k', lw=1.2 * _pub_scale, label='Noiseless')
         ax.plot(wave_ins[_g1], _ny, color='firebrick',
-                lw=0.8, alpha=0.8, label='Noisy')
+                lw=0.8 * _pub_scale, alpha=0.8, label='Noisy')
         _ylab = 'In-silico flux (a.u.)'
     ax.set_xlim(_mxlo, _mxhi)
-    ax.set_ylabel(_ylab, fontsize=12)
-    ax.legend(fontsize=10, loc='lower right', framealpha=0.6)
+    ax.set_ylabel(_ylab, fontsize=12 * _pub_scale)
+    ax.legend(fontsize=10 * _pub_scale, loc='lower right', framealpha=0.6)
     ax.tick_params(direction='in', which='both')
     ax.set_xticklabels([])
 
@@ -349,28 +353,29 @@ def _plot_sysrem_waterfall(
         _vis = mat[:, _colvis]
         vmin, vmax = np.nanpercentile(_vis, 2), np.nanpercentile(_vis, 98)
         ax.pcolormesh(wave_ins, np.arange(n_spectra) + 1, mat,
-                      cmap=_cmap, shading='auto', vmin=vmin, vmax=vmax)
+                      cmap=_cmap, shading='auto', vmin=vmin, vmax=vmax,
+                      rasterized=True)
         if len(with_signal) > 0:
-            ax.axhline(with_signal[0] + 1, color='red', ls='--', lw=1.0,
+            ax.axhline(with_signal[0] + 1, color='red', ls='--', lw=1.0 * _pub_scale,
                        alpha=0.8)
-            ax.axhline(with_signal[-1] + 1, color='red', ls='--', lw=1.0,
+            ax.axhline(with_signal[-1] + 1, color='red', ls='--', lw=1.0 * _pub_scale,
                        alpha=0.8)
         ax.set_xlim(_mxlo, _mxhi)
         ax.set_ylim(1, n_spectra)
-        ax.set_ylabel('Spectrum', fontsize=11)
+        ax.set_ylabel('Spectrum', fontsize=11 * _pub_scale)
         ax.tick_params(direction='in', which='both')
-        ax.text(0.01, 0.95, label, transform=ax.transAxes, fontsize=10,
+        ax.text(0.01, 0.95, label, transform=ax.transAxes, fontsize=10 * _pub_scale,
                 color='red', va='top', ha='left',
                 bbox=dict(boxstyle='round,pad=0.2', fc='white', alpha=0.75))
         if j < len(panels) - 1:
             ax.set_xticklabels([])
 
-    axes[-1].set_xlabel(r'$\lambda$ [$\mu$m]', fontsize=12)
+    axes[-1].set_xlabel(r'$\lambda$ [$\mu$m]', fontsize=12 * _pub_scale)
     axes[-1].ticklabel_format(useOffset=False, axis='x')
 
     if save_plot:
         fig.savefig(f"{plots_dir}pipeline_steps_{sim_name}.pdf",
-                    bbox_inches='tight', dpi=150)
+                    bbox_inches='tight', dpi=600)
     if show_plot:
         plt.show()
     plt.close(fig)

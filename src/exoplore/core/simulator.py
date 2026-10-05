@@ -3599,11 +3599,34 @@ class ExoploreSimulator:
                                 snmap=_snm, vsys_axis=_vsa,
                                 vsys_expected=_vs_t, kp=_kp_t,
                                 n_in_cross=_ncross)
+                            # Label the figure with the template it came from,
+                            # so a run never claims the wrong species.
+                            try:
+                                import re as _re_t
+                                _src_t = cfg.cross_correlation.ccf_template_source
+                                if _src_t in ("stellar", "telluric"):
+                                    _lbl_t = _src_t.capitalize()
+                                else:
+                                    from exoplore.atmosphere.prt import (
+                                        easychem_molecule as _echem_t)
+                                    # "CO_high_Sam" and friends are opacity
+                                    # variants of one molecule; the label wants
+                                    # only the molecule.
+                                    _mol_t = [_echem_t(_s).split("_")[0]
+                                              for _s in cc.species]
+                                    _lbl_t = ", ".join(
+                                        _re_t.sub(r"(\d+)", r"$_\1$", _m)
+                                        for _m in _mol_t
+                                        if _m not in ("H2", "He")
+                                    ) or None
+                            except Exception:
+                                _lbl_t = None
                             chev26_plot_duration_map(
                                 _snm, _vsa, _vs_t,
                                 f"{_plots_subdir_b7}/duration_test_fig4_"
                                 f"{_mini_b7['Simulation_name']}.png",
-                                kp=_kp_t, n_in_expected=_ncross)
+                                kp=_kp_t, n_in_expected=_ncross,
+                                species=_lbl_t)
                     save_compressed(
                         _base_dir_b7, sim_name,
                         {'stats_timing_pos': _chev_tim_pos,

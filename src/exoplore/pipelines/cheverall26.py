@@ -477,7 +477,8 @@ def chev26_timing_stats(ccf_all_orders, v_ccf, phase, berv, kp, vsys,
 
 
 def chev26_plot_duration_map(snmap, vsys_axis, vsys_expected, out_path,
-                             kp=None, vwin=50.0, title=None, n_in_expected=None):
+                             kp=None, vwin=50.0, title=None, n_in_expected=None,
+                             species=None):
     """Save the Cheverall+26 Fig. 4-right duration-test figure.
 
     Left: the S/N(N_in, V_sys) map with crosshairs at the expected V_sys and
@@ -486,6 +487,11 @@ def chev26_plot_duration_map(snmap, vsys_axis, vsys_expected, out_path,
     (red) and at the V_sys of the global map maximum (orange), plus a
     horizontal line marking the expected transit duration, to expose whether
     the signal builds coherently with N_in or is a localised bump.
+
+    ``species`` is the display label of whatever was cross-correlated (already
+    formatted for matplotlib, e.g. ``"H$_2$O"``).  It is only used to build the
+    default title, so the figure names the template it actually came from.
+    Pass ``title`` to override the whole suptitle.
     """
     import matplotlib
     matplotlib.use("Agg")
@@ -538,7 +544,7 @@ def chev26_plot_duration_map(snmap, vsys_axis, vsys_expected, out_path,
     axR.legend(fontsize=9.5, loc="lower right", framealpha=0.9)
     axR.grid(alpha=0.25)
     if title is None:
-        title = ("H$_2$S duration test"
+        title = ((f"{species} duration test" if species else "Duration test")
                  + (f" (Kp={kp:.0f})" if kp is not None else ""))
     fig.suptitle(title, fontsize=15)
     fig.tight_layout()
