@@ -1,6 +1,6 @@
 """
 exoplore.config.czesla2024
-========================
+==========================
 
 Explicit configuration for direct He I transmission preparation following
 Czesla et al. (2024), A&A 692, A230, doi:10.1051/0004-6361/202451003.

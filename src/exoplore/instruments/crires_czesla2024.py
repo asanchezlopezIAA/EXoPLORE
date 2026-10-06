@@ -1,6 +1,6 @@
 """
 exoplore.instruments.crires_czesla2024
-===================================
+======================================
 
 Explicit, target-segment-only molecfit preparation for the Czesla et al. (2024)
 direct helium workflow. ESO cr2res dark/flat/wavelength/nodding extraction is

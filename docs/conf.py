@@ -3,6 +3,7 @@ import sys
 
 sys.path.insert(0, os.path.abspath("../src"))
 autodoc_mock_imports = ["numpy", "scipy", "astropy", "matplotlib"]
+autodoc_use_legacy_class_based = True
 
 project = "EXoPLORE"
 author = "Alejandro Sánchez-López"

@@ -1,6 +1,6 @@
 """
 exoplore.pipelines.czesla2024
-===========================
+=============================
 
 Direct He I transmission preparation following Czesla et al. (2024),
 A&A 692, A230, https://doi.org/10.1051/0004-6361/202451003.

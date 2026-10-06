@@ -1,5 +1,5 @@
 """exoplore.pipelines.helium_math
-============================
+=================================
 
 Numerical primitives for direct, vacuum He I transmission analysis.
 

@@ -421,20 +421,24 @@ useful evidence to investigate, not substitutes for those checks.
 
 ## API reference
 
-```{automodule} exoplore.config.czesla2024
-:members:
+```{eval-rst}
+.. automodule:: exoplore.config.czesla2024
+   :members:
 ```
 
-```{automodule} exoplore.instruments.crires_czesla2024
-:members:
+```{eval-rst}
+.. automodule:: exoplore.instruments.crires_czesla2024
+   :members:
 ```
 
-```{automodule} exoplore.pipelines.czesla2024
-:members:
+```{eval-rst}
+.. automodule:: exoplore.pipelines.czesla2024
+   :members:
 ```
 
-```{automodule} exoplore.pipelines.helium_math
-:members:
+```{eval-rst}
+.. automodule:: exoplore.pipelines.helium_math
+   :members:
 ```
 
 ## References and attribution
