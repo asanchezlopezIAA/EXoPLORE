@@ -1,60 +1,56 @@
-# Direct helium transmission with the `czesla2024` preparation pipeline
+# Tutorial: Direct He I transmission spectroscopy with CRIRES+
 
-Choose `pipeline.name: "czesla2024"` to prepare an observed CRIRES+ transit
-time series for direct He I transmission spectroscopy. The normal EXoPLORE
-JSON configuration and runner select this workflow. Its products are a
-stellar-frame transmission map, a planetary-frame spectrum and helium light
-curves in both frames.
+This tutorial describes how to prepare an observed CRIRES+ transit for direct
+He I λ10833 transmission spectroscopy. Specifically, we use the WASP-121 b
+observations analysed by [Czesla et al. (2024)](https://doi.org/10.1051/0004-6361/202451003)
+to illustrate the reduction, telluric correction, construction of the stellar
+reference, and extraction of the planetary transmission spectrum. The
+`czesla2024` preparation choice selects this procedure through the usual
+EXoPLORE configuration and runner. In the following, we describe each step
+and the resulting transmission map, spectrum, and helium light curves.
 
-The scientific method and WASP-121 b benchmark come from **Czesla et al.
-(2024), “The overflowing atmosphere of WASP-121 b: High-resolution He I
-λ10833 transmission spectroscopy with VLT/CRIRES+,” A&A 692, A230**.
-Read and cite the [published paper](https://doi.org/10.1051/0004-6361/202451003)
-([open PDF](https://www.aanda.org/articles/aa/pdf/2024/12/aa51003-24.pdf)),
-especially Sections 2.1 and 3.4. This option implements the stated direct
-transmission procedure. The exact unpublished molecfit windows and continuum
-recipe are not available; the corresponding EXoPLORE choices are explicit.
+The observing and analysis methodology is presented in Sections 2.1 and 3.4
+of Czesla et al. (2024), *The overflowing atmosphere of WASP-121 b:
+High-resolution He I λ10833 transmission spectroscopy with VLT/CRIRES+*
+([open PDF](https://www.aanda.org/articles/aa/pdf/2024/12/aa51003-24.pdf)).
+The example uses the same observations as that study. Consequently, it
+illustrates a reanalysis of the published dataset, rather than an independent
+observation of the system. The fit windows and continuum prescription adopted
+here are specified below, since the publication does not provide every
+setting needed to reproduce those operations exactly.
 
-This preparation option is separate from the molecular cross-correlation
-analysis. Selecting it produces direct line products without loading pRT
-opacities, computing Kp–Vsys maps or running SYSREM. The existing preparation
-options continue to use their existing execution paths.
+## Step 1: Understand the transmission measurement
 
-## 1. Understand the measurement
+During a primary transit, absorption in the planetary atmosphere modifies
+the stellar spectrum over a narrow wavelength interval. In order to measure
+this additional absorption, we divide each corrected, normalised spectrum by
+a reference constructed from observations outside transit. The resulting
+transmission is approximately one away from variable spectral features;
+for example, a value of 0.98 corresponds to two per cent additional
+absorption relative to the reference.
 
-In this tutorial we will start from a reduced CRIRES+ night and follow the
-helium signal from individual spectra to a transmission map, an averaged
-spectrum and a light curve. We use WASP-121 b to make the steps concrete;
-afterwards, the same preparation choice can be configured for another target.
-Keep the complete example configuration open as you work through the steps.
+The planet's radial velocity changes during transit, while the stellar lines
+remain approximately stationary once the spectra are aligned in the stellar
+rest frame. Following Czesla et al. (2024), we construct the out-of-transit
+reference in this frame and divide every spectrum by it. We subsequently
+remove the planet's orbital velocity from the transmission spectra before
+co-adding the selected in-transit exposures. This sequence allows the stellar
+reference and the planetary average to be constructed in their respective
+rest frames.
 
-The quantity we measure is the spectrum during transit divided by a reference
-spectrum of the star outside transit. A value of one means that the spectra
-agree. A value of 0.98 means two per cent additional absorption relative to
-that reference. This is a spectral transmission measurement, so the light
-curves below should not be read as ordinary broadband transit photometry.
+Here we analyse the resolved helium triplet directly. This preparation choice
+therefore produces spectral transmission products without the molecular
+cross-correlation, SYSREM, or atmospheric retrieval stages used in other
+EXoPLORE tutorials.
 
-Telluric absorption comes from Earth's atmosphere. Stellar absorption stays
-nearly fixed after shifting each spectrum into the stellar frame. Planetary
-absorption moves through the stellar spectrum as the planet's radial velocity
-changes. We first correct the telluric absorption, align the stellar spectra,
-and divide each spectrum by a weighted out-of-transit stellar reference. We
-then shift the resulting transmission spectra into the planetary frame before
-averaging the chosen in-transit exposures.
-
-A trail in the map is a useful diagnostic. It is not by itself a detection
-probability, and residual sky or stellar structure can also appear in these
-products. The workflow preserves the observations needed to investigate those
-possibilities rather than replacing a failed correction with a flat spectrum.
-
-## 2. Obtain and reduce a CRIRES+ transit
+## Step 2: Reduce the CRIRES+ observations
 
 Obtain science frames and associated calibrations from the
 [ESO archive](https://archive.eso.org/). Follow the
 [CRIRES+ reduction guide](crires_reduction.md) for the cr2res dark, flat,
 trace/wavelength and AB nodding extraction stages. Work in a fresh reduction
 directory; keep original compressed and decompressed observations intact.
-The new preparation step consumes the extracted products, not raw images.
+The helium preparation takes the extracted one-dimensional spectra as input.
 
 The upstream reduction should provide:
 
@@ -63,18 +59,19 @@ The upstream reduction should provide:
   with its extracted file path;
 - the original raw FITS files referenced by the extracted-product provenance.
 
-Use the physical segment identifier, such as `CHIP1.INT1_02`, rather than an
-order index that may change when orders are sorted. For the WASP-121 benchmark,
-this segment covers approximately 1077.34–1084.58 nm.
+For WASP-121 b, the helium triplet lies in `CHIP1.INT1_02`, which covers
+approximately 1077.34–1084.58 nm. We identify this segment by its physical
+name because its numerical index can change when the extracted orders are
+sorted.
 
 The extracted A/B files can share a primary header inherited from one input
 frame. Therefore the individual midpoint is reconstructed from the manifest
-time, nod and raw-file provenance. It is not taken blindly from the extracted
-header. The exposure-duration keyword is explicitly configured. For the
-benchmark, `ESO DET SEQ1 EXPTIME` yields 451.4352425 s; using the nominal 450 s
-value is a different timing choice.
+time, nod position, and corresponding raw-file header. This ensures that each
+spectrum receives its own exposure midpoint for the barycentric and orbital
+velocity calculations. In this example, the configured keyword
+`ESO DET SEQ1 EXPTIME` gives an exposure duration of 451.4352425 s.
 
-## 3. Configure the target and selections
+## Step 3: Inspect the configuration and select the exposures
 
 Start from `configs/wasp121b_crires_czesla2024.json`. Its principal choices are:
 
@@ -104,15 +101,18 @@ Start from `configs/wasp121b_crires_czesla2024.json`. Its principal choices are:
 }
 ```
 
-This excerpt shows the structure; **use the complete example file**, since
-scientific settings in `pipeline.czesla2024` are required rather than inferred.
-The typed `Czesla2024Config` describes all fields.
+The excerpt above shows the principal choices. Use the complete example file,
+which also specifies the ephemeris, velocities, continuum windows, helium
+line data, and uncertainty calculation. Set `input_path` to the corrected
+spectra prepared in Step 5, and choose an unused `output_root` for this run.
 
-Running numbers are one-based and chronological. The night analysed by Czesla et al. (2024) uses
+Running numbers start at one and follow chronological order. For the night
+analysed by Czesla et al. (2024), we use exposures
 1–10 and 36–40 for the reference and 16–32 for the second-to-third-contact
-coadd. **For another dataset, supply its own selections.** The pipeline does
-not require 40 exposures or quietly reuse the benchmark selections. Reference
-and in-transit selections must be disjoint, unique and within the dataset.
+co-addition. These selections are entered in `reference_running_numbers`
+and `in_transit_running_numbers`, respectively. For another dataset, select
+the appropriate out-of-transit baseline and in-transit interval from its own
+observing sequence. The two selections must be disjoint.
 
 For a new target, also supply its coordinates, observatory longitude/latitude/
 height, systemic velocity, ephemeris, Kp and contact phases. The current orbital
@@ -128,15 +128,16 @@ python scripts/run_exoplore.py configs/wasp121b_crires_czesla2024.json
 
 Without `--run`, this prints the selected recipe and exits. The direct branch
 requires observed transit data, zero SYSREM iterations and disabled molecular
-retrieval. It does not silently reinterpret a conflicting configuration.
+retrieval, as shown in the example configuration.
 
-## 4. Validate telluric correction on one exposure
+## Step 4: Test the telluric correction on one exposure
 
 Install `esorex`, `cr2res` and `molecfit` as described in the reduction guide.
-The new wrapper resolves `esorex` on PATH, or uses the explicit executable in
+The preparation script resolves `esorex` on PATH, or uses the executable in
 `configs/crires_czesla2024_molecfit.json`. It fits only the selected segment.
 
-Preview a one-exposure pilot:
+In order to assess the telluric correction before processing a full night,
+first preview a single-exposure run. Replace `mynight` with your data directory:
 
 ```bash
 python scripts/prepare_crires_czesla2024.py \
@@ -148,48 +149,45 @@ python scripts/prepare_crires_czesla2024.py \
   --pilot-exposure 1
 ```
 
-Add `--run` to execute it. A fit typically costs minutes per exposure;
-the example limits each recipe to 240 s. The pilot's manifest sidecar and
-output directory must be new. It does not change the original manifest.
+Add `--run` to execute the test. A fit typically takes minutes per exposure;
+the example limits each recipe to 240 s. Use a new output directory. The
+script creates a separate manifest for this test and preserves the original
+night manifest.
 
 The example settings specify water fitting, O2 at a fixed relative column,
 separate constant continua for the anchor windows and a fitted Gaussian
 instrumental kernel. Wavelength refinement starts with `WLC_CONST=0` and
-`WLC_N=1`. Box and Lorentzian widths are explicitly zero. These settings avoid
-the installed recipe's large starting wavelength displacement and nonzero
-fixed-kernel widths; they are local validated settings, not claimed verbatim
-author settings.
+`WLC_N=1`, with box and Lorentzian widths set to zero. These are the
+EXoPLORE settings tested for this example; the exact recipe settings used by
+Czesla et al. (2024) are not fully specified in the publication.
 
 The example anchor windows, in native vacuum nm, are 1077.54–1077.62,
 1080.20–1080.31, 1081.32–1081.43, 1083.65–1083.74 and 1084.04–1084.16.
 An anchor is removed for a given exposure when it overlaps a predicted
 observer-frame He component within the configured 50 km/s guard. All anchors
-must remain inside the selected segment. No unrelated order is fitted.
+must remain inside the selected segment. This keeps the telluric fit within
+the helium order while excluding the expected planetary absorption.
 
 Inspect the fitted residuals, kernel width and wavelength adjustment before
-continuing. Czesla et al. (2024) report adjustments of order 0.1 km/s. A fit displaced by
-20–100 km/s is a calibration failure to investigate, not an acceptable
-correction because a plot looks convincing. The example's 1 km/s rejection
-gate is a failure threshold, not a claim of 0.1 km/s calibration accuracy.
-
-For orientation, the first-exposure test with this wrapper on the benchmark
-night returned **+0.176 km/s**. Its model fit took about one minute on the
-local test machine. These are measured pilot results, not values that your
-dataset is expected to reproduce. The important question is whether a small
-wavelength refinement brings the telluric anchors into agreement without
-distorting the helium region. Inspect A and B nods separately as well: a
-consistent nod-dependent offset deserves investigation even when every fit
-passes the numerical gate.
+continuing. Czesla et al. (2024) report wavelength adjustments of order
+0.1 km/s. The first-exposure test for this example returned +0.176 km/s;
+however, the appropriate refinement must be assessed for each observation.
+Displacements of 20–100 km/s indicate a calibration problem that must be
+resolved before constructing transmission spectra. The example rejects
+adjustments larger than 1 km/s, although passing this threshold alone does
+not establish the calibration precision. Examine the residuals and the
+adjustments for the A and B nod positions separately.
 
 The wrapper runs official `molecfit_calctrans` after an accepted model fit.
 Full-grid `mlambda` provides refined vacuum wavelengths, and dimensionless
 `mtrans` provides absorption transmission. `mflux`, which includes continuum
-scaling, is not a telluric divisor. Failed status, width, displacement or
-full-grid checks stop preparation; there is no unity or unrelated-order fallback.
+scaling, should therefore not be used to divide the observed spectra.
+Preparation stops if the fitted model or wavelength solution fails its
+configured checks.
 
-## 5. Prepare the full corrected night
+## Step 5: Correct the full observing sequence
 
-Once the pilot is credible, remove `--pilot-exposure`, specify a **new** output
+Once the single-exposure correction has been assessed, omit `--pilot-exposure`, specify a **new** output
 directory matching `pipeline.czesla2024.input_path`, and pass `--run`:
 
 ```bash
@@ -203,16 +201,17 @@ python scripts/prepare_crires_czesla2024.py \
 ```
 
 This is a serial per-exposure fit and can take roughly an hour for a 40-frame
-night, depending on the system and convergence. A fresh fit is not needed
-when credible, provenance-verified per-exposure corrections already exist.
-The old exploratory nod-wide caches are not compatible inputs to this recipe.
+night, depending on the system and convergence. If validated per-exposure
+corrections from this preparation already exist, they can be reused directly.
 
 Outputs include a `night_report.json` and each exposure's recipe commands,
 logs, quality checks and `correction.npz`. Input raw/extracted files are
 read-only. The transmission stage verifies extraction hashes, individual raw
 header hashes, correction hashes and the wavelength gate again.
 
-## 6. Run direct transmission preparation
+## Step 6: Construct the transmission spectra
+
+We now apply the direct preparation to the corrected observing sequence:
 
 ```bash
 python scripts/run_exoplore.py configs/wasp121b_crires_czesla2024.json --run
@@ -242,18 +241,20 @@ Velocities are km/s, positive for recession; BERV is Astropy's additive
 barycentric correction. Native cr2res wavelengths are vacuum. Do not apply an
 additional air-to-vacuum conversion. All arrays and configured windows use nm.
 
-The example's first-order continuum bands are an explicit implementation
-choice inspired by [Allart et al. (2023)](https://arxiv.org/abs/2307.05580),
-and is distinct from the normalization described by Czesla et al. (2024). Their degree and minimum valid
-pixel count are configurable. No cosmic-ray replacement, frame dropping or
-polynomial detrending against airmass is silently added.
+In order to normalise the spectra consistently, the example fits a
+first-order polynomial in the stellar-frame bands 1082.3–1082.6 nm and
+1083.9–1084.2 nm. This choice is informed by
+[Allart et al. (2023)](https://arxiv.org/abs/2307.05580).
+It is specified explicitly because the complete continuum prescription of
+Czesla et al. (2024) is unavailable. The bands, polynomial degree, and minimum
+number of valid pixels can be adjusted in the configuration. Assess their
+sensitivity for the target under study before interpreting the line profile.
 
-## 7. Read the map, spectrum and curves
+## Step 7: Inspect the transmission map, spectrum, and light curves
 
-Now we can inspect what the preparation has actually produced. The figure
-below comes from running this EXoPLORE option on the original WASP-121 b
-benchmark observations. It is an example of the diagnostic output, rather
-than a copy of a figure from the paper.
+The following figure shows the products obtained with this preparation
+choice for the WASP-121 b observations analysed by Czesla et al. (2024).
+We describe the physical quantities in each panel below.
 
 ```{figure} figures/czesla2024_wasp121_diagnostic.png
 :alt: Stellar-frame transmission map, planetary-frame helium spectrum, and two helium light curves from the WASP-121 b benchmark observations.
@@ -270,53 +271,57 @@ configuration requests 512. These uncertainties are conditional on the adopted
 correction and preparation choices, as discussed in Step 9.
 ```
 
-### Follow the moving absorption in the stellar frame
+### Stellar-frame transmission map
 
-Read the map from bottom to top: each row is one exposure, and time zero is
-mid-transit. We have aligned the star, so a residual tied to a stellar line
-would remain at approximately the same wavelength. Absorption travelling
-with the planet instead follows a sloping path, moving from shorter to longer
-wavelengths across transit. The red tracks show where the three helium
-components would lie for the configured orbital velocity. They are predictions
-from the ephemeris, not fits to the coloured structure.
+The top panel shows spectral transmission as a function of wavelength and
+time relative to mid-transit. Each row corresponds to one exposure, with
+time increasing upwards. Since the spectra are aligned in the stellar frame,
+residual stellar features remain at approximately fixed wavelengths. In
+contrast, absorption moving with the planet changes wavelength as its
+line-of-sight orbital velocity evolves during transit. The red tracks show
+the expected positions of the three helium components for the adopted
+ephemeris and orbital velocity.
 
-We can see reduced transmission near the stronger pair of helium tracks in
-this example. The useful next question is whether that structure survives
-changes in reference selection, OH treatment and nod subset. A visually
-prominent trail alone cannot establish its physical origin. Pay particular
-attention to structure that continues well outside transit or follows the
-terrestrial OH positions rather than the predicted planetary motion.
+Reduced transmission is visible near the stronger pair of helium tracks.
+To assess this structure, compare its time and wavelength dependence with
+the planetary tracks and terrestrial OH positions. In particular, repeat
+the preparation with different reference selections and nod subsets to
+establish how these choices affect the recovered feature.
 
-### Bring the planet to rest before averaging
+### Planetary-frame transmission spectrum
 
-The second panel answers a different question: what line profile remains when
-we remove the planet's orbital motion? Each transmission spectrum is shifted
-first, and only then are exposures 16–32 averaged. Averaging in the stellar
-frame would spread a moving line over its orbital velocity range and change
-its apparent width and depth.
+The second panel shows the average transmission spectrum after removal of
+the planet's orbital motion. Specifically, we shift each transmission
+spectrum to the planetary rest frame and subsequently co-add exposures
+16–32, following the selection of Czesla et al. (2024). This alignment
+preserves a feature travelling with the planet; averaging in the stellar
+frame would broaden it over the range of orbital velocities sampled during
+the selected interval.
 
-The two stronger triplet components are close together and can form one
-blended feature; the weaker component lies to their blue side. The dip near
-the stronger pair is visible in the example. To measure a residual velocity,
-fit all three components with a shared shift as in Step 8. Do not estimate a
-wind speed from the deepest pixel: noise, blending and the intrinsic profile
-all affect that pixel. Agreement with the paper should be assessed using the
-same selections, wavelength convention and definition of width.
+The two stronger triplet components are closely spaced and appear as a
+blended absorption feature, whereas the weaker component lies at shorter
+wavelengths. In order to measure a residual velocity or line width, we fit
+the three components jointly as described in Step 8. This accounts for
+their relative positions and strengths. A quantitative comparison with
+Czesla et al. (2024) requires consistent exposure selections, wavelength
+conventions, and definitions of the fitted width.
 
-### Ask when the absorption changes
+### Helium light curves
 
-The last two panels retain the individual exposure times. In the planetary
-frame, a fixed wavelength band follows the predicted moving line. In the
-stellar frame, a fixed band stays on the star. They consequently sample
-different parts of a travelling feature and need not have the same shape.
-The example also uses different band widths in the two frames, so their
-depths are not directly interchangeable.
+The last two panels show the mean spectral transmission within a configured
+helium band for each exposure. The planetary-frame band follows the expected
+orbital motion of the line, while the stellar-frame band remains stationary
+relative to the star. Consequently, the two curves sample different parts
+of the moving absorption profile. Their band widths also differ in this
+example, and must be considered when comparing the amplitudes.
 
-The dashed contact markers help us compare the spectral absorption with the
-optical transit. A dip extending beyond those markers motivates checks of an
-extended atmosphere, but also of the reference and residual backgrounds.
-Keep every exposure in view; the pipeline does not force the light curve to
-follow an optical transit model.
+The dashed lines indicate the optical transit contacts. These allow the
+timing of the helium absorption to be compared with the passage of the
+planetary disc across the star. Absorption outside this interval may provide
+information about extended material; its interpretation also requires
+assessment of the out-of-transit reference and residual stellar and sky
+contributions. The curves are extracted directly from the spectra, without
+imposing an optical transit shape.
 
 Products are written under:
 
@@ -327,13 +332,11 @@ Products are written under:
     transmission_diagnostic.png
 ```
 
-An existing output directory is refused, preserving all prior results.
-The map is in the **stellar frame**: magenta markers show the vacuum triplet,
-red tracks show the expected planetary motion, and gold tracks show terrestrial
-OH transformed into that frame. The spectrum beneath it is in the **planetary
-frame**. Its coadd uses only the explicit in-transit selection. Both curves
-use fixed configured bands; a missing or masked band is reported as missing,
-not estimated by bridging a gap.
+Use a new output directory for each comparison, since existing results are
+preserved. The plotted OH positions are transformed from the topocentric
+frame into the stellar frame; some lie outside the displayed interval.
+If masking leaves incomplete coverage of a light-curve band, the affected
+measurement is reported as missing.
 
 The precise triplet wavelengths in the example are 1083.2057472,
 1083.3216751 and 1083.3306444 nm. Oscillator strengths and their source are
@@ -356,13 +359,16 @@ with np.load(directory / "transmission.npz") as products:
     planet_curve = products["planet_lightcurve"]
 ```
 
-## 8. Fit a documented helium multiplet when appropriate
+## Step 8: Fit the helium triplet
 
 The public `fit_helium_multiplet` function implements the slab model of Czesla et al. (2024),
 `T = 1-f + f exp(-sum(tau_j))`, with shared velocity and intrinsic Gaussian
-width for all three oscillator-weighted components. The baseline is fixed at
-one. Filling factor, effective resolution, starting values and bounds are
-explicit function arguments; fitting is not silently added to preparation.
+width for all three components, with their relative optical depths set by
+the oscillator strengths. Here, `f` is the fraction of the stellar disc
+covered by the absorbing material and `tau_j` is the optical depth of
+component `j`. The continuum baseline is fixed at one. The following
+optional fit uses the arrays loaded in Step 7 and requires the covering
+fraction, effective resolving power, initial parameters, and bounds:
 
 ```python
 from exoplore.config import SimulationConfig
@@ -382,23 +388,30 @@ fit = fit_helium_multiplet(
 )
 ```
 
-The filling factor 0.05 and effective R=61600 are the WASP-121 coadd choices
-from Czesla et al. (2024), and should be adjusted for other datasets. The latter already includes exposure
-smearing; do not add that smearing again. The reported Gaussian width is
-sigma; the Doppler parameter used by Czesla et al. (2024) is `b = sqrt(2) sigma`.
+The filling factor of 0.05 and effective resolving power of 61,600 follow
+the WASP-121 b co-added spectrum analysis of Czesla et al. (2024). The
+effective resolution already accounts for exposure smearing. For another
+dataset, supply values appropriate to its geometry and instrumental and
+exposure broadening. The fitted parameters are the logarithmic helium
+column density, velocity shift, and Gaussian width `sigma`; the Doppler
+parameter used by Czesla et al. (2024) is `b = sqrt(2) sigma`.
 
-This convenience fit uses marginal error weights and returns a diagnostic
-point estimate. It does not reproduce the paper's full 43-parameter time
-model or its MCMC, and is not a replacement for a justified correlated
-likelihood. Column, covering fraction and width can be degenerate.
+This fit provides a point estimate using the marginal uncertainties of
+the co-added spectrum. It covers the averaged triplet profile only; the
+full 43-parameter time-dependent model and MCMC analysis of Czesla et al.
+(2024) are outside the present preparation workflow. In particular, the
+column density, covering fraction, and width can be degenerate, and their
+joint uncertainties require an appropriate likelihood and posterior analysis.
 
-## 9. Compare OH modes and assess uncertainty
+## Step 9: Assess OH residuals and uncertainties
 
-Baseline mode retains the stated AB sky-subtraction treatment and marks OH.
-Molecfit corrects absorption; this workflow does not claim it removes OH
-airglow emission. Mask mode is a separately declared sensitivity test using
-explicit native topocentric windows. Change `oh_mode` to `mask` in a new
-configuration and use a new output root. No dedicated OH model is applied.
+The `baseline` mode retains the AB sky-subtraction treatment described by
+Czesla et al. (2024). Residual OH emission should be inspected separately,
+since molecfit models telluric absorption. To assess the sensitivity to OH,
+set `oh_mode` to `mask` in a separate configuration and select a new output
+root. This excludes the configured OH windows in the native topocentric
+frame before interpolation. Both modes retain the same stellar-reference
+and planetary-frame preparation sequence; neither fits an OH emission model.
 
 The example OH markers are 1083.2103, 1083.2412, 1083.4241 and 1083.43338 nm,
 with +/-0.015 nm windows based on Allart et al. (2023) and the markers shown by Czesla et al. (2024).
@@ -411,20 +424,22 @@ normalization and interpolation into coadd/curve samples. Optional molecfit
 RMS inflation affects the draws, not the native inverse-variance reference
 weights. Random seed, configuration and input hashes are saved.
 
-These are conditional noise uncertainties. Stellar activity, photospheric
-RM/CLV, physical AB extraction correlations, fitted telluric-model uncertainty,
-calibration and ephemeris errors are not all marginalized. No automatic
-detection significance or physical upper limit is issued. Check nod subsets,
-out/out controls, OH residuals and normalization sensitivity before physical
-interpretation. A moving feature and a numerically close published fit are
-useful evidence to investigate, not substitutes for those checks.
+The resulting uncertainties describe the propagation of the adopted noise
+model through the preparation. Stellar variability, Rossiter–McLaughlin and
+centre-to-limb effects, correlations introduced by the physical AB extraction,
+and uncertainty in the telluric model, calibration, and ephemeris are not all
+included. Consequently, physical interpretation requires additional controls:
+compare the nod subsets, divide independent out-of-transit subsets by one
+another, and assess the sensitivity to OH masks and continuum choices. The
+workflow provides the spectral products and conditional uncertainties needed
+for this assessment; a detection significance or physical upper limit requires
+a separate statistical analysis that accounts for the relevant backgrounds.
 
-## References and attribution
+## References
 
 - **Czesla et al. (2024), A&A 692, A230**:
   [published article](https://doi.org/10.1051/0004-6361/202451003).
-  Credit this work for the original WASP-121 b observing and direct helium
-  analysis procedure used as the methodological benchmark here.
+  Original WASP-121 b observations and direct helium analysis methodology.
 - Allart et al. (2023): [paper](https://arxiv.org/abs/2307.05580), supporting
   continuum-window and OH-line choices.
 - ESO [CRIRES+ pipeline](https://www.eso.org/sci/software/pipelines/cr2res/)
