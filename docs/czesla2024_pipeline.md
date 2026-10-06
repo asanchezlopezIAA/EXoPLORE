@@ -126,9 +126,13 @@ Preview with the standard runner:
 python scripts/run_exoplore.py configs/wasp121b_crires_czesla2024.json
 ```
 
-Without `--run`, this prints the selected recipe and exits. The direct branch
-requires observed transit data, zero SYSREM iterations and disabled molecular
-retrieval, as shown in the example configuration.
+Without `--run`, this prints the planet, preparation choice, and output
+directory. Check these before continuing. The example uses
+`use_real_data: true` to read observed spectra, `sysrem_iterations: 0` to
+retain the reference-division procedure, and `simulate_planet: false` to
+analyse the data without an injected signal. Keep retrieval disabled
+(`retrieval.enabled: false`, the default), since this run extracts the
+transmission spectrum.
 
 ## Step 4: Test the telluric correction on one exposure
 
@@ -185,6 +189,40 @@ scaling, should therefore not be used to divide the observed spectra.
 Preparation stops if the fitted model or wavelength solution fails its
 configured checks.
 
+After the test finishes, inspect the saved fit with the following command:
+
+```bash
+python scripts/plot_crires_czesla2024.py exposure \
+  mynight/new_helium_pilot mynight/telluric_exposure_01.png --exposure 1
+```
+
+This takes seconds and reads the saved fit; it does not rerun molecfit.
+Choose a new PNG filename when comparing results. The output is illustrated
+below for the first WASP-121 b exposure.
+
+```{figure} figures/tutorial12_telluric_exposure_v2.png
+:alt: Telluric fit, before-and-after correction, and residuals in five fitted wavelength windows for the first WASP-121 b exposure.
+:width: 100%
+
+Telluric correction of exposure 1, nod A. Each column corresponds to one
+fitted wavelength interval. The top row compares the observed spectrum
+(black) with the fitted telluric model (orange). The middle row compares
+the spectrum before (grey) and after (blue) division by the pure telluric
+transmission; both are scaled by the fitted local continuum for display.
+The bottom row shows data-minus-model residuals in units of the input
+extraction error. These are telluric fitting windows, outside the protected
+planetary helium region. The wavelength refinement is +0.176 km/s, while
+the remaining residuals show that the extraction errors alone do not account
+for all scatter.
+```
+
+The correction should reduce absorption at the fitted telluric positions
+without leaving a repeated line-shaped residual. Inspect the residual row
+as well as the corrected spectrum: a nearly flat continuum can still contain
+structured or underestimated residuals. A large wavelength adjustment or
+systematic residual at the line centres should be investigated before
+processing the night.
+
 ## Step 5: Correct the full observing sequence
 
 Once the single-exposure correction has been assessed, omit `--pilot-exposure`, specify a **new** output
@@ -209,6 +247,39 @@ logs, quality checks and `correction.npz`. Input raw/extracted files are
 read-only. The transmission stage verifies extraction hashes, individual raw
 header hashes, correction hashes and the wavelength gate again.
 
+Plot the fitted quantities across the night with:
+
+```bash
+python scripts/plot_crires_czesla2024.py night \
+  inputs/CRIRES_PLUS/WASP121b/czesla2024_corrected \
+  mynight/telluric_night.png
+```
+
+This also takes seconds, since it reads the saved exposure reports. To
+inspect an individual fit from the full sequence, use the `exposure`
+command above with the full correction directory and its running number.
+The night summary for the validated WASP-121 b corrections is shown below.
+
+```{figure} figures/tutorial12_telluric_night.png
+:alt: Wavelength adjustments, Gaussian kernel widths, and reduced chi-squared across the 40 WASP-121 b exposures, separated by A and B nod position.
+:width: 100%
+
+Telluric fit diagnostics across the 40-exposure observing sequence. From
+top to bottom: wavelength adjustment evaluated near helium, fitted Gaussian
+full width at half maximum in detector pixels, and reduced chi-squared in
+the telluric fit. Blue circles and orange squares identify nods A and B,
+respectively. The adjustments are fractions of a km/s and show a
+nod-dependent pattern. The reduced chi-squared values exceed one, indicating
+scatter larger than predicted by the adopted extraction-error model.
+```
+
+Assess the trends in all three panels together. A small wavelength adjustment
+is necessary for this example, but does not establish the quality of the
+correction by itself. Changes in kernel width, fit quality, or nod-dependent
+behaviour should be checked against the individual spectra before combining
+them. The plotted adjustments have no fitted error bars and should not be
+interpreted as estimates of absolute calibration precision.
+
 ## Step 6: Construct the transmission spectra
 
 We now apply the direct preparation to the corrected observing sequence:
@@ -230,16 +301,33 @@ For each exposure, the pipeline:
 9. Propagates native noise through repeated normalization, shared reference
    construction, interpolation and coaddition.
 
-The optical Doppler convention is explicit:
+**Stellar and planetary rest frames.** The out-of-transit reference should compare
+the same stellar wavelengths in every exposure. The observed positions of
+the stellar lines include both the motion of Earth and the systemic velocity
+of the star. EXoPLORE calculates the barycentric velocity correction (BERV)
+at each exposure midpoint using Astropy, then removes the configured stellar
+systemic velocity, `gamma_kms`. For this example, the latter is 38.35 km/s.
+The resulting spectra are aligned in the stellar rest frame, where we
+normalise them, build the reference, and divide each exposure by it.
+
+The planetary absorption still moves across those aligned stellar spectra.
+We therefore apply a second shift to the transmission spectra, using the
+planet's orbital velocity calculated from the ephemeris and `kp_kms`. This
+brings absorption travelling with the planet to the same wavelength before
+the in-transit spectra are averaged. In terms of the observed wavelength,
+the two transformations are:
 
 ```text
 lambda_star   = lambda_top * (1 + BERV/c) / (1 + gamma/c)
 lambda_planet = lambda_star / (1 + v_planet/c)
 ```
 
-Velocities are km/s, positive for recession; BERV is Astropy's additive
-barycentric correction. Native cr2res wavelengths are vacuum. Do not apply an
-additional air-to-vacuum conversion. All arrays and configured windows use nm.
+Here, `gamma` is the systemic velocity and `v_planet` is the instantaneous
+orbital velocity, with positive values corresponding to motion away from
+the observer; `c` is expressed in the same velocity units. The CRIRES+
+extraction and the helium line positions in this example both use vacuum
+wavelengths. They can therefore be compared directly, with no air-to-vacuum
+conversion between them.
 
 In order to normalise the spectra consistently, the example fits a
 first-order polynomial in the stellar-frame bands 1082.3–1082.6 nm and
@@ -255,6 +343,20 @@ sensitivity for the target under study before interpreting the line profile.
 The following figure shows the products obtained with this preparation
 choice for the WASP-121 b observations analysed by Czesla et al. (2024).
 We describe the physical quantities in each panel below.
+
+The run in Step 6 saves this figure automatically. To recreate it later
+from the saved transmission products, run:
+
+```bash
+python scripts/plot_crires_czesla2024.py transmission \
+  configs/wasp121b_crires_czesla2024.json \
+  outputs/wasp121_czesla2024/WASP121b/czesla2024/transmission.npz \
+  mynight/helium_transmission.png
+```
+
+This takes seconds and reuses the saved spectra and uncertainties, without
+repeating the correction or noise simulations. Use the same configuration
+as the original preparation, so the frame markers and displayed bands agree.
 
 ```{figure} figures/czesla2024_wasp121_diagnostic.png
 :alt: Stellar-frame transmission map, planetary-frame helium spectrum, and two helium light curves from the WASP-121 b benchmark observations.
@@ -413,16 +515,27 @@ root. This excludes the configured OH windows in the native topocentric
 frame before interpolation. Both modes retain the same stellar-reference
 and planetary-frame preparation sequence; neither fits an OH emission model.
 
-The example OH markers are 1083.2103, 1083.2412, 1083.4241 and 1083.43338 nm,
-with +/-0.015 nm windows based on Allart et al. (2023) and the markers shown by Czesla et al. (2024).
-Interpolation requires valid native contributors and does not bridge masks.
-Equivalent width is not reported if its integration window has missing pixels.
+The example masks ±0.015 nm around the OH positions 1083.2103, 1083.2412,
+1083.4241 and 1083.43338 nm, using the line information of Allart et al.
+(2023) and the markers shown by Czesla et al. (2024). Masked pixels are kept
+out of the interpolation so their residual emission cannot enter neighbouring
+wavelength bins. If the resulting gaps fall inside an integration band, the
+affected equivalent-width or light-curve measurement is left undefined.
 
-Noise realizations share a rebuilt reference across all exposures. They therefore
-propagate the statistical correlations produced by reference division,
-normalization and interpolation into coadd/curve samples. Optional molecfit
-RMS inflation affects the draws, not the native inverse-variance reference
-weights. Random seed, configuration and input hashes are saved.
+**Uncertainties after reference division.** Every transmission spectrum uses
+the same out-of-transit reference, so noise in that reference affects several
+exposures together. To include this effect, EXoPLORE draws repeated noisy
+versions of the extracted spectra and repeats the normalisation, reference
+construction, frame shifts, and co-addition for each draw. The scatter of
+the resulting spectra and light curves gives the plotted uncertainties.
+The example uses 512 draws and saves the random seed so this calculation
+can be repeated.
+
+The example also sets `inflate_by_telluric_rms: true`: the noise draws are
+scaled by the telluric fit's residual scatter relative to the extraction
+errors when that scatter exceeds one. This accounts approximately for
+excess residual noise such as that seen in Steps 4 and 5. The stellar
+reference itself retains the original extraction-error weights.
 
 The resulting uncertainties describe the propagation of the adopted noise
 model through the preparation. Stellar variability, Rossiter–McLaughlin and
