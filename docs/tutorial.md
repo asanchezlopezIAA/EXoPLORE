@@ -1,6 +1,6 @@
 # EXoPLORE Tutorial
 
-This tutorial walks through eleven progressively more involved analyses. In particular, by the end the reader will know how to run the default HD 189733 b ANDES simulation, change the target planet, configure the atmospheric forward model, run a CARMENES NIR simulation, combine multiple nights, enable the Bayesian retrieval, assess retrieval pipeline bias, validate detection significances and retrieval uncertainties, analyse real CRIRES+ and IGRINS data reduced from archive frames (WASP-127 b and L 98-59 d), and produce molecule detectability maps over a grid of atmospheric compositions. We note that each tutorial builds on the previous one, so we recommend following them in order on a first reading. Readers new to the technique may wish to read the [Concepts primer](concepts.md) first.
+This tutorial walks through twelve progressively more involved analyses. In particular, by the end the reader will know how to run the default HD 189733 b ANDES simulation, change the target planet, configure the atmospheric forward model, run a CARMENES NIR simulation, combine multiple nights, enable the Bayesian retrieval, assess retrieval pipeline bias, validate detection significances and retrieval uncertainties, analyse real CRIRES+ and IGRINS data reduced from archive frames (WASP-127 b and L 98-59 d), produce molecule detectability maps over a grid of atmospheric compositions, and prepare direct He I transmission spectra from CRIRES+ observations (WASP-121 b). We note that each tutorial builds on the previous one, so we recommend following them in order on a first reading. Readers new to the technique may wish to read the [Concepts primer](concepts.md) first.
 
 ---
 
@@ -1207,6 +1207,15 @@ H₂O detectability for a single HD 189733 b ANDES transit (all 76 YJHK orders),
 ```
 
 To resume an interrupted sweep, just re-run the command: existing grid points are already saved as text files and only the missing points are recomputed (and `plot_detectability_map(..., )` can render a partial grid). Because each grid point is an independent process, the fastest way to fill a large grid is to run several points concurrently; the runner is a thin wrapper over per-point subprocesses precisely so this parallelises cleanly.
+
+---
+
+## Tutorial 12: Direct He I transmission spectroscopy with CRIRES+ (WASP-121 b)
+
+```{include} czesla2024_pipeline.md
+:start-line: 2
+:heading-offset: 1
+```
 
 ---
 

@@ -37,3 +37,4 @@ myst_enable_extensions = [
 myst_heading_anchors = 3
 
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "requirements.txt"]
+exclude_patterns.append("czesla2024_pipeline.md")

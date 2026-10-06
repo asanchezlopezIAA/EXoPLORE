@@ -32,7 +32,6 @@ current and next-generation ground-based spectrographs.
    :caption: Tutorials
 
    tutorial
-   czesla2024_pipeline
 
 .. toctree::
    :maxdepth: 2
