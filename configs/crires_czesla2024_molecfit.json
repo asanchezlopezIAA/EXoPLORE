@@ -1,0 +1,15 @@
+{
+  "esorex": "esorex",
+  "windows_nm": [[1077.54,1077.62],[1080.20,1080.31],[1081.32,1081.43],[1083.65,1083.74],[1084.04,1084.16]],
+  "molecules": ["H2O","O2"],
+  "fit_molecules": [1,0],
+  "relative_columns": [1.0,1.0],
+  "helium_guard_kms": 50.0,
+  "gaussian_initial_fwhm_pixels": 3.0,
+  "gaussian_fwhm_range_pixels": [2.0,4.5],
+  "max_reduced_chi2": 10.0,
+  "ftol": 0.0001,
+  "xtol": 0.0001,
+  "kernel_factor": 3.0,
+  "timeout_seconds": 240.0
+}

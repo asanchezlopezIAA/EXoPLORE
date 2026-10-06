@@ -1,0 +1,151 @@
+{
+  "planet": {
+    "name": "WASP121b"
+  },
+  "instrument": {
+    "name": "CRIRES+"
+  },
+  "observation": {
+    "event_type": "transit",
+    "use_real_data": true,
+    "simulate_planet": false,
+    "n_nights": 1,
+    "exposure_time_seconds": 451.4352425
+  },
+  "pipeline": {
+    "name": "czesla2024",
+    "sysrem_iterations": 0,
+    "prepare_template": false,
+    "czesla2024": {
+      "wavelength_frame": "topocentric_vacuum_nm",
+      "oh_mode": "baseline",
+      "oh_topocentric_lines_nm": [
+        1083.2103,
+        1083.2412,
+        1083.4241,
+        1083.43338
+      ],
+      "oh_topocentric_windows_nm": [
+        [
+          1083.1952999999999,
+          1083.2253
+        ],
+        [
+          1083.2261999999998,
+          1083.2562
+        ],
+        [
+          1083.4090999999999,
+          1083.4391
+        ],
+        [
+          1083.4183799999998,
+          1083.44838
+        ]
+      ],
+      "gamma_kms": 38.35,
+      "kp_kms": 221.4423778649905,
+      "t0_bjd_tdb": 2458119.72074,
+      "period_days": 1.27492504,
+      "observatory_lon_lat_height": [
+        -70.4045,
+        -24.6268,
+        2648
+      ],
+      "target_ra_deg": 107.600004,
+      "target_dec_deg": -39.09806,
+      "exposure_time_keyword": "ESO DET SEQ1 EXPTIME",
+      "telluric_min_transmission": 0.15,
+      "inflate_by_telluric_rms": true,
+      "continuum_stellar_windows_nm": [
+        [
+          1082.3,
+          1082.6
+        ],
+        [
+          1083.9,
+          1084.2
+        ]
+      ],
+      "continuum_polynomial_degree": 1,
+      "planet_lightcurve_window_nm": [
+        1083.3022809,
+        1083.3522809
+      ],
+      "helium_vacuum_lines_nm": [
+        1083.2057472,
+        1083.3216751,
+        1083.3306444
+      ],
+      "helium_oscillator_strengths": [
+        0.0599,
+        0.179693,
+        0.299482
+      ],
+      "helium_atomic_source": "Geach et al. 2025, doi:10.1029/2024GL112885 Table 1; matches Sanz-Forcada et al. 2025 footnote to ~0.001 A",
+      "optical_contact_phases": [
+        -0.047222139574022264,
+        -0.03652324652592382,
+        0.03652324652592382,
+        0.047222139574022264
+      ],
+      "equivalent_width_window_nm": [
+        1082.95,
+        1083.48
+      ],
+      "input_path": "inputs/CRIRES_PLUS/WASP121b/czesla2024_corrected",
+      "order_segment": "CHIP1.INT1_02",
+      "reference_running_numbers": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        36,
+        37,
+        38,
+        39,
+        40
+      ],
+      "in_transit_running_numbers": [
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32
+      ],
+      "minimum_continuum_pixels": 20,
+      "max_wavelength_shift_kms": 1.0,
+      "stellar_lightcurve_window_nm": [
+        1083.277,
+        1083.377
+      ],
+      "plot_stellar_window_nm": [
+        1082.8,
+        1083.9
+      ],
+      "monte_carlo_draws": 512,
+      "monte_carlo_seed": 20261006
+    }
+  },
+  "paths": {
+    "output_root": "outputs/wasp121_czesla2024"
+  }
+}

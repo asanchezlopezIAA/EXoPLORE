@@ -108,6 +108,10 @@ def preparing_pipeline(
     Varies by branch (see the per-branch code for the full return signature).
     """
     # Lazy imports to avoid circular dependencies
+    if inp_dat['preparing_pipeline'] == 'czesla2024':
+        from exoplore.pipelines.czesla2024 import preparing_pipeline_adapter
+        return preparing_pipeline_adapter(inp_dat, data, noise, wave, mask, masks, correct_uncertainties, retrieval)
+
     from exoplore.pipelines.bl19 import (
         pipeline_BL19_norm, pipeline_BL19_tellcorr,
         pipeline_pseudocontinuum_norm,

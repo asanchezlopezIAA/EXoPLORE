@@ -22,6 +22,7 @@ import json
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from exoplore.config.czesla2024 import Czesla2024Config
 
 
 # ---------------------------------------------------------------------------
@@ -511,6 +512,15 @@ class PipelineConfig:
     #   between the two).  Pipeline-agnostic: any preparing pipeline that
     #   detrends honours this switch.  The component count is sysrem_iterations.
     detrend_method: str = "sysrem"
+
+    # Optional direct-transmission recipe; absent for every existing pipeline.
+    czesla2024: Optional[Czesla2024Config] = None
+
+    def __post_init__(self) -> None:
+        if isinstance(self.czesla2024, dict):
+            self.czesla2024 = Czesla2024Config(**self.czesla2024)
+        if self.name == "czesla2024" and self.czesla2024 is None:
+            raise ValueError("pipeline.name='czesla2024' requires explicit pipeline.czesla2024 settings")
 
 
 # ---------------------------------------------------------------------------

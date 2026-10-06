@@ -197,6 +197,7 @@ class SimulationSummary:
 
     # Pipeline citation strings
     _PIPELINE_REFS = {
+        "czesla2024":   "czesla2024    (Czesla et al. 2024, A&A, 692, A230)",
         "BL19":         "BL19          (Brogi & Line 2019, AJ, 157, 114)",
         "Blain24":      "Blain24       (Blain, Sanchez-Lopez & Molliere 2024, AJ, 167, 179)",
         "ASL19":        "ASL19         (Sanchez-Lopez et al. 2019, A&A, 630, A53)",
@@ -220,6 +221,9 @@ class SimulationSummary:
         ]
         if self.pipeline in self._SYSREM_PIPELINES:
             lines.append(f"  SYSREM iterations   : {self.sysrem_iterations}")
+        if self.pipeline == "czesla2024":
+            lines += ["  Analysis            : direct He I transmission", "  Calibration         : validated per-exposure CRIRES+ corrections", f"  Output root         : {self.output_root}", ""]
+            return "\n".join(lines)
         lines += [
             f"  Species             : {self.species}",
             f"  EasyChem            : {self.use_easychem}",
@@ -264,6 +268,9 @@ class ExoploreSimulator:
 
     def _validate(self) -> None:
         cfg = self.config
+        if cfg.pipeline.name == "czesla2024":
+            from exoplore.pipelines.czesla2024 import validate_run_config
+            validate_run_config(cfg)
 
         if not cfg.planet.name:
             raise ValueError("planet.name must not be empty.")
@@ -360,6 +367,10 @@ class ExoploreSimulator:
         # ----------------------------------------------------------------
         import time as _time
         cfg = self.config
+        if cfg.pipeline.name == "czesla2024":
+            from exoplore.pipelines.czesla2024 import run_czesla2024
+            run_czesla2024(cfg)
+            return
         _t_run_start = _time.time()
         _t_blocks = {}   # timing store: block_name -> elapsed_s
         sim_name = self.simulation_name()
