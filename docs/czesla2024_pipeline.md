@@ -108,7 +108,7 @@ This excerpt shows the structure; **use the complete example file**, since
 scientific settings in `pipeline.czesla2024` are required rather than inferred.
 The typed `Czesla2024Config` describes all fields.
 
-Running numbers are one-based and chronological. Czesla's specific night uses
+Running numbers are one-based and chronological. The night analysed by Czesla et al. (2024) uses
 1–10 and 36–40 for the reference and 16–32 for the second-to-third-contact
 coadd. **For another dataset, supply its own selections.** The pipeline does
 not require 40 exposures or quietly reuse the benchmark selections. Reference
@@ -167,7 +167,7 @@ observer-frame He component within the configured 50 km/s guard. All anchors
 must remain inside the selected segment. No unrelated order is fitted.
 
 Inspect the fitted residuals, kernel width and wavelength adjustment before
-continuing. Czesla reports adjustments of order 0.1 km/s. A fit displaced by
+continuing. Czesla et al. (2024) report adjustments of order 0.1 km/s. A fit displaced by
 20–100 km/s is a calibration failure to investigate, not an acceptable
 correction because a plot looks convincing. The example's 1 km/s rejection
 gate is a failure threshold, not a claim of 0.1 km/s calibration accuracy.
@@ -244,7 +244,7 @@ additional air-to-vacuum conversion. All arrays and configured windows use nm.
 
 The example's first-order continuum bands are an explicit implementation
 choice inspired by [Allart et al. (2023)](https://arxiv.org/abs/2307.05580),
-not an asserted exact Czesla normalization. Their degree and minimum valid
+and is distinct from the normalization described by Czesla et al. (2024). Their degree and minimum valid
 pixel count are configurable. No cosmic-ray replacement, frame dropping or
 polynomial detrending against airmass is silently added.
 
@@ -358,7 +358,7 @@ with np.load(directory / "transmission.npz") as products:
 
 ## 8. Fit a documented helium multiplet when appropriate
 
-The public `fit_helium_multiplet` function implements the Czesla slab
+The public `fit_helium_multiplet` function implements the slab model of Czesla et al. (2024),
 `T = 1-f + f exp(-sum(tau_j))`, with shared velocity and intrinsic Gaussian
 width for all three oscillator-weighted components. The baseline is fixed at
 one. Filling factor, effective resolution, starting values and bounds are
@@ -383,9 +383,9 @@ fit = fit_helium_multiplet(
 ```
 
 The filling factor 0.05 and effective R=61600 are the WASP-121 coadd choices
-from Czesla, not universal settings. The latter already includes exposure
+from Czesla et al. (2024), and should be adjusted for other datasets. The latter already includes exposure
 smearing; do not add that smearing again. The reported Gaussian width is
-sigma; Czesla's Doppler parameter is `b = sqrt(2) sigma`.
+sigma; the Doppler parameter used by Czesla et al. (2024) is `b = sqrt(2) sigma`.
 
 This convenience fit uses marginal error weights and returns a diagnostic
 point estimate. It does not reproduce the paper's full 43-parameter time
@@ -401,7 +401,7 @@ explicit native topocentric windows. Change `oh_mode` to `mask` in a new
 configuration and use a new output root. No dedicated OH model is applied.
 
 The example OH markers are 1083.2103, 1083.2412, 1083.4241 and 1083.43338 nm,
-with +/-0.015 nm windows from Allart's line list and Czesla's plotted markers.
+with +/-0.015 nm windows based on Allart et al. (2023) and the markers shown by Czesla et al. (2024).
 Interpolation requires valid native contributors and does not bridge masks.
 Equivalent width is not reported if its integration window has missing pixels.
 
@@ -418,28 +418,6 @@ detection significance or physical upper limit is issued. Check nod subsets,
 out/out controls, OH residuals and normalization sensitivity before physical
 interpretation. A moving feature and a numerically close published fit are
 useful evidence to investigate, not substitutes for those checks.
-
-## API reference
-
-```{eval-rst}
-.. automodule:: exoplore.config.czesla2024
-   :members:
-```
-
-```{eval-rst}
-.. automodule:: exoplore.instruments.crires_czesla2024
-   :members:
-```
-
-```{eval-rst}
-.. automodule:: exoplore.pipelines.czesla2024
-   :members:
-```
-
-```{eval-rst}
-.. automodule:: exoplore.pipelines.helium_math
-   :members:
-```
 
 ## References and attribution
 
