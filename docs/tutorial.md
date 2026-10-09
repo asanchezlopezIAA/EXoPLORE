@@ -1212,10 +1212,9 @@ To resume an interrupted sweep, just re-run the command: existing grid points ar
 
 ## Tutorial 12: Direct He I transmission spectroscopy with CRIRES+ (WASP-121 b)
 
-```{include} czesla2024_pipeline.md
-:start-line: 2
-:heading-offset: 1
-```
+:::{note}
+Coming soon!
+:::
 
 ---
 
