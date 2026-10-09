@@ -273,6 +273,8 @@ def validate_run_config(config) -> None:
         raise ValueError('The direct helium branch does not use the molecular atmospheric retrieval')
     if config.pipeline.czesla2024 is None:
         raise ValueError('Explicit pipeline.czesla2024 settings are required')
+    if config.pipeline.czesla2024.monte_carlo_draws < 100:
+        raise ValueError('Observed-data uncertainty propagation requires at least 100 native-noise draws')
 
 
 def preparing_pipeline_adapter(inp_dat: dict,data: np.ndarray,noise: np.ndarray,

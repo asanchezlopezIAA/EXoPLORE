@@ -190,6 +190,7 @@ class SimulationSummary:
     velocity_max_kms: float
     retrieval_enabled: bool
     output_root: str
+    helium_backend: Optional[str] = None
 
     def __post_init__(self):
         # Backward-compatibility alias
@@ -221,6 +222,12 @@ class SimulationSummary:
         ]
         if self.pipeline in self._SYSREM_PIPELINES:
             lines.append(f"  SYSREM iterations   : {self.sysrem_iterations}")
+        if self.helium_backend is not None:
+            lines += [f"  Atmosphere          : {self.helium_backend}",
+                      "  Observations        : synthetic optical transit",
+                      "  Analysis            : direct He I transmission",
+                      f"  Output root         : {self.output_root}", ""]
+            return "\n".join(lines)
         if self.pipeline == "czesla2024":
             lines += ["  Analysis            : direct He I transmission", "  Calibration         : validated per-exposure CRIRES+ corrections", f"  Output root         : {self.output_root}", ""]
             return "\n".join(lines)
@@ -268,7 +275,13 @@ class ExoploreSimulator:
 
     def _validate(self) -> None:
         cfg = self.config
-        if cfg.pipeline.name == "czesla2024":
+        from exoplore.core.spectroscopy_mode import spectroscopy_route
+        route = spectroscopy_route(cfg)
+        if route == "helium_simulation":
+            from exoplore.core.helium_simulation import validate_helium_run
+            validate_helium_run(cfg)
+            return
+        if route == "helium_observed":
             from exoplore.pipelines.czesla2024 import validate_run_config
             validate_run_config(cfg)
 
@@ -312,6 +325,8 @@ class ExoploreSimulator:
 
     def summary(self) -> SimulationSummary:
         cfg = self.config
+        from exoplore.core.spectroscopy_mode import spectroscopy_route
+        route = spectroscopy_route(cfg)
         return SimulationSummary(
             planet_name=cfg.planet.name,
             instrument=cfg.instrument.name,
@@ -326,6 +341,8 @@ class ExoploreSimulator:
             velocity_max_kms=cfg.cross_correlation.velocity_max_kms,
             retrieval_enabled=cfg.retrieval.enabled,
             output_root=cfg.paths.output_root,
+            helium_backend=((cfg.atmosphere.helium.backend if cfg.observation.simulate_planet else "no injection")
+                            if route == 'helium_simulation' else None),
         )
 
     # ------------------------------------------------------------------
@@ -367,7 +384,13 @@ class ExoploreSimulator:
         # ----------------------------------------------------------------
         import time as _time
         cfg = self.config
-        if cfg.pipeline.name == "czesla2024":
+        from exoplore.core.spectroscopy_mode import spectroscopy_route
+        route = spectroscopy_route(cfg)
+        if route == "helium_simulation":
+            from exoplore.core.helium_simulation import run_helium_simulation
+            run_helium_simulation(cfg)
+            return
+        if route == "helium_observed":
             from exoplore.pipelines.czesla2024 import run_czesla2024
             run_czesla2024(cfg)
             return

@@ -68,13 +68,15 @@ def _recipe(command: list[str],directory: Path,name: str,timeout: float) -> None
 
 def prepare_crires_czesla2024(manifest: Path,raw_directory: Path,
                              science: Czesla2024Config,settings: HeliumMolecfitConfig,
-                             output: Path) -> Path:
+                             output: Path, *, synthetic_input: bool = False) -> Path:
     """Fit each chronological extracted exposure on guarded helium-order anchors.
 
     This can take minutes per exposure. Run one exposure pilot before a whole
     night. All settings and recipe commands are recorded. The full calctrans
     output supplies refined vacuum wavelengths and pure absorption transmission.
-    Source raw/extracted files are opened read-only.
+    Source raw/extracted files are opened read-only. With synthetic_input=True,
+    explicitly marked simulated 1D spectra supply their own observing metadata;
+    all fitting commands and acceptance gates remain the same.
     """
     executable=shutil.which(settings.esorex)
     if executable is None:raise FileNotFoundError(f'ESO executable not found: {settings.esorex}')
@@ -88,12 +90,22 @@ def prepare_crires_czesla2024(manifest: Path,raw_directory: Path,
         start=time.monotonic();nod='A' if extracted.name.endswith('extractedA.fits') else 'B' if extracted.name.endswith('extractedB.fits') else None
         if nod is None:raise ValueError('Manifest must contain individual extracted A/B products')
         header=fits.getheader(extracted);matches=[]
-        for key in header:
-            if key.startswith('ESO PRO REC1 RAW') and key.endswith(' NAME'):
-                candidate=raw_directory/header[key];rh=fits.getheader(candidate)
-                if rh['ESO SEQ NODPOS']==nod and abs(rh['MJD-OBS']-mjd)<1e-7:matches.append(candidate)
-        if len(matches)!=1:raise ValueError('Cannot resolve an individual raw exposure using manifest time and nod')
-        raw=matches[0];raw_header=fits.getheader(raw);raw_hash=hashlib.sha256(raw_header.tostring().encode()).hexdigest()
+        if synthetic_input:
+            if header.get('SYNTHET') is not True or header.get('ORIGIN') != 'EXOPLORE_SIMULATION':
+                raise ValueError('Synthetic fitting requires an explicitly marked simulated 1D spectrum')
+            if header['ESO SEQ NODPOS'] != nod or abs(header['MJD-OBS']-mjd) >= 1e-7:
+                raise ValueError('Synthetic manifest time/nod disagrees with its spectrum')
+            # The simulated spectrum itself supplies observing metadata;
+            # no ESO raw detector frame or sky subtraction is fabricated.
+            raw=extracted
+        else:
+            for key in header:
+                if key.startswith('ESO PRO REC1 RAW') and key.endswith(' NAME'):
+                    candidate=raw_directory/header[key];rh=fits.getheader(candidate)
+                    if rh['ESO SEQ NODPOS']==nod and abs(rh['MJD-OBS']-mjd)<1e-7:matches.append(candidate)
+            if len(matches)!=1:raise ValueError('Cannot resolve an individual raw exposure using manifest time and nod')
+            raw=matches[0]
+        raw_header=fits.getheader(raw);raw_hash=hashlib.sha256(raw_header.tostring().encode()).hexdigest()
         bjd,berv,_=exposure_metadata(raw,science);phase=((bjd-science.t0_bjd_tdb)/science.period_days+.5)%1-.5
         rv=science.kp_kms*np.sin(2*np.pi*phase)
         name,wave,flux,error={item[0]:item for item in segments_of(extracted)}[science.order_segment]
@@ -138,7 +150,8 @@ def prepare_crires_czesla2024(manifest: Path,raw_directory: Path,
         report={'exposure':number,'nod':nod,'extracted':str(extracted.resolve()),'raw':str(raw.resolve()),
                 'extracted_sha256':hashlib.sha256(extracted.read_bytes()).hexdigest(),'raw_header_sha256':raw_hash,
                 'frame':'topocentric vacuum nm','order_segment':science.order_segment,'fit_windows_nm':windows,
-                'command':command,'accepted':False}
+                'command':command,'accepted':False,
+                'input_origin':'exoplore_simulated_1d' if synthetic_input else 'eso_extracted_observation'}
         try:
             _recipe(command,work,'model',settings.timeout_seconds)
             parameters={str(row['parameter']):float(row['value']) for row in fits.getdata(work/'BEST_FIT_PARAMETERS.fits',1) if np.isfinite(row['value'])}

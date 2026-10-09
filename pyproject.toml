@@ -31,6 +31,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+helium = ["p-winds==2.0.1"]
+helium-sunbather = ["p-winds==1.4.7", "sunbather==1.1.0"]
 prt = ["petitRADTRANS", "easychem"]
 retrieval = ["pymultinest", "emcee", "corner"]
 batman = ["batman-package"]

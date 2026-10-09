@@ -81,8 +81,8 @@ class Czesla2024Config:
             raise ValueError('Invalid period, wavelength gate or telluric floor')
         if self.continuum_polynomial_degree not in (0,1,2) or self.minimum_continuum_pixels<self.continuum_polynomial_degree+2:
             raise ValueError('Invalid continuum degree or minimum pixel count')
-        if self.monte_carlo_draws<100:
-            raise ValueError('At least 100 native-noise draws are required')
+        if type(self.monte_carlo_draws) is not int or (self.monte_carlo_draws != 0 and self.monte_carlo_draws < 100):
+            raise ValueError('Choose zero draws for a simulation without resampling, or at least 100 draws')
         windows=self.continuum_stellar_windows_nm+self.oh_topocentric_windows_nm+[
             self.planet_lightcurve_window_nm,self.stellar_lightcurve_window_nm,
             self.plot_stellar_window_nm,self.equivalent_width_window_nm]

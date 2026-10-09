@@ -23,6 +23,8 @@ from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from exoplore.config.czesla2024 import Czesla2024Config
+from exoplore.config.carmenes_helium import CarmenesHeliumConfig
+from exoplore.config.helium import HeliumPwindsConfig
 
 
 # ---------------------------------------------------------------------------
@@ -110,6 +112,9 @@ class ObservationConfig:
         from planet JSON).
     use_real_data:
         Analyse a real observed dataset instead of simulating one.
+    helium_transmission_spectroscopy:
+        Select direct helium spectroscopy. ``use_real_data`` still selects
+        observed or synthetic spectra. Omission preserves older configurations.
     noise_scaling_factor:
         Multiplicative scaling applied to all noise levels (1.0 = nominal).
     simulate_planet:
@@ -184,6 +189,8 @@ class ObservationConfig:
     add_throughput_variations: bool = True
     mask_v_rotsini: bool = False
     exposure_time_seconds_per_night: Optional[List[float]] = None
+    # Append to preserve positional construction of older configurations.
+    helium_transmission_spectroscopy: Optional[bool] = None
 
 
 # ---------------------------------------------------------------------------
@@ -360,6 +367,12 @@ class AtmosphereConfig:
     morning_night: Optional[AtmosphereRegionConfig] = None
     evening_day: Optional[AtmosphereRegionConfig] = None
     evening_night: Optional[AtmosphereRegionConfig] = None
+    helium: Optional[HeliumPwindsConfig] = None
+
+    def __post_init__(self) -> None:
+        """Construct the optional helium backend only when explicitly supplied."""
+        if isinstance(self.helium, dict):
+            self.helium = HeliumPwindsConfig(**self.helium)
 
 
 # ---------------------------------------------------------------------------
@@ -515,8 +528,13 @@ class PipelineConfig:
 
     # Optional direct-transmission recipe; absent for every existing pipeline.
     czesla2024: Optional[Czesla2024Config] = None
+    carmenes_helium: Optional[CarmenesHeliumConfig] = None
 
     def __post_init__(self) -> None:
+        if isinstance(self.carmenes_helium, dict):
+            self.carmenes_helium = CarmenesHeliumConfig(**self.carmenes_helium)
+        if self.name == "carmenes_helium" and self.carmenes_helium is None:
+            raise ValueError("pipeline.name='carmenes_helium' requires explicit settings")
         if isinstance(self.czesla2024, dict):
             self.czesla2024 = Czesla2024Config(**self.czesla2024)
         if self.name == "czesla2024" and self.czesla2024 is None:
