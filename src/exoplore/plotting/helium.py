@@ -272,7 +272,7 @@ def plot_helium_summary(path: Path, result: dict, phase: np.ndarray,
                     title='Individual nights and combined He I transmission' if combined else 'Planet-frame He I transmission')
         lo,hi=np.asarray(science.planet_lightcurve_window_nm)/1000
         axes[2].set(xlabel='Orbital phase',ylabel='Band-averaged transmission excess (%)',
-                    title=f'Planet-frame helium light curve ({lo:.6f}–{hi:.6f} μm)')
+                    title=f'Planet-frame He I light curve ({lo:.6f}–{hi:.6f} μm)')
         for index,contact in enumerate(science.optical_contact_phases,1):
             hour=contact*science.period_days*24
             axes[0].axhline(hour,color='black',ls='--',lw=.9)
