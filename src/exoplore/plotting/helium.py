@@ -195,6 +195,7 @@ def plot_helium_summary(path: Path, result: dict, phase: np.ndarray,
     import matplotlib
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
+    import matplotlib.patheffects as path_effects
     path = Path(path)
     if path.exists():
         raise FileExistsError(path)
@@ -224,20 +225,26 @@ def plot_helium_summary(path: Path, result: dict, phase: np.ndarray,
         axes[1].sharex(axes[0])
         mesh = axes[0].pcolormesh(wave,hours,result['stellar_transmission'],
                                   cmap='RdBu',shading='auto',vmin=.975,vmax=1.025)
+        marker_outline = [path_effects.Stroke(linewidth=4, foreground='white'),
+                          path_effects.Normal()]
         for index,line in enumerate(science.helium_vacuum_lines_nm):
-            axes[0].axvline(line/1000,color='magenta',ls=':',lw=1.2,
+            axes[0].axvline(line/1000,color='black',ls=':',lw=1.8,
+                           path_effects=marker_outline,
                            label='He I rest wavelengths' if index==0 else None)
-            axes[0].plot(line*(1+rv_kms/C_KMS)/1000,hours,color='red',ls='--',lw=1,
+            axes[0].plot(line*(1+rv_kms/C_KMS)/1000,hours,color='black',ls='--',lw=1.8,
+                         path_effects=marker_outline,
                          label='Planet velocity track' if index==0 else None)
             axes[1].axvline(line/1000,color='.65',ls=':',lw=1.2)
         for index,line in enumerate(science.oh_topocentric_lines_nm):
             axes[0].plot(stellar_wavelength(line,berv_kms,science.gamma_kms)/1000,
-                         hours,color='gold',ls=':',lw=1,
+                         hours,color='.25',ls='-.',lw=1.8,
+                         path_effects=marker_outline,
                          label='OH sky wavelengths' if index==0 else None)
         axes[0].set(xlim=map_limits,ylabel='Time from mid-transit (h)',
                     title='Residual spectral matrix in the stellar rest frame')
         axes[0].tick_params(axis='x',labelbottom=False)
-        axes[0].legend(loc='upper right',fontsize=12)
+        axes[0].legend(loc='upper right',fontsize=17,framealpha=1,
+                       facecolor='white',edgecolor='.4',handlelength=3)
         fig.colorbar(mesh,ax=axes[0],label='Transmission')
         if combined:
             colors=plt.get_cmap('tab10')
