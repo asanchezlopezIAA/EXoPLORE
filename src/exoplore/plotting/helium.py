@@ -204,8 +204,7 @@ def plot_helium_summary(path: Path, result: dict, phase: np.ndarray,
     wave = np.asarray(result['stellar_wave_nm'])/1000
     planet_wave = np.asarray(result['planet_wave_nm'])/1000
     map_limits = np.asarray(science.plot_stellar_window_nm)/1000
-    spectrum_limits = np.asarray(science.equivalent_width_window_nm)/1000
-    band=(planet_wave>=spectrum_limits[0])&(planet_wave<=spectrum_limits[1])
+    band=(planet_wave>=map_limits[0])&(planet_wave<=map_limits[1])
     coadd_error = np.asarray(result.get('planet_coadd_error', result.get('coadd_error')))
     curve_error = np.asarray(result.get('planet_lightcurve_error', result.get('lightcurve_error')))
     combined = night_spectra is not None
