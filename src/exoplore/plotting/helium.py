@@ -224,21 +224,23 @@ def plot_helium_summary(path: Path, result: dict, phase: np.ndarray,
         axes[1].sharex(axes[0])
         mesh = axes[0].pcolormesh(wave,hours,result['stellar_transmission'],
                                   cmap='RdBu',shading='auto',vmin=.975,vmax=1.025)
-        marker_outline = [path_effects.Stroke(linewidth=4, foreground='white'),
+        marker_outline = [path_effects.Stroke(linewidth=5, foreground='white'),
                           path_effects.Normal()]
+        helium_handles = []
         for index,line in enumerate(science.helium_vacuum_lines_nm):
-            axes[0].axvline(line/1000,color='black',ls=':',lw=1.8,
+            axes[0].axvline(line/1000,color='black',ls=':',lw=2.6,
                            path_effects=marker_outline,
                            label='He I rest wavelengths' if index==0 else None)
-            axes[0].plot(line*(1+rv_kms/C_KMS)/1000,hours,color='black',ls='--',lw=1.8,
+            axes[0].plot(line*(1+rv_kms/C_KMS)/1000,hours,color='cyan',ls='--',lw=2.6,
                          path_effects=marker_outline,
                          label='Planet velocity track' if index==0 else None)
-            axes[1].axvline(line/1000,color='.65',ls=':',lw=1.2)
-        for index,line in enumerate(science.oh_topocentric_lines_nm):
-            axes[0].plot(stellar_wavelength(line,berv_kms,science.gamma_kms)/1000,
-                         hours,color='.25',ls='-.',lw=1.8,
-                         path_effects=marker_outline,
-                         label='OH sky wavelengths' if index==0 else None)
+            helium_handles.append(axes[1].axvline(
+                line/1000,color='.4',ls=(':','--','-.')[index%3],lw=2.4,
+                label=f'He I ({line/1000:.7f} μm)'))
+        helium_legend = axes[1].legend(handles=helium_handles,loc='upper right',
+                                      title=r'He I: $2\,{}^3S_1\rightarrow 2\,{}^3P^{\rm o}_{0,1,2}$',
+                                      fontsize=13,title_fontsize=14,framealpha=1)
+        axes[1].add_artist(helium_legend)
         axes[0].set(xlim=map_limits,ylabel='Time from mid-transit (h)',
                     title='Residual spectral matrix in the stellar rest frame')
         axes[0].tick_params(axis='x',labelbottom=False)
@@ -287,7 +289,11 @@ def plot_helium_summary(path: Path, result: dict, phase: np.ndarray,
                                   'Points: exposures (unbinned)')):
             axis.axhline(0,color='.6',lw=.8)
             title = sampling if legend_title is None else legend_title+'\n'+sampling
-            axis.legend(title=title,title_fontsize=13,loc='lower left')
+            handles, labels = axis.get_legend_handles_labels()
+            selected = [(handle, text) for handle, text in zip(handles, labels)
+                        if not text.startswith('He I (')]
+            axis.legend([item[0] for item in selected], [item[1] for item in selected],
+                        title=title,title_fontsize=13,loc='lower left')
         for axis in axes[:2]:
             axis.ticklabel_format(axis='x',style='plain',useOffset=False)
         with path.open('xb') as stream:
