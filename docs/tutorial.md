@@ -1259,7 +1259,7 @@ The principal choices in `configs/wasp121b_crires_czesla2024.json` are:
 
 This excerpt shows the main controls; the complete configuration also supplies the ephemeris, systemic velocity, continuum intervals and exposure selections. Adding `helium_transmission_spectroscopy: true` makes the spectroscopy choice explicit. With `use_real_data: true`, EXoPLORE analyses the supplied observations. The helium feature is measured directly in the transmission spectra, so this example uses zero SYSREM iterations and leaves molecular retrieval disabled. The `oh_mode: "baseline"` choice keeps the AB sky subtraction and applies no additional OH mask or emission model. Selecting `"mask"` excludes the configured OH intervals before constructing the transmission spectra.
 
-EXoPLORE calculates each exposure's orbital phase from its observing time and the ephemeris. Comparing these phases with the optical contacts gives exposures 16–32 between T2 and T3, consistent with Czesla et al. (2024). These exposures form the average planetary spectrum. For the reference, we retain their selection of exposures 1–10 and 36–40. Exposures 11 and 12 are also outside the optical transit, but are excluded from the published reference. The current helium branch reads these selections from `in_transit_running_numbers` and `reference_running_numbers`; it calculates the phases but does not automatically replace the supplied lists.
+For this night, we follow Czesla et al. (2024): exposures 1–10 and 36–40 form the out-of-transit reference, and exposures 16–32 form the average planetary transmission spectrum.
 
 The configuration adopts the paper's systemic velocity, 38.35 km s⁻¹, and ephemeris. The extracted wavelengths are already in vacuum. EXoPLORE applies the barycentric and systemic-velocity corrections to align the stellar spectrum, then removes the planet's orbital velocity when constructing the planetary average.
 
@@ -1369,7 +1369,7 @@ The run writes `transmission.npz`, `summary.json` and `transmission_diagnostic.p
 outputs/wasp121_czesla2024/WASP121b/czesla2024/
 ```
 
-The numerical products retain the individual transmission spectra, planetary average, light curves and their uncertainty samples. To reproduce the figure from an existing run:
+The numerical products retain the individual transmission spectra, planetary average, light curves and their propagated extraction uncertainties. To reproduce the figure from an existing run:
 
 ```bash
 python scripts/plot_crires_czesla2024.py transmission \
