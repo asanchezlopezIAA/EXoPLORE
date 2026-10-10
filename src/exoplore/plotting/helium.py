@@ -221,6 +221,7 @@ def plot_helium_summary(path: Path, result: dict, phase: np.ndarray,
                          'legend.fontsize':13, 'xtick.major.size':5.6,
                          'ytick.major.size':5.6}):
         fig, axes = plt.subplots(3,1,figsize=(13,13),constrained_layout=True)
+        axes[1].sharex(axes[0])
         mesh = axes[0].pcolormesh(wave,hours,result['stellar_transmission'],
                                   cmap='RdBu',shading='auto',vmin=.975,vmax=1.025)
         for index,line in enumerate(science.helium_vacuum_lines_nm):
@@ -233,7 +234,9 @@ def plot_helium_summary(path: Path, result: dict, phase: np.ndarray,
             axes[0].plot(stellar_wavelength(line,berv_kms,science.gamma_kms)/1000,
                          hours,color='gold',ls=':',lw=1,
                          label='OH sky wavelengths' if index==0 else None)
-        axes[0].set(xlim=map_limits,xlabel='Wavelength (μm)',ylabel='Time from mid-transit (h)')
+        axes[0].set(xlim=map_limits,ylabel='Time from mid-transit (h)',
+                    title='Residual spectral matrix in the stellar rest frame')
+        axes[0].tick_params(axis='x',labelbottom=False)
         axes[0].legend(loc='upper right',fontsize=12)
         fig.colorbar(mesh,ax=axes[0],label='Transmission')
         if combined:
@@ -257,7 +260,7 @@ def plot_helium_summary(path: Path, result: dict, phase: np.ndarray,
         axes[2].plot(phase,100*(curve-1),'k.-',lw=2.2,label=label)
         axes[2].fill_between(phase,100*(curve-1-curve_error),
                              100*(curve-1+curve_error),color='black',alpha=.15)
-        axes[1].set(xlim=spectrum_limits,xlabel='Wavelength (μm)',ylabel='Transmission excess (%)',
+        axes[1].set(xlim=map_limits,xlabel='Wavelength (μm)',ylabel='Transmission excess (%)',
                     title='Individual nights and combined He I transmission' if combined else 'Planet-frame He I transmission')
         lo,hi=np.asarray(science.planet_lightcurve_window_nm)/1000
         axes[2].set(xlabel='Orbital phase',ylabel='Band-averaged transmission excess (%)',
