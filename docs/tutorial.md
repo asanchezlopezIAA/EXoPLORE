@@ -1348,7 +1348,7 @@ A transmission of 0.98 therefore corresponds to 2% excess absorption. Displaying
 
 ### Step 5: The result
 
-```{figure} figures/tutorial12_helium_transmission_result.png
+```{figure} figures/tutorial12_helium_shared_wavelength.png
 :width: 95%
 :align: center
 
