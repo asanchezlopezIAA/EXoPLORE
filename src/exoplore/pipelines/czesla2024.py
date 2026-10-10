@@ -10,7 +10,7 @@ choices. This module neither detrends with SYSREM nor declares a detection.
 """
 from __future__ import annotations
 
-from dataclasses import asdict
+from dataclasses import asdict, replace
 import hashlib
 import json
 from pathlib import Path
@@ -36,6 +36,36 @@ def exposure_indices(numbers: list[int], n_exposures: int) -> np.ndarray:
     if not numbers or len(set(numbers))!=len(numbers) or any(type(i) is not int or i<1 or i>n_exposures for i in numbers):
         raise ValueError('Invalid chronological exposure selection')
     return np.asarray(numbers,dtype=int)-1
+
+
+def timed_exposure_selection(config: Czesla2024Config, bjd_tdb: np.ndarray,
+                             *, published_wasp121_night: bool = False):
+    """Use EXoPLORE transit timing to determine signal and reference indices.
+
+    The published WASP-121 b night retains its reference subset as part of the
+    Czesla et al. (2024) reproduction recipe, after verifying optical membership.
+    Other nights use the computed out-of-transit spectra. JSON exposure lists
+    are never used by the observed-data runner.
+    """
+    from exoplore.observation.timing import orbital_phase, in_transit_indices
+    phase = orbital_phase(bjd_tdb, config.t0_bjd_tdb, config.period_days)
+    t1, t2, t3, t4 = config.optical_contact_phases
+    with_signal = in_transit_indices(phase, (t4-t1)*config.period_days*24,
+                                     config.period_days)
+    without_signal = np.setdiff1d(np.arange(len(phase)), with_signal)
+    full_transit = in_transit_indices(phase, (t3-t2)*config.period_days*24,
+                                      config.period_days)
+    reference = without_signal
+    if published_wasp121_night:
+        from exoplore.pipelines.helium_math import czesla_indices
+        reference, expected_inside = czesla_indices(len(phase))
+        if not np.isin(reference, without_signal).all() or not np.array_equal(full_transit, expected_inside):
+            raise ValueError('Published WASP-121 night disagrees with the calculated transit timing')
+    if not len(reference) or not len(full_transit):
+        raise ValueError('The observing times must include reference and full-transit spectra')
+    resolved = replace(config, reference_running_numbers=(reference+1).tolist(),
+                       in_transit_running_numbers=(full_transit+1).tolist())
+    return resolved, phase, with_signal, without_signal
 
 
 def exposure_metadata(raw: Path, config: Czesla2024Config) -> tuple[float,float,float]:
@@ -178,48 +208,47 @@ def run_czesla2024(simulation_config) -> Path:
     """Run the explicitly selected observed-data recipe through EXoPLORE's runner.
 
     The output directory must be new. Raw reduction and validated molecfit
-    corrections are upstream inputs, described in the RTD tutorial. Native
-    noise draws rebuild normalization, reference, interpolation and coaddition;
-    physical extraction, stellar and telluric-model systematics remain excluded.
+    corrections are upstream inputs, described in the RTD tutorial. Extraction errors are propagated analytically through the reference division
+    and interpolation. Fitted continua and telluric models are held fixed.
     """
     config=simulation_config.pipeline.czesla2024
     if not isinstance(config,Czesla2024Config):raise ValueError('Explicit pipeline.czesla2024 configuration required')
     destination=Path(simulation_config.paths.output_root)/simulation_config.planet.name/'czesla2024'
     if destination.exists():raise FileExistsError(f'Preserving existing output: {destination}')
     night=read_corrected_night(config)
-    phase=(night['bjd_tdb']-config.t0_bjd_tdb)/config.period_days;phase-=np.round(np.median(phase))
+    published_night = (simulation_config.planet.name.lower() == 'wasp121b'
+                       and len(night['bjd_tdb']) == 40
+                       and np.all(np.floor(night['bjd_tdb']) == 2459997))
+    config,phase,with_signal,without_signal=timed_exposure_selection(
+        config,night['bjd_tdb'],published_wasp121_night=published_night)
     rv=config.kp_kms*np.sin(2*np.pi*phase)
     # Validate every data selection and normalization before creating any output.
     observed=prepare_transmission(night['wave_nm'],night['flux'],night['error'],night['berv_kms'],rv,config)
     output=Path(simulation_config.paths.output_root)/simulation_config.planet.name/'czesla2024'
     output.mkdir(parents=True,exist_ok=False)
-    rng=np.random.default_rng(config.monte_carlo_seed);coadds=[];planet_curves=[];stellar_curves=[]
-    draw_error=night['error']*night['noise_inflation'][:,None]
-    for draw in range(config.monte_carlo_draws):
-        result=prepare_transmission(night['wave_nm'],night['flux']+rng.normal(size=night['flux'].shape)*draw_error,
-                                    night['error'],night['berv_kms'],rv,config)
-        coadds.append(result['planet_coadd']);planet_curves.append(result['planet_lightcurve']);stellar_curves.append(result['stellar_lightcurve'])
-        if (draw+1)%64==0:print(f'  czesla2024: native-noise draws {draw+1}/{config.monte_carlo_draws}',flush=True)
-    with warnings.catch_warnings():
-        warnings.simplefilter('ignore',RuntimeWarning)
-        observed['planet_coadd_error']=np.nanstd(coadds,axis=0,ddof=1)
-        observed['planet_lightcurve_error']=np.nanstd(planet_curves,axis=0,ddof=1)
-        observed['stellar_lightcurve_error']=np.nanstd(stellar_curves,axis=0,ddof=1)
+    # Propagate supplied extraction errors; never create perturbed observations.
+    from exoplore.pipelines.helium_noise_propagation import weighted_crires_uncertainties
+    errors=weighted_crires_uncertainties(night['wave_nm'],night['flux'],night['error'],
+                                        night['berv_kms'],rv,config,observed)
+    observed.update(errors)
     selected=window_mask(observed['planet_wave_nm'],[config.equivalent_width_window_nm])
-    complete=selected.any() and np.isfinite(observed['planet_coadd'][selected]).all() and np.isfinite(np.asarray(coadds)[:,selected]).all()
+    complete=selected.any() and np.isfinite(observed['planet_coadd'][selected]).all()
     ew=float(np.trapz(1-observed['planet_coadd'][selected],observed['planet_wave_nm'][selected])*1e4) if complete else None
-    ew_error=float(np.std(np.trapz(1-np.asarray(coadds)[:,selected],observed['planet_wave_nm'][selected],axis=1)*1e4,ddof=1)) if complete else None
+    ew_error=errors['equivalent_width_error_mA'].item() if complete else None
     with (output/'transmission.npz').open('xb') as stream:
         np.savez(stream,**observed,bjd_tdb=night['bjd_tdb'],berv_kms=night['berv_kms'],planet_rv_kms=rv,phase=phase,
-                 coadd_noise_samples=np.asarray(coadds),planet_lightcurve_noise_samples=np.asarray(planet_curves),stellar_lightcurve_noise_samples=np.asarray(stellar_curves))
+                 with_signal=with_signal,without_signal=without_signal,
+                 reference_indices=np.asarray(config.reference_running_numbers)-1,
+                 full_transit_indices=np.asarray(config.in_transit_running_numbers)-1)
     summary={'pipeline':'czesla2024','scientific_reference':'https://doi.org/10.1051/0004-6361/202451003',
              'status':'Direct transmission preparation; no automatic detection decision',
              'configuration':asdict(config),'simulation_configuration':simulation_config.to_dict(),
+             'exposure_selection':'Internal timing; published reference subset for the original WASP-121 b night' if published_night else 'Internal transit timing',
              'n_exposures':len(rv),'nod':night['nod'],'wavelength_shift_kms':night['wavelength_shift_kms'],
-             'noise_inflation_factors':night['noise_inflation'].tolist(),'equivalent_width_mA':ew,'ew_noise_error_mA':ew_error,
+             'uncertainty_resamples':0,'equivalent_width_mA':ew,'ew_noise_error_mA':ew_error,
              'ew_coverage':'complete' if complete else 'not reported: masked or missing pixels; no gap bridging',
-             'oh_emission_model_applied':False,'uncertainty_scope':'Native noise propagated through continuum, shared reference and interpolation. No stellar/telluric/calibration/physical AB systematic model, significance or physical upper limit.',
-             'weight_convention':'Native ESO conditional variances; RMS inflation affects noise draws only',
+             'oh_emission_model_applied':False,'uncertainty_scope':'Extraction errors propagated analytically through the shared reference and interpolation, conditional on fitted continua and telluric correction. No stellar/telluric/calibration/physical AB systematic model or detection significance.',
+             'weight_convention':'Native ESO variances; no noise perturbation or RMS-inflated draws',
              'inputs':[{'path':str(p.resolve()),'sha256':hashlib.sha256(p.read_bytes()).hexdigest()} for p in night['paths']],
              'raw_header_hashes':night['raw_header_hashes']}
     with (output/'summary.json').open('x') as stream:json.dump(summary,stream,indent=2)
@@ -307,8 +336,8 @@ def validate_run_config(config) -> None:
         raise ValueError('The direct helium branch does not use the molecular atmospheric retrieval')
     if config.pipeline.czesla2024 is None:
         raise ValueError('Explicit pipeline.czesla2024 settings are required')
-    if config.pipeline.czesla2024.monte_carlo_draws < 100:
-        raise ValueError('Observed-data uncertainty propagation requires at least 100 native-noise draws')
+    if config.pipeline.czesla2024.monte_carlo_draws != 0:
+        raise ValueError('Observed helium preparation does not support noise perturbations; remove monte_carlo_draws')
 
 
 def preparing_pipeline_adapter(inp_dat: dict,data: np.ndarray,noise: np.ndarray,
@@ -319,13 +348,21 @@ def preparing_pipeline_adapter(inp_dat: dict,data: np.ndarray,noise: np.ndarray,
     Requires ``czesla2024_config``, ``berv_kms``, ``planet_rv_kms`` and an
     explicit ``telluric_corrected=True`` statement in ``inp_dat``. Per-frame
     native wavelengths and masked errors are required for an OH-mask run.
-    Output noise is marginal only; use the high-level runner for native MC.
+    Output noise is propagated analytically; no perturbed spectra are generated.
     """
     if retrieval:raise ValueError('czesla2024 dispatcher does not implement molecular retrieval filtering')
     if inp_dat.get('telluric_corrected') is not True:
         raise ValueError('czesla2024 requires separately validated telluric corrections')
     config=inp_dat['czesla2024_config']
     if isinstance(config,dict):config=Czesla2024Config(**config)
+    if not config.reference_running_numbers or not config.in_transit_running_numbers:
+        if 'phase' in inp_dat:
+            times=config.t0_bjd_tdb+np.asarray(inp_dat['phase'])*config.period_days
+        elif 'julian_date' in inp_dat:
+            times=np.asarray(inp_dat['julian_date'])
+        else:
+            raise ValueError('Supply phase or julian_date for internal transit selection')
+        config,_,_,_=timed_exposure_selection(config,times)
     waves=np.broadcast_to(wave,data.shape);flux=np.array(data,dtype=float,copy=True);error=np.array(noise,dtype=float,copy=True)
     flux[:,np.asarray(mask,dtype=int)]=np.nan;error[:,np.asarray(mask,dtype=int)]=np.nan
     if config.oh_mode=='mask':

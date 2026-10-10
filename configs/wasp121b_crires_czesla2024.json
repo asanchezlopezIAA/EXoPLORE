@@ -95,42 +95,6 @@
       ],
       "input_path": "inputs/CRIRES_PLUS/WASP121b/czesla2024_corrected",
       "order_segment": "CHIP1.INT1_02",
-      "reference_running_numbers": [
-        1,
-        2,
-        3,
-        4,
-        5,
-        6,
-        7,
-        8,
-        9,
-        10,
-        36,
-        37,
-        38,
-        39,
-        40
-      ],
-      "in_transit_running_numbers": [
-        16,
-        17,
-        18,
-        19,
-        20,
-        21,
-        22,
-        23,
-        24,
-        25,
-        26,
-        27,
-        28,
-        29,
-        30,
-        31,
-        32
-      ],
       "minimum_continuum_pixels": 20,
       "max_wavelength_shift_kms": 1.0,
       "stellar_lightcurve_window_nm": [
@@ -140,9 +104,7 @@
       "plot_stellar_window_nm": [
         1082.8,
         1083.9
-      ],
-      "monte_carlo_draws": 512,
-      "monte_carlo_seed": 20261006
+      ]
     }
   },
   "paths": {

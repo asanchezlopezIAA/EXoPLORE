@@ -4,11 +4,11 @@ exoplore.config.czesla2024
 
 Explicit configuration for direct He I transmission preparation following
 Czesla et al. (2024), A&A 692, A230, doi:10.1051/0004-6361/202451003.
-Dataset-specific exposure selections and frame conventions are mandatory.
+Exposure membership is computed from observing times and transit geometry.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import math
 
 
@@ -17,8 +17,7 @@ class Czesla2024Config:
     """Scientific choices for one observed, corrected CRIRES+ time series.
 
     ``input_path`` points to a validated per-exposure correction directory.
-    ``reference_running_numbers`` and ``in_transit_running_numbers`` are
-    one-based chronological selections, supplied separately for every dataset.
+    Exposure selections are internal timing products, not required JSON inputs.
     Wavelengths are native topocentric vacuum nm; velocities are km/s.
     Continuum normalization is an explicit local implementation choice, since
     the paper does not specify a complete normalization recipe.
@@ -26,8 +25,6 @@ class Czesla2024Config:
     input_path: str
     wavelength_frame: str
     order_segment: str
-    reference_running_numbers: list[int]
-    in_transit_running_numbers: list[int]
     gamma_kms: float
     kp_kms: float
     t0_bjd_tdb: float
@@ -53,8 +50,11 @@ class Czesla2024Config:
     optical_contact_phases: list[float]
     plot_stellar_window_nm: list[float]
     equivalent_width_window_nm: list[float]
-    monte_carlo_draws: int
-    monte_carlo_seed: int
+    monte_carlo_draws: int = 0
+    monte_carlo_seed: int = 0
+    # Retained for internal adapters and compatibility with saved products.
+    reference_running_numbers: list[int] = field(default_factory=list)
+    in_transit_running_numbers: list[int] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         """Reject ambiguous scientific settings before starting a run."""
@@ -67,7 +67,7 @@ class Czesla2024Config:
         if self.oh_mode == 'mask' and not self.oh_topocentric_windows_nm:
             raise ValueError('OH mask mode requires explicit native topocentric windows')
         selections=[self.reference_running_numbers,self.in_transit_running_numbers]
-        if any(not s or any(type(i) is not int or i<1 for i in s) or len(set(s))!=len(s) for s in selections):
+        if any(any(type(i) is not int or i<1 for i in s) or len(set(s))!=len(s) for s in selections):
             raise ValueError('Exposure selections must contain unique positive integer running numbers')
         if set(selections[0])&set(selections[1]):
             raise ValueError('Reference and in-transit selections must be disjoint')
