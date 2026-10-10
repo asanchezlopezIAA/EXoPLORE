@@ -252,18 +252,21 @@ def plot_helium_summary(path: Path, result: dict, phase: np.ndarray,
                 night_label=f'Night {index+1}'
                 if significance is not None:
                     night_label += f" ({significance[index]['significance_sigma']:.1f}σ)"
-                axes[1].plot(planet_wave[band],100*(spectrum[band]-1),color=color,lw=1,alpha=.7,label=night_label)
-                axes[2].plot(phase,100*(curve-1),'.-',color=color,lw=1,alpha=.7,label=night_label)
+                axes[1].plot(planet_wave[band],100*(spectrum[band]-1),'o-',
+                             color=color,lw=1,markersize=3,alpha=.7,label=night_label)
+                axes[2].plot(phase,100*(curve-1),'o-',color=color,lw=1,
+                             markersize=4,alpha=.7,label=night_label)
                 if night_lightcurve_errors is not None:
                     error=night_lightcurve_errors[index]
                     axes[2].fill_between(phase,100*(curve-1-error),100*(curve-1+error),
                                          color=color,alpha=.10)
         spectrum=np.asarray(result['planet_coadd'])
         curve=np.asarray(result['planet_lightcurve'])
-        axes[1].plot(planet_wave[band],100*(spectrum[band]-1),'k-',lw=2.2,label=label)
+        axes[1].plot(planet_wave[band],100*(spectrum[band]-1),'ko-',lw=1.5,
+                     markersize=3.5,label=label)
         axes[1].fill_between(planet_wave[band],100*(spectrum[band]-1-coadd_error[band]),
                              100*(spectrum[band]-1+coadd_error[band]),color='black',alpha=.15)
-        axes[2].plot(phase,100*(curve-1),'k.-',lw=2.2,label=label)
+        axes[2].plot(phase,100*(curve-1),'ko-',lw=2.2,markersize=5,label=label)
         axes[2].fill_between(phase,100*(curve-1-curve_error),
                              100*(curve-1+curve_error),color='black',alpha=.15)
         axes[1].set(xlim=map_limits,xlabel='Wavelength (μm)',ylabel='Transmission excess (%)',
@@ -279,9 +282,12 @@ def plot_helium_summary(path: Path, result: dict, phase: np.ndarray,
             axes[2].text(contact,.98,f'T{index}',transform=axes[2].get_xaxis_transform(),
                          ha='right' if index in (1,3) else 'left',va='top',fontsize=12,
                          bbox=dict(facecolor='white',edgecolor='none',alpha=.8,pad=1))
-        for axis in axes[1:]:
+        for axis,sampling in zip(axes[1:],
+                                 ('Points: spectral pixels (unbinned)',
+                                  'Points: exposures (unbinned)')):
             axis.axhline(0,color='.6',lw=.8)
-            axis.legend(title=legend_title,title_fontsize=13,loc='lower left')
+            title = sampling if legend_title is None else legend_title+'\n'+sampling
+            axis.legend(title=title,title_fontsize=13,loc='lower left')
         for axis in axes[:2]:
             axis.ticklabel_format(axis='x',style='plain',useOffset=False)
         with path.open('xb') as stream:
