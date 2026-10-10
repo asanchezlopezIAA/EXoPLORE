@@ -1212,11 +1212,11 @@ To resume an interrupted sweep, just re-run the command: existing grid points ar
 
 ## Tutorial 12: He I transmission spectroscopy with CRIRES+ (WASP-121 b)
 
-> **Approximate run time:** ~45–50 min for the per-exposure telluric correction of this 40-spectrum night. The saved fits took 61–77 s per exposure, with a total of 46 min. Raw reduction is a separate, one-off calculation. The transmission analysis with 512 uncertainty draws has not yet been timed separately; existing corrections can be reused, and the plotting commands read their saved results.
+> **Approximate run time:** ~45–50 min for the per-exposure telluric correction of this 40-spectrum night. The saved fits took 61–77 s per exposure, with a total of 46 min. Raw reduction is a separate, one-off calculation.
 
 The He I triplet near 1.0833 µm probes the upper atmospheres of transiting planets. Here we analyse the CRIRES+ observations of WASP-121 b presented by [Czesla et al. (2024)](https://doi.org/10.1051/0004-6361/202451003), who report helium absorption of approximately 2% and investigate its evolution through transit. We use the same observing sequence to illustrate how EXoPLORE constructs a stellar-frame transmission map, an average planetary transmission spectrum, and helium light curves.
 
-During transit, the planet's orbital motion shifts its absorption across the stellar spectrum. We therefore construct the stellar reference after aligning the observations with the star, and average the transmission spectra after aligning them with the planet. The `czesla2024` preparation choice implements this sequence, following Section 3.4 of Czesla et al. (2024).
+During transit, the planet's orbital motion changes the wavelength at which we observe its helium absorption. We therefore construct the stellar reference after aligning the observations with the star, and average the transmission spectra after aligning them with the planet. The `czesla2024` preparation choice implements this sequence, following Section 3.4 of Czesla et al. (2024).
 
 ### Step 1: The observations and reference files
 
@@ -1257,11 +1257,11 @@ The principal choices in `configs/wasp121b_crires_czesla2024.json` are:
 "paths": { "output_root": "outputs/wasp121_czesla2024" }
 ```
 
-This excerpt shows the main controls; the complete configuration also supplies the ephemeris, systemic velocity, continuum intervals and exposure selections. Adding `helium_transmission_spectroscopy: true` makes the spectroscopy choice explicit. With `use_real_data: true`, EXoPLORE analyses the supplied observations. The helium feature is measured directly in the transmission spectra, so this example uses zero SYSREM iterations and leaves molecular retrieval disabled.
+This excerpt shows the main controls; the complete configuration also supplies the ephemeris, systemic velocity, continuum intervals and exposure selections. Adding `helium_transmission_spectroscopy: true` makes the spectroscopy choice explicit. With `use_real_data: true`, EXoPLORE analyses the supplied observations. The helium feature is measured directly in the transmission spectra, so this example uses zero SYSREM iterations and leaves molecular retrieval disabled. The `oh_mode: "baseline"` choice keeps the AB sky subtraction and applies no additional OH mask or emission model. Selecting `"mask"` excludes the configured OH intervals before constructing the transmission spectra.
 
-Following Czesla et al. (2024), the reference uses chronological exposures 1–10 and 36–40. The average planetary spectrum uses exposures 16–32, between the optical second and third contacts. These lists are supplied through `reference_running_numbers` and `in_transit_running_numbers`; they describe this observing sequence and should be selected again for another night.
+EXoPLORE calculates each exposure's orbital phase from its observing time and the ephemeris. Comparing these phases with the optical contacts gives exposures 16–32 between T2 and T3, consistent with Czesla et al. (2024). These exposures form the average planetary spectrum. For the reference, we retain their selection of exposures 1–10 and 36–40. Exposures 11 and 12 are also outside the optical transit, but are excluded from the published reference. The current helium branch reads these selections from `in_transit_running_numbers` and `reference_running_numbers`; it calculates the phases but does not automatically replace the supplied lists.
 
-The configuration adopts the paper's systemic velocity, 38.35 km s⁻¹, and ephemeris. The extracted wavelengths are already in vacuum. EXoPLORE applies the barycentric and systemic-velocity corrections to align the stellar spectrum, then removes the planet's orbital velocity when constructing the planetary average. An additional air-to-vacuum conversion would introduce a large, spurious shift.
+The configuration adopts the paper's systemic velocity, 38.35 km s⁻¹, and ephemeris. The extracted wavelengths are already in vacuum. EXoPLORE applies the barycentric and systemic-velocity corrections to align the stellar spectrum, then removes the planet's orbital velocity when constructing the planetary average.
 
 We can preview the selected analysis before loading the spectra:
 
@@ -1285,23 +1285,23 @@ python scripts/prepare_crires_czesla2024.py \
   --pilot-exposure 1 --run
 ```
 
-The saved fit can then be plotted without repeating molecfit:
+The saved fit can then be plotted with:
 
 ```bash
 python scripts/plot_crires_czesla2024.py exposure \
   mynight/helium_pilot mynight/telluric_exposure_01.png --exposure 1
 ```
 
-```{figure} figures/tutorial12_telluric_exposure_v2.png
+```{figure} figures/tutorial12_telluric_correction.png
 :width: 100%
 :align: center
 
 Telluric correction of the first WASP-121 b exposure. Each column shows one fitting interval. The observed spectrum and fitted model are compared in the top row; the middle row shows the spectrum before and after correction, scaled by the local continuum. The bottom row gives the residuals in units of the extraction uncertainty. The telluric lines are substantially reduced, although the remaining scatter exceeds the extraction errors. Produced with `scripts/plot_crires_czesla2024.py exposure`.
 ```
 
-The wavelength refinement is especially important here. Czesla et al. (2024) report adjustments of order 0.1 km s⁻¹, with a small nod-dependent pattern. Fits displaced by tens of km s⁻¹ can instead divide the observation by a misaligned telluric model and create artificial structure. The example therefore starts the wavelength fit at zero displacement and rejects adjustments exceeding 1 km s⁻¹. The fitting intervals and instrumental-kernel choices are our adopted settings; the publication does not specify every molecfit parameter.
+Czesla et al. (2024) report adjustments of order 0.1 km s⁻¹, with a small nod-dependent pattern. Fits displaced by tens of km s⁻¹ can instead divide the observation by a misaligned telluric model and create artificial structure. The example therefore starts the wavelength fit at zero displacement and rejects adjustments exceeding 1 km s⁻¹.
 
-Once the pilot fit is satisfactory, we process all 40 exposures:
+Once the first fit is successful, we process all 40 exposures:
 
 ```bash
 python scripts/prepare_crires_czesla2024.py \
@@ -1321,7 +1321,7 @@ python scripts/plot_crires_czesla2024.py night \
   mynight/telluric_night.png
 ```
 
-```{figure} figures/tutorial12_telluric_night.png
+```{figure} figures/tutorial12_wavelength_refinement.png
 :width: 90%
 :align: center
 
@@ -1340,30 +1340,28 @@ EXoPLORE shifts every spectrum into the stellar frame and normalises its continu
 
 The out-of-transit reference is the inverse-variance weighted average of exposures 1–10 and 36–40. Dividing each normalised spectrum by this reference gives
 
-\[
+```{math}
 \mathcal{T}(\lambda,t)=\frac{F(\lambda,t)}{F_{\mathrm{out}}(\lambda)}.
-\]
+```
 
-A transmission of 0.98 therefore corresponds to 2% excess absorption. Displaying these ratios against wavelength and time gives the stellar-frame map. We then shift the ratios into the planetary frame and calculate the weighted average of exposures 16–32. This brings the moving helium components together before averaging.
+A transmission of 0.98 therefore corresponds to 2% excess absorption. Displaying these ratios against wavelength and time gives the stellar-frame map. We then shift the ratios into the planetary frame and calculate the weighted average of exposures 16–32. In this way, the planetary He I signal is aligned.
 
 ### Step 5: The result
 
-```{figure} figures/czesla2024_wasp121_diagnostic.png
+```{figure} figures/tutorial12_helium_transmission.png
 :width: 95%
 :align: center
 
-Helium transmission spectra of WASP-121 b. Top: the stellar-frame map, where absorption appears red and follows approximately the expected planetary velocity tracks (red dashed lines). The magenta markers indicate the triplet wavelengths and the horizontal dashed lines mark the optical transit contacts. Second panel: the average transmission after shifting exposures 16–32 into the planetary frame, with the propagated uncertainty shaded. The two lower panels show the mean transmission through bands fixed in the planetary and stellar frames, respectively. Produced by the run as `transmission_diagnostic.png`.
+Helium transmission spectra of WASP-121 b. Top: the stellar-frame map, where absorption appears red and follows approximately the expected planetary velocity tracks (red dashed lines). The magenta markers indicate the triplet wavelengths and the horizontal dashed lines mark the optical transit contacts. Second panel: the average transmission after shifting exposures 16–32 into the planetary frame. The line follows the native pixels, with 1σ uncertainties shown by the shading and error bars. The two lower panels show the helium absorption in percent, measured in the planetary and stellar frames. T1–T4 indicate the four optical contacts. Produced by the run as `transmission_diagnostic.png`.
 ```
 
-The absorption near the stronger triplet components reaches approximately 2%, comparable in scale to the feature reported by Czesla et al. (2024). The map retains the time information, while the planetary average combines the in-transit signal. The weaker component lies blueward of the strong blend and carries less information at this noise level.
+The absorption near the stronger triplet components reaches approximately 2%, comparable in scale to the feature reported by Czesla et al. (2024). The map retains the time information, while the planetary average combines the in-transit signal. The weaker component lies blueward of the strong one and carries less information at this noise level.
 
-The planetary light curve follows a 0.5 Å interval around the strong components as they move through the observations. The stellar-frame curve uses a wider, stationary 1 Å interval, so the two curves measure different wavelength selections and their depths need not coincide. They show integrated transmission; Czesla et al. (2024) additionally fit time-dependent helium profiles to investigate the evolution of the absorbing gas.
+Each point in the third panel measures the helium absorption in one exposure: we average the transmission over a 0.5 Å band centred on the stronger triplet components in the planetary frame, and plot $100(1-\langle\mathcal{T}\rangle)$ in percent. Zero means no excess absorption relative to the reference; positive values mean absorption. Because the band follows the planet's Doppler shift, this curve shows when the planetary signal appears and how its strength changes through transit. Czesla et al. (2024) use this band in their Fig. 5.
 
-Sky OH emission also occurs near the triplet. The baseline analysis retains the AB sky subtraction and marks the OH positions. Molecfit models atmospheric absorption, so residual OH emission must be assessed separately. For a comparison excluding the configured OH intervals, set `oh_mode: "mask"` and select a new output root. The masks are applied before the frame shifts. Measurements with incomplete coverage of their integration band are left undefined.
+The fourth panel measures the same quantity in a 1 Å band fixed at the stellar helium wavelength, following the wavelength selection of their Fig. 6. The moving planetary line enters and leaves this stationary band. This curve helps identify changes that remain near the stellar line, but it contains planetary absorption too. Czesla et al. (2024) subtract their fitted planetary model to examine the remaining variability; this figure shows the measurements before that subtraction. The two curves therefore answer different questions and need not have the same depth. The vertical lines mark ingress starting (T1), full transit starting (T2), full transit ending (T3), and egress ending (T4).
 
-The shaded uncertainties are obtained by repeating the preparation with noisy versions of the extracted spectra. The example uses 512 draws, rebuilding the shared out-of-transit reference on each draw so its noise propagates into the planetary spectrum and light curves. This calculation estimates measurement uncertainty; it does not generate additional observing nights. Uncertainty in the telluric model and stellar variability are not fully included.
-
-The recovered feature is encouraging, but agreement in depth alone does not establish a complete reproduction of the published result. Continuum choices, nod-dependent residuals and OH contamination affect the profile and its width. Comparing those effects is necessary before interpreting velocity shifts or assigning a detection significance.
+Sky OH emission also occurs near the triplet. The baseline choice of analysis retains the AB sky subtraction and marks the OH positions. Molecfit models atmospheric absorption, so residual OH emission must be assessed separately. For a comparison excluding the configured OH intervals, set `oh_mode: "mask"` and select a new output root. The masks are applied before the frame shifts. If masking removes pixels within a light-curve band, that exposure is omitted from the curve: averaging a smaller part of the line would change the quantity being measured.
 
 The run writes `transmission.npz`, `summary.json` and `transmission_diagnostic.png` under:
 

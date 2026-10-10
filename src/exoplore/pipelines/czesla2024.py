@@ -236,25 +236,59 @@ def plot_transmission(result: dict,phase: np.ndarray,rv: np.ndarray,berv: np.nda
     import matplotlib.pyplot as plt
     if path.exists():raise FileExistsError(path)
     wave=result['stellar_wave_nm'];hours=phase*config.period_days*24
-    fig,axes=plt.subplots(4,1,figsize=(10,12),constrained_layout=True)
-    image=axes[0].pcolormesh(wave,hours,result['stellar_transmission'],cmap='RdBu',shading='auto',vmin=.975,vmax=1.025)
-    for line in config.helium_vacuum_lines_nm:
-        axes[0].axvline(line,color='magenta',ls=':');axes[0].plot(line*(1+rv/C_KMS),hours,color='red',ls='--',lw=.7)
-        axes[1].axvline(line,color='magenta',ls=':')
-    for line in config.oh_topocentric_lines_nm:
-        axes[0].plot(stellar_wavelength(line,berv,config.gamma_kms),hours,color='gold',ls=':',lw=.7)
-    axes[0].set(xlim=config.plot_stellar_window_nm,xlabel='Stellar-frame vacuum wavelength (nm)',ylabel='Hours from transit',title='Czesla et al. (2024) direct preparation — diagnostic')
-    fig.colorbar(image,ax=axes[0],label='Relative transmission')
-    axes[1].plot(wave,result['planet_coadd'],'k-',lw=.7)
-    axes[1].fill_between(wave,result['planet_coadd']-result['planet_coadd_error'],result['planet_coadd']+result['planet_coadd_error'],alpha=.2)
-    axes[1].set(xlim=config.plot_stellar_window_nm,xlabel='Planet-frame vacuum wavelength (nm)',ylabel='Transmission')
-    for ax,key,title in [(axes[2],'planet','Planet-frame fixed-band curve'),(axes[3],'stellar','Stellar-frame fixed-band curve')]:
-        ax.errorbar(hours,result[key+'_lightcurve'],yerr=result[key+'_lightcurve_error'],fmt='o',ms=3)
-        ax.set(xlabel='Hours from transit',ylabel='Transmission',title=title)
-    for contact in config.optical_contact_phases:
-        axes[0].axhline(contact*config.period_days*24,color='black',ls='--',lw=.5)
-        for ax in axes[2:]:ax.axvline(contact*config.period_days*24,color='black',ls='--',lw=.5)
-    fig.savefig(path,dpi=160);plt.close(fig)
+    # Display only: retain the native sampling and all saved scientific products.
+    with plt.rc_context({'font.size':14,'axes.labelsize':17,'xtick.labelsize':14,
+                         'ytick.labelsize':14,'legend.fontsize':13,
+                         'xtick.major.size':5.6,'ytick.major.size':5.6}):
+        fig,axes=plt.subplots(4,1,figsize=(13,15),constrained_layout=True)
+        image=axes[0].pcolormesh(wave/1000,hours,result['stellar_transmission'],
+                               cmap='RdBu',shading='auto',vmin=.975,vmax=1.025)
+        for index,line in enumerate(config.helium_vacuum_lines_nm):
+            axes[0].axvline(line/1000,color='magenta',ls=':',lw=1.2,
+                           label='He I rest wavelengths' if index==0 else None)
+            axes[0].plot(line*(1+rv/C_KMS)/1000,hours,color='red',ls='--',lw=1,
+                         label='Planet velocity track' if index==0 else None)
+            axes[1].axvline(line/1000,color='magenta',ls=':',lw=1.2,
+                           label='He I rest wavelengths' if index==0 else None)
+        for index,line in enumerate(config.oh_topocentric_lines_nm):
+            axes[0].plot(stellar_wavelength(line,berv,config.gamma_kms)/1000,
+                         hours,color='gold',ls=':',lw=1,
+                         label='OH sky lines' if index==0 else None)
+        limits=np.asarray(config.plot_stellar_window_nm)/1000
+        axes[0].set(xlim=limits,xlabel='Wavelength (µm)',ylabel='Time from mid-transit (h)')
+        fig.colorbar(image,ax=axes[0],label='Transmission')
+        axes[0].legend(loc='upper right',fontsize=11)
+        axes[1].plot(wave/1000,result['planet_coadd'],'k-',lw=1,label='Native spectrum')
+        axes[1].fill_between(wave/1000,result['planet_coadd']-result['planet_coadd_error'],
+                             result['planet_coadd']+result['planet_coadd_error'],
+                             color='tab:blue',alpha=.2)
+        visible=(wave/1000>=limits[0])&(wave/1000<=limits[1])
+        axes[1].errorbar(wave[visible]/1000,result['planet_coadd'][visible],
+                        yerr=result['planet_coadd_error'][visible],fmt='o',ms=3,
+                        color='black',ecolor='0.5',elinewidth=.7,alpha=.8,
+                        label='Native pixels (1σ)')
+        axes[1].set(xlim=limits,xlabel='Wavelength (µm)',ylabel='Transmission')
+        axes[1].legend(loc='lower left')
+        for ax,key,description in [(axes[2],'planet','Planet frame: 0.5 Å band'),
+                                    (axes[3],'stellar','Stellar frame: 1 Å band')]:
+            ax.errorbar(hours,100*(1-result[key+'_lightcurve']),
+                        yerr=100*result[key+'_lightcurve_error'],fmt='o',ms=5,
+                        capsize=3,color='tab:blue',label=description)
+            ax.axhline(0,color='0.5',ls=':',lw=1)
+            ax.set(xlabel='Time from mid-transit (h)',ylabel='He I absorption (%)')
+            ax.legend(loc='upper left')
+        for index,contact in enumerate(config.optical_contact_phases,1):
+            hour=contact*config.period_days*24
+            axes[0].axhline(hour,color='black',ls='--',lw=.9)
+            axes[0].text(.01,hour,f'T{index}',transform=axes[0].get_yaxis_transform(),
+                         va='bottom',fontsize=12)
+            for ax in axes[2:]:
+                ax.axvline(hour,color='black',ls='--',lw=.9)
+                ax.text(hour,.98,f'T{index}',transform=ax.get_xaxis_transform(),
+                        ha='center',va='top',fontsize=12)
+        for ax in axes[:2]:
+            ax.ticklabel_format(axis='x',style='plain',useOffset=False)
+        fig.savefig(path,dpi=160);plt.close(fig)
 
 
 def validate_run_config(config) -> None:

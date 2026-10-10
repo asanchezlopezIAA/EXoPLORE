@@ -53,44 +53,49 @@ def plot_exposure(directory: Path, number: int, output: Path) -> None:
     if len(wavelength) != len(native_wave) or not np.allclose(wavelength, native_wave, rtol=0, atol=1e-7):
         raise ValueError("Model and correction must have the same native pixels")
     windows = report["fit_windows_nm"]
-    figure, axes = plt.subplots(3, len(windows), figsize=(3.2 * len(windows), 7.5), squeeze=False)
+    figure, axes = plt.subplots(3, len(windows), figsize=(4.4 * len(windows), 9.5), squeeze=False, sharex="col", gridspec_kw={"hspace": 0})
     for column, (lower, upper) in enumerate(windows):
         valid = ((wavelength >= lower) & (wavelength <= upper)
                  & (model["mrange"] > 0) & (model["weight"] > 0)
                  & (model["mscal"] > 0) & (transmission > 0))
         if not np.any(valid):
             raise ValueError("Saved fit window has no usable pixels")
-        x = wavelength[valid]
+        x = wavelength[valid] / 1000
         observed, fitted = model["flux"][valid], model["mflux"][valid]
         continuum = model["mscal"][valid]
         axes[0, column].plot(x, observed, color="black", label="Observed")
         axes[0, column].plot(x, fitted, color="tab:orange", label="Telluric fit")
-        axes[0, column].set_title(f"{lower:.2f}–{upper:.2f} nm")
+        axes[0, column].set_title(f"{lower / 1000:.5f}–{upper / 1000:.5f} µm", fontsize=16)
         axes[1, column].plot(x, observed / continuum, color="0.6", label="Before correction")
         axes[1, column].plot(x, observed / continuum / transmission[valid], color="tab:blue", label="After correction")
         axes[1, column].axhline(1, color="0.5", ls=":")
         residual = (observed - fitted) * model["weight"][valid]
         axes[2, column].plot(x, residual, color="black")
         axes[2, column].axhline(0, color="0.5", ls=":")
-        axes[2, column].set_xlabel("Native vacuum wavelength (nm)")
+        axes[2, column].set_xlabel("Wavelength (µm)")
         for axis in axes[:, column]:
             axis.ticklabel_format(axis="x", style="plain", useOffset=False)
             axis.xaxis.set_major_locator(MaxNLocator(3))
-            axis.tick_params(labelsize=9)
-    axes[0, 0].set_ylabel("Scaled extracted flux")
-    axes[1, 0].set_ylabel("Continuum-scaled flux")
+            axis.yaxis.set_major_locator(MaxNLocator(4, prune="both"))
+            axis.tick_params(labelsize=13, length=5.6, width=1.1)
+            axis.xaxis.label.set_size(17)
+            axis.yaxis.label.set_size(17)
+        for axis in axes[:2, column]:
+            axis.tick_params(axis="x", labelbottom=False)
+    axes[0, 0].set_ylabel("Extracted flux")
+    axes[1, 0].set_ylabel("Normalised flux")
     axes[2, 0].set_ylabel("(Data − model) / error")
-    axes[0, 0].legend(fontsize=8)
-    axes[1, 0].legend(fontsize=8)
-    figure.suptitle(f"Exposure {number}, nod {report['nod']}: telluric anchors; wavelength adjustment {report['he_shift_kms']:+.3f} km/s")
-    figure.tight_layout()
+    axes[0, 0].legend(fontsize=12)
+    axes[1, 0].legend(fontsize=12)
+    figure.suptitle(f"Exposure {number}, nod {report['nod']}: wavelength adjustment {report['he_shift_kms']:+.3f} km/s", fontsize=17)
+    figure.subplots_adjust(hspace=0, wspace=0.30, top=0.88, bottom=0.10, left=0.08, right=0.99)
     save_figure(figure, output)
 
 
 def plot_night(directory: Path, output: Path) -> None:
     """Compare wavelength refinement, fitted Gaussian width, and fit quality."""
     reports = read_reports(directory)
-    figure, axes = plt.subplots(3, 1, figsize=(10, 8), sharex=True)
+    figure, axes = plt.subplots(3, 1, figsize=(12, 10), sharex=True)
     fields = [("he_shift_kms", "Wavelength adjustment (km/s)"),
               ("gaussfwhm", "Gaussian FWHM (pixels)"),
               ("reduced_chi2", "Reduced chi-squared")]
@@ -102,9 +107,13 @@ def plot_night(directory: Path, output: Path) -> None:
             axis.set_ylabel(label)
             axis.grid(alpha=0.2)
     axes[0].axhline(0, color="0.5", ls=":")
-    axes[0].legend()
+    axes[0].legend(fontsize=14)
     axes[-1].set_xlabel("Chronological exposure number")
-    figure.suptitle("Telluric correction across the observing sequence")
+    for axis in axes:
+        axis.tick_params(labelsize=14, length=5.6, width=1.1)
+        axis.xaxis.label.set_size(17)
+        axis.yaxis.label.set_size(17)
+    figure.suptitle("Telluric correction across the observing sequence", fontsize=17)
     figure.tight_layout()
     save_figure(figure, output)
 
