@@ -20,6 +20,7 @@ from exoplore.instruments import load_instrument_v2, get_WaveGrid_v2
 from exoplore.instruments.carmenes_helium_molecfit import fit_carmenes_night
 from exoplore.observation.noise import photon_noise
 from exoplore.pipelines.carmenes_helium import prepare_carmenes_transmission
+from exoplore.pipelines.czesla2024 import timed_exposure_selection
 from exoplore.pipelines.helium_math import window_mask
 from exoplore.planets import load_planet
 
@@ -107,11 +108,13 @@ def run_carmenes_helium(config, *, expectation_source: Path | None = None):
     if not np.allclose(science.optical_contact_phases, contact_phases(planet),atol=1e-7,rtol=0):
         raise ValueError('Preparation contacts differ from the injected transit')
     phases = np.asarray(h.phase_midpoints)
+    science,_,_,_=timed_exposure_selection(science,
+        science.t0_bjd_tdb+phases*science.period_days,config.observation.exposure_time_seconds)
     half = config.observation.exposure_time_seconds/(2*science.period_days*86400)
     if np.any(np.diff(phases)<2*half):raise ValueError('Synthetic exposures overlap')
     contacts = np.asarray(science.optical_contact_phases)
-    refs = np.asarray(science.reference_running_numbers)-1
-    inside = np.asarray(science.in_transit_running_numbers)-1
+    refs = np.asarray(science._reference_indices, dtype=int)
+    inside = np.asarray(science._full_transit_indices, dtype=int)
     if np.any((phases[refs]+half>contacts[0])&(phases[refs]-half<contacts[3])):raise ValueError('Reference exposure overlaps optical transit')
     if np.any(phases[inside]-half<contacts[1]) or np.any(phases[inside]+half>contacts[2]):raise ValueError('Coadd exposure extends beyond T2--T3')
     output = Path(config.paths.output_root)/config.planet.name/('helium_sunbather' if h.backend == 'sunbather' else 'helium_pwinds')

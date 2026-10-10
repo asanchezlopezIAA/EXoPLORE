@@ -29,6 +29,11 @@ def _physical_config(config: dict) -> dict:
     result = json.loads(json.dumps(config))
     result['paths']['output_root'] = ''
     result['observation']['n_nights'] = 1
+    for recipe in ('czesla2024','carmenes_helium'):
+        choices=result.get('pipeline',{}).get(recipe)
+        if choices:
+            choices.pop('reference_running_numbers',None)
+            choices.pop('in_transit_running_numbers',None)
     h = result['atmosphere']['helium']
     # A significance estimator changes reporting, not the saved observations.
     h.pop('allart2023_significance', None)
@@ -118,6 +123,10 @@ def combine_helium_nights(output: Path, sources: list[Path], science, settings):
             result = {k: data[k].copy() for k in data.files}
         with np.load(source/'molecfit_calibration.npz') as data:
             calibration = {k: data[k].copy() for k in data.files}
+        from exoplore.pipelines.czesla2024 import timed_exposure_selection
+        config=json.loads((source/'run_config.json').read_text())
+        science,_,_,_=timed_exposure_selection(science,obs['bjd_tdb'],
+            config['observation']['exposure_time_seconds'])
         if common is None:
             common = result['planet_wave_nm'].copy()
             stellar_grid = result['stellar_wave_nm'].copy()
@@ -224,59 +233,20 @@ def plot_helium_nights(output, wave, spectra, combined, error, phases,
     colors = plt.get_cmap('tab10')
     if any((output/f'{stem}.{extension}').exists() for stem in ('helium_nights_comparison','helium_nights_maps') for extension in ('png','pdf')):
         raise FileExistsError('Preserve existing helium comparison figures; choose a new output')
-    fig, axes = plt.subplots(2, 1, figsize=(11, 8), constrained_layout=True)
-    band = window_mask(wave, [science.equivalent_width_window_nm])
-    for index, (spectrum, curve) in enumerate(zip(spectra, lightcurves)):
-        color = colors(index % 10)
-        label = f'Night {index+1}'
-        if significance is not None:
-            label += f" ({significance[index]['significance_sigma']:.1f}σ)"
-        axes[0].plot(wave[band], 100*(spectrum[band]-1), color=color,
-                     lw=1, alpha=.7, label=label)
-        axes[1].plot(phases, 100*(curve-1), '.-', color=color,
-                     lw=1, alpha=.7, label=label)
-        if lightcurve_errors is not None:
-            axes[1].fill_between(phases,
-                                 100*(curve-1-lightcurve_errors[index]),
-                                 100*(curve-1+lightcurve_errors[index]),
-                                 color=color, alpha=.10)
-    combined_label = f'Combined ({len(spectra)} nights)'
-    if significance is not None:
-        combined_label += f" ({significance[-1]['significance_sigma']:.1f}σ)"
-    axes[0].plot(wave[band], 100*(combined[band]-1), 'k-', lw=2.2,
-                 label=combined_label)
-    axes[0].fill_between(wave[band], 100*(combined[band]-1-error[band]),
-                         100*(combined[band]-1+error[band]), color='black', alpha=.15)
-    combined_curve = np.mean(lightcurves, axis=0)
-    axes[1].plot(phases, 100*(combined_curve-1), 'k.-', lw=2.2,
-                 label=combined_label)
-    if combined_lightcurve_error is not None:
-        axes[1].fill_between(phases,
-                             100*(combined_curve-1-combined_lightcurve_error),
-                             100*(combined_curve-1+combined_lightcurve_error),
-                             color='black', alpha=.15)
-    for line in science.helium_vacuum_lines_nm:
-        axes[0].axvline(line, color='.65', ls=':', lw=1)
-    for index, contact in enumerate(science.optical_contact_phases, 1):
-        axes[1].axvline(contact, color='.5', ls='--', lw=1)
-        axes[1].text(contact, 0.98, f'T{index}',
-                     transform=axes[1].get_xaxis_transform(),
-                     ha='right' if index in (1, 3) else 'left', va='top', fontsize=9,
-                     bbox=dict(facecolor='white', edgecolor='none', alpha=.8, pad=1))
-    axes[0].set(xlabel='Wavelength (μm)',
-                ylabel='Transmission excess (%)', title='Individual nights and combined He I transmission')
+    from exoplore.plotting.helium import plot_helium_summary
     from matplotlib.ticker import FuncFormatter
-    axes[0].xaxis.set_major_formatter(FuncFormatter(lambda value, position: f'{value/1000:.4f}'))
-    lo, hi = science.planet_lightcurve_window_nm
-    axes[1].set(xlabel='Orbital phase', ylabel='Band-averaged transmission excess (%)',
-                title=f'Planet-frame helium light curve ({lo/1000:.6f}–{hi/1000:.6f} μm)')
-    for axis in axes:
-        axis.axhline(0, color='.6', lw=.8)
-        title = None if significance is None else f"Significance from Allart et al. 2023. {significance[0]['config']['band_width_nm']*10:.2f}Å band."
-        axis.legend(title=title, title_fontsize=9)
-    fig.savefig(output/'helium_nights_comparison.png', dpi=180, bbox_inches='tight')
-    fig.savefig(output/'helium_nights_comparison.pdf', bbox_inches='tight')
-    plt.close(fig)
+    display=dict(stellar_wave_nm=stellar_wave,stellar_transmission=np.mean(maps,axis=0),
+                 planet_wave_nm=wave,planet_coadd=combined,planet_coadd_error=error,
+                 planet_lightcurve=np.mean(lightcurves,axis=0),
+                 planet_lightcurve_error=combined_lightcurve_error if combined_lightcurve_error is not None else np.full(len(phases),np.nan))
+    config=json.loads((output/'run_config.json').read_text())
+    berv=np.asarray(config['atmosphere']['helium']['berv_kms'])
+    velocity=science.kp_kms*np.sin(2*np.pi*phases)
+    for suffix in ('png','pdf'):
+        plot_helium_summary(output/f'helium_nights_comparison.{suffix}',display,
+                            phases,velocity,berv,science,night_spectra=spectra,
+                            night_lightcurves=lightcurves,night_lightcurve_errors=lightcurve_errors,
+                            significance=significance,synthetic=True)
     n = len(maps)+1
     fig, axes = plt.subplots(n, 1, figsize=(11, 2.4*n), constrained_layout=True,
                              sharex=True, sharey=True, squeeze=False)

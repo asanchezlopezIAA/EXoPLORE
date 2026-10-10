@@ -39,13 +39,11 @@ def exposure_indices(numbers: list[int], n_exposures: int) -> np.ndarray:
 
 
 def timed_exposure_selection(config: Czesla2024Config, bjd_tdb: np.ndarray,
-                             *, published_wasp121_night: bool = False):
+                             duration_seconds=None):
     """Use EXoPLORE transit timing to determine signal and reference indices.
 
-    The published WASP-121 b night retains its reference subset as part of the
-    Czesla et al. (2024) reproduction recipe, after verifying optical membership.
-    Other nights use the computed out-of-transit spectra. JSON exposure lists
-    are never used by the observed-data runner.
+    All nights use their computed out-of-transit spectra. No published exposure
+    numbers or dataset-specific exceptions enter this selection.
     """
     from exoplore.observation.timing import orbital_phase, in_transit_indices
     phase = orbital_phase(bjd_tdb, config.t0_bjd_tdb, config.period_days)
@@ -56,15 +54,15 @@ def timed_exposure_selection(config: Czesla2024Config, bjd_tdb: np.ndarray,
     full_transit = in_transit_indices(phase, (t3-t2)*config.period_days*24,
                                       config.period_days)
     reference = without_signal
-    if published_wasp121_night:
-        from exoplore.pipelines.helium_math import czesla_indices
-        reference, expected_inside = czesla_indices(len(phase))
-        if not np.isin(reference, without_signal).all() or not np.array_equal(full_transit, expected_inside):
-            raise ValueError('Published WASP-121 night disagrees with the calculated transit timing')
+    if duration_seconds is not None:
+        half=np.asarray(duration_seconds)/(2*config.period_days*86400)
+        reference=reference[((phase+half)[reference]<t1)|((phase-half)[reference]>t4)]
+        full_transit=full_transit[((phase-half)[full_transit]>=t2)&((phase+half)[full_transit]<=t3)]
     if not len(reference) or not len(full_transit):
         raise ValueError('The observing times must include reference and full-transit spectra')
-    resolved = replace(config, reference_running_numbers=(reference+1).tolist(),
-                       in_transit_running_numbers=(full_transit+1).tolist())
+    resolved = replace(config)
+    object.__setattr__(resolved,'_reference_indices',tuple(int(i) for i in reference))
+    object.__setattr__(resolved,'_full_transit_indices',tuple(int(i) for i in full_transit))
     return resolved, phase, with_signal, without_signal
 
 
@@ -151,7 +149,9 @@ def prepare_transmission(waves_nm: np.ndarray, flux: np.ndarray, error: np.ndarr
         raise ValueError('Expected matching exposure-by-pixel arrays')
     n=len(data)
     if np.shape(berv_kms)!=(n,) or np.shape(planet_rv_kms)!=(n,):raise ValueError('Velocity array lengths disagree')
-    reference=exposure_indices(config.reference_running_numbers,n);inside=exposure_indices(config.in_transit_running_numbers,n)
+    reference=np.asarray(config._reference_indices, dtype=int);inside=np.asarray(config._full_transit_indices, dtype=int)
+    if not len(reference) or not len(inside):
+        raise ValueError('Calculate exposure membership from observing times before preparing spectra')
     stellar=np.asarray([stellar_wavelength(w,b,config.gamma_kms) for w,b in zip(waves,berv_kms)])
     grid=np.median(stellar,axis=0);bands=window_mask(grid,config.continuum_stellar_windows_nm)
     if not bands.any():raise ValueError('Continuum windows outside the segment')
@@ -216,11 +216,7 @@ def run_czesla2024(simulation_config) -> Path:
     destination=Path(simulation_config.paths.output_root)/simulation_config.planet.name/'czesla2024'
     if destination.exists():raise FileExistsError(f'Preserving existing output: {destination}')
     night=read_corrected_night(config)
-    published_night = (simulation_config.planet.name.lower() == 'wasp121b'
-                       and len(night['bjd_tdb']) == 40
-                       and np.all(np.floor(night['bjd_tdb']) == 2459997))
-    config,phase,with_signal,without_signal=timed_exposure_selection(
-        config,night['bjd_tdb'],published_wasp121_night=published_night)
+    config,phase,with_signal,without_signal=timed_exposure_selection(config,night['bjd_tdb'],night['duration_seconds'])
     rv=config.kp_kms*np.sin(2*np.pi*phase)
     # Validate every data selection and normalization before creating any output.
     observed=prepare_transmission(night['wave_nm'],night['flux'],night['error'],night['berv_kms'],rv,config)
@@ -238,12 +234,12 @@ def run_czesla2024(simulation_config) -> Path:
     with (output/'transmission.npz').open('xb') as stream:
         np.savez(stream,**observed,bjd_tdb=night['bjd_tdb'],berv_kms=night['berv_kms'],planet_rv_kms=rv,phase=phase,
                  with_signal=with_signal,without_signal=without_signal,
-                 reference_indices=np.asarray(config.reference_running_numbers)-1,
-                 full_transit_indices=np.asarray(config.in_transit_running_numbers)-1)
+                 reference_indices=np.asarray(config._reference_indices, dtype=int),
+                 full_transit_indices=np.asarray(config._full_transit_indices, dtype=int))
     summary={'pipeline':'czesla2024','scientific_reference':'https://doi.org/10.1051/0004-6361/202451003',
              'status':'Direct transmission preparation; no automatic detection decision',
              'configuration':asdict(config),'simulation_configuration':simulation_config.to_dict(),
-             'exposure_selection':'Internal timing; published reference subset for the original WASP-121 b night' if published_night else 'Internal transit timing',
+             'exposure_selection':'Internal transit timing',
              'n_exposures':len(rv),'nod':night['nod'],'wavelength_shift_kms':night['wavelength_shift_kms'],
              'uncertainty_resamples':0,'equivalent_width_mA':ew,'ew_noise_error_mA':ew_error,
              'ew_coverage':'complete' if complete else 'not reported: masked or missing pixels; no gap bridging',
@@ -259,65 +255,9 @@ def run_czesla2024(simulation_config) -> Path:
 
 def plot_transmission(result: dict,phase: np.ndarray,rv: np.ndarray,berv: np.ndarray,
                       config: Czesla2024Config,path: Path) -> None:
-    """Write a new diagnostic map, planetary coadd and two fixed-band curves."""
-    import matplotlib
-    matplotlib.use('Agg')
-    import matplotlib.pyplot as plt
-    if path.exists():raise FileExistsError(path)
-    wave=result['stellar_wave_nm'];hours=phase*config.period_days*24
-    # Display only: retain the native sampling and all saved scientific products.
-    with plt.rc_context({'font.size':14,'axes.labelsize':17,'xtick.labelsize':14,
-                         'ytick.labelsize':14,'legend.fontsize':13,
-                         'xtick.major.size':5.6,'ytick.major.size':5.6}):
-        fig,axes=plt.subplots(4,1,figsize=(13,15),constrained_layout=True)
-        image=axes[0].pcolormesh(wave/1000,hours,result['stellar_transmission'],
-                               cmap='RdBu',shading='auto',vmin=.975,vmax=1.025)
-        for index,line in enumerate(config.helium_vacuum_lines_nm):
-            axes[0].axvline(line/1000,color='magenta',ls=':',lw=1.2,
-                           label='He I rest wavelengths' if index==0 else None)
-            axes[0].plot(line*(1+rv/C_KMS)/1000,hours,color='red',ls='--',lw=1,
-                         label='Planet velocity track' if index==0 else None)
-            axes[1].axvline(line/1000,color='magenta',ls=':',lw=1.2,
-                           label='He I rest wavelengths' if index==0 else None)
-        for index,line in enumerate(config.oh_topocentric_lines_nm):
-            axes[0].plot(stellar_wavelength(line,berv,config.gamma_kms)/1000,
-                         hours,color='gold',ls=':',lw=1,
-                         label='OH sky lines' if index==0 else None)
-        limits=np.asarray(config.plot_stellar_window_nm)/1000
-        axes[0].set(xlim=limits,xlabel='Wavelength (µm)',ylabel='Time from mid-transit (h)')
-        fig.colorbar(image,ax=axes[0],label='Transmission')
-        axes[0].legend(loc='upper right',fontsize=11)
-        axes[1].plot(wave/1000,result['planet_coadd'],'k-',lw=1,label='Native spectrum')
-        axes[1].fill_between(wave/1000,result['planet_coadd']-result['planet_coadd_error'],
-                             result['planet_coadd']+result['planet_coadd_error'],
-                             color='tab:blue',alpha=.2)
-        visible=(wave/1000>=limits[0])&(wave/1000<=limits[1])
-        axes[1].errorbar(wave[visible]/1000,result['planet_coadd'][visible],
-                        yerr=result['planet_coadd_error'][visible],fmt='o',ms=3,
-                        color='black',ecolor='0.5',elinewidth=.7,alpha=.8,
-                        label='Native pixels (1σ)')
-        axes[1].set(xlim=limits,xlabel='Wavelength (µm)',ylabel='Transmission')
-        axes[1].legend(loc='lower left')
-        for ax,key,description in [(axes[2],'planet','Planet frame: 0.5 Å band'),
-                                    (axes[3],'stellar','Stellar frame: 1 Å band')]:
-            ax.errorbar(hours,100*(1-result[key+'_lightcurve']),
-                        yerr=100*result[key+'_lightcurve_error'],fmt='o',ms=5,
-                        capsize=3,color='tab:blue',label=description)
-            ax.axhline(0,color='0.5',ls=':',lw=1)
-            ax.set(xlabel='Time from mid-transit (h)',ylabel='He I absorption (%)')
-            ax.legend(loc='upper left')
-        for index,contact in enumerate(config.optical_contact_phases,1):
-            hour=contact*config.period_days*24
-            axes[0].axhline(hour,color='black',ls='--',lw=.9)
-            axes[0].text(.01,hour,f'T{index}',transform=axes[0].get_yaxis_transform(),
-                         va='bottom',fontsize=12)
-            for ax in axes[2:]:
-                ax.axvline(hour,color='black',ls='--',lw=.9)
-                ax.text(hour,.98,f'T{index}',transform=ax.get_xaxis_transform(),
-                        ha='center',va='top',fontsize=12)
-        for ax in axes[:2]:
-            ax.ticklabel_format(axis='x',style='plain',useOffset=False)
-        fig.savefig(path,dpi=160);plt.close(fig)
+    """Write the standard helium map, planetary spectrum and light curve."""
+    from exoplore.plotting.helium import plot_helium_summary
+    plot_helium_summary(path,result,phase,rv,berv,config)
 
 
 def validate_run_config(config) -> None:
@@ -355,7 +295,7 @@ def preparing_pipeline_adapter(inp_dat: dict,data: np.ndarray,noise: np.ndarray,
         raise ValueError('czesla2024 requires separately validated telluric corrections')
     config=inp_dat['czesla2024_config']
     if isinstance(config,dict):config=Czesla2024Config(**config)
-    if not config.reference_running_numbers or not config.in_transit_running_numbers:
+    if not config._reference_indices or not config._full_transit_indices:
         if 'phase' in inp_dat:
             times=config.t0_bjd_tdb+np.asarray(inp_dat['phase'])*config.period_days
         elif 'julian_date' in inp_dat:
@@ -368,7 +308,7 @@ def preparing_pipeline_adapter(inp_dat: dict,data: np.ndarray,noise: np.ndarray,
     if config.oh_mode=='mask':
         bad=window_mask(waves,config.oh_topocentric_windows_nm);flux[bad]=np.nan;error[bad]=np.nan
     result=prepare_transmission(waves,flux,error,np.asarray(inp_dat['berv_kms']),np.asarray(inp_dat['planet_rv_kms']),config)
-    reference=exposure_indices(config.reference_running_numbers,len(flux))
+    reference=np.asarray(config._reference_indices, dtype=int)
     var=result['normalized_stellar_variance'];f=result['normalized_stellar_flux'];master=result['master']
     marginal=var/master**2+f**2*result['master_variance']/master**4
     # Numerator/reference dependence for OOT members, with fixed reference weights.

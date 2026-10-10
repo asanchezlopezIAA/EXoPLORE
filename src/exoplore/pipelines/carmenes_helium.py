@@ -44,8 +44,10 @@ def prepare_carmenes_transmission(waves_nm, flux, error, berv_kms, planet_rv_kms
     if waves.ndim != 2 or data.shape != waves.shape or errors.shape != waves.shape:
         raise ValueError('Expected matching exposure-by-pixel wavelength, flux and error')
     n = len(data)
-    refs = exposure_indices(config.reference_running_numbers, n)
-    inside = exposure_indices(config.in_transit_running_numbers, n)
+    refs = np.asarray(config._reference_indices, dtype=int)
+    inside = np.asarray(config._full_transit_indices, dtype=int)
+    if not len(refs) or not len(inside):
+        raise ValueError('Calculate exposure membership from observing times before preparing spectra')
     stellar = np.asarray([stellar_wavelength(w, b, config.gamma_kms) for w, b in zip(waves, berv_kms)])
     grid = np.median(stellar, axis=0)
     rows, variances = [], []

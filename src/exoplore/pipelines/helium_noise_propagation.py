@@ -29,8 +29,8 @@ def carmenes_coadd_covariance(waves_nm, flux, error, berv_kms, rv_kms, config, r
     The continuum means are fixed at their fitted values in this calculation.
     Invalid coadd pixels must remain masked when using the covariance.
     """
-    refs=np.asarray(config.reference_running_numbers)-1
-    inside=np.asarray(config.in_transit_running_numbers)-1
+    refs=np.asarray(config._reference_indices, dtype=int)
+    inside=np.asarray(config._full_transit_indices, dtype=int)
     grid=result['planet_wave_nm'];master=result['master']
     inv=np.divide(1.,master,out=np.zeros_like(master),where=np.isfinite(master)&(master>0))
     operators=[];normalized_variance=[]
@@ -66,7 +66,7 @@ def carmenes_lightcurve_covariance(waves_nm, flux, error, berv_kms,
     Continuum estimates and telluric fits are held fixed. A missing band pixel
     invalidates that exposure, matching the preparation's arithmetic mean.
     """
-    refs = np.asarray(config.reference_running_numbers) - 1
+    refs = np.asarray(config._reference_indices, dtype=int)
     grid = result['planet_wave_nm']
     band = window_mask(grid, [config.planet_lightcurve_window_nm])
     if not band.any():
@@ -116,8 +116,8 @@ def weighted_crires_uncertainties(waves_nm, flux, error, berv_kms, rv_kms,
     the parameter-posterior calculation of Czesla et al. (2024).
     """
     grid = result['stellar_wave_nm']
-    refs = np.asarray(config.reference_running_numbers, dtype=int) - 1
-    inside = np.asarray(config.in_transit_running_numbers, dtype=int) - 1
+    refs = np.asarray(config._reference_indices, dtype=int)
+    inside = np.asarray(config._full_transit_indices, dtype=int)
     n, pixels = np.shape(flux)
     bands = window_mask(grid, config.continuum_stellar_windows_nm)
     x = grid - grid[bands].mean()

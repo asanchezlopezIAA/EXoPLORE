@@ -17,7 +17,7 @@ from scipy.ndimage import gaussian_filter1d
 
 from exoplore.atmosphere.helium_pwinds import contact_phases, geometry
 from exoplore.atmosphere.helium_provider import HeliumTransit, solve_outflow
-from exoplore.pipelines.czesla2024 import exposure_indices, prepare_transmission
+from exoplore.pipelines.czesla2024 import exposure_indices, prepare_transmission, timed_exposure_selection
 from exoplore.pipelines.helium_math import stellar_wavelength, window_mask
 from exoplore.planets import load_planet
 from exoplore.instruments import load_instrument_v2, get_WaveGrid_v2
@@ -49,15 +49,17 @@ def validate_helium_run(config) -> None:
         raise ValueError("Supply CRIRES+ and an explicit planet parameter file")
     if not np.isfinite(o.exposure_time_seconds) or o.exposure_time_seconds <= 0:
         raise ValueError("Exposure duration must be positive")
-    science = p.czesla2024
+    science,_,_,_=timed_exposure_selection(p.czesla2024,
+        p.czesla2024.t0_bjd_tdb+np.asarray(h.phase_midpoints)*p.czesla2024.period_days,
+        o.exposure_time_seconds)
     if h.telluric_correction == "molecfit" and science.monte_carlo_draws != 0:
         raise ValueError("This synthetic molecfit run uses one noise realization and zero uncertainty resamples")
     if h.uncertainty_mode == 'conditional' and science.monte_carlo_draws != 0:
         raise ValueError('Set monte_carlo_draws=0 for a simulation without noise resampling')
     if h.uncertainty_mode == 'monte_carlo' and science.monte_carlo_draws < 100:
         raise ValueError('Monte Carlo propagation requires at least 100 draws')
-    refs = exposure_indices(science.reference_running_numbers, len(h.phase_midpoints))
-    inside = exposure_indices(science.in_transit_running_numbers, len(h.phase_midpoints))
+    refs = np.asarray(science._reference_indices, dtype=int)
+    inside = np.asarray(science._full_transit_indices, dtype=int)
     if np.intersect1d(refs, inside).size:
         raise ValueError("Reference and in-transit exposure selections overlap")
 
@@ -234,6 +236,9 @@ def run_helium_simulation(config) -> Path:
         from exoplore.core.carmenes_helium_simulation import run_carmenes_helium
         return run_carmenes_helium(config)
     h, science = config.atmosphere.helium, config.pipeline.czesla2024
+    science,_,_,_=timed_exposure_selection(science,
+        science.t0_bjd_tdb+np.asarray(h.phase_midpoints)*science.period_days,
+        config.observation.exposure_time_seconds)
     output = Path(config.paths.output_root)/config.planet.name/('helium_sunbather' if config.atmosphere.helium.backend == 'sunbather' else 'helium_pwinds')
     if output.exists():
         raise FileExistsError(f"Output already exists; choose a new output_root: {output}")
@@ -254,8 +259,8 @@ def run_helium_simulation(config) -> Path:
     half = config.observation.exposure_time_seconds/(2*science.period_days*86400)
     if np.any(np.diff(phases) < 2*half):
         raise ValueError("Synthetic exposures overlap in time")
-    refs = exposure_indices(science.reference_running_numbers, len(phases))
-    inside = exposure_indices(science.in_transit_running_numbers, len(phases))
+    refs = np.asarray(science._reference_indices, dtype=int)
+    inside = np.asarray(science._full_transit_indices, dtype=int)
     if np.any((phases[refs]+half > contacts[0]) & (phases[refs]-half < contacts[3])):
         raise ValueError("A reference exposure overlaps the optical transit")
     if np.any(phases[inside]-half < contacts[1]) or np.any(phases[inside]+half > contacts[2]):
@@ -464,50 +469,9 @@ def plot_simulation(output, arrays, recovered, truth, phases, rv, coadd_error, c
 
 def _plot_simulation(output, arrays, recovered, truth, phases, rv, coadd_error, curve_error, science, *, significance=None) -> None:
     """Draw with local style settings, independently of the molecular simulator."""
-    import matplotlib.pyplot as plt
-    recovered_label = "Recovered simulation"
-    if significance is not None:
-        recovered_label += f" — {significance['significance_sigma']:.1f}σ (Allart-style spectral significance)"
-    fig, axes = plt.subplots(3, 1, figsize=(10, 11), constrained_layout=True)
-    for axis in axes[:2]:
-        axis.ticklabel_format(axis='x', style='plain', useOffset=False)
-    wave = recovered["stellar_wave_nm"]
-    band = window_mask(wave, [science.plot_stellar_window_nm])
-    excess = 100*(recovered["stellar_transmission"][:, band]-1)
-    limit = max(float(np.nanpercentile(np.abs(excess), 99)), .01)
-    image = axes[0].pcolormesh(wave[band], phases, excess,
-                                shading="auto", cmap="RdBu_r", vmin=-limit, vmax=limit)
-    for index, line in enumerate(science.helium_vacuum_lines_nm):
-        axes[0].plot(line*(1+rv/C_KMS), phases, "k--", lw=.8,
-                     label="Planet Doppler tracks: He I triplet" if index == 0 else None)
-    axes[0].legend(loc='upper right', fontsize=8)
-    planet_label = 'HD 209458 b' if output.parent.name == 'HD209458b' else output.parent.name
-    axes[0].set(xlabel="Stellar-frame vacuum wavelength (nm)", ylabel="Orbital phase",
-                title=f"Simulated {planet_label} helium transit: moving absorption")
-    fig.colorbar(image, ax=axes[0], label="Transmission excess (%)")
-    band = window_mask(wave, [science.equivalent_width_window_nm])
-    axes[1].errorbar(wave[band], 100*(recovered["planet_coadd"][band]-1),
-                       yerr=100*coadd_error[band], fmt=".", ms=3, color="0.4",
-                       label=recovered_label)
-    truth_wave = truth["planet_wave_nm"]
-    truth_band = window_mask(truth_wave, [science.equivalent_width_window_nm])
-    axes[1].plot(truth_wave[truth_band], 100*(truth["planet_coadd"][truth_band]-1), color="tab:red", label="Noiseless simulation after the same analysis")
-    for line in science.helium_vacuum_lines_nm:
-        axes[1].axvline(line, color="0.7", ls=":")
-    axes[1].set(xlabel="Planet-frame vacuum wavelength (nm)", ylabel="Transmission excess (%)",
-                title="Helium triplet recovered from fully in-transit exposures")
-    axes[1].legend()
-    axes[2].errorbar(phases, 100*(recovered["planet_lightcurve"]-1),
-                       yerr=100*curve_error if np.isfinite(curve_error).any() else None,
-                       fmt="o", label=recovered_label)
-    axes[2].plot(phases, 100*(truth["planet_lightcurve"]-1), "r.-", label="Noiseless simulation")
-    for index, phase in enumerate(science.optical_contact_phases):
-        axes[2].axvline(phase, color="0.7", ls=":")
-        axes[2].text(phase, .98, f'T{index+1}', transform=axes[2].get_xaxis_transform(),
-                     ha='center', va='top', fontsize=8, color='0.4')
-    axes[2].set(xlabel="Orbital phase", ylabel="Mean transmission excess (%)",
-                title=f"Planet-frame helium light curve ({science.planet_lightcurve_window_nm[0]:.3f}–{science.planet_lightcurve_window_nm[1]:.3f} nm)")
-    axes[2].legend()
-    fig.savefig(output/"helium_recovery.png", dpi=180, bbox_inches='tight')
-    fig.savefig(output/"helium_recovery.pdf", bbox_inches='tight')
-    plt.close(fig)
+    from exoplore.plotting.helium import plot_helium_summary
+    display=dict(recovered,planet_coadd_error=coadd_error,planet_lightcurve_error=curve_error)
+    berv=np.asarray(json.loads((output/'run_config.json').read_text())['atmosphere']['helium']['berv_kms'])
+    for suffix in ('png','pdf'):
+        plot_helium_summary(output/f'helium_recovery.{suffix}',display,phases,rv,berv,
+                            science,significance=significance,synthetic=True)

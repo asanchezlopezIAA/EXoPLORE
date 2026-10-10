@@ -1257,9 +1257,9 @@ The principal choices in `configs/wasp121b_crires_czesla2024.json` are:
 "paths": { "output_root": "outputs/wasp121_czesla2024" }
 ```
 
-This excerpt shows the main controls; the complete configuration also supplies the ephemeris, systemic velocity, continuum intervals. Adding `helium_transmission_spectroscopy: true` makes the spectroscopy choice explicit. With `use_real_data: true`, EXoPLORE analyses the supplied observations. The helium feature is measured directly in the transmission spectra, so this example uses zero SYSREM iterations and leaves molecular retrieval disabled. The `oh_mode: "baseline"` choice keeps the AB sky subtraction and applies no additional OH mask or emission model. Selecting `"mask"` applies the wavelength intervals listed in `pipeline.czesla2024.oh_topocentric_windows_nm`. The supplied WASP-121 b configuration includes these intervals around the OH lines; EXoPLORE applies them automatically when this choice is selected. For another dataset, the intervals can be adjusted in the JSON.
+This excerpt shows the main controls; the complete configuration also supplies the ephemeris, systemic velocity and continuum intervals. Adding `helium_transmission_spectroscopy: true` makes the spectroscopy choice explicit. With `use_real_data: true`, EXoPLORE analyses the supplied observations. The helium feature is measured directly in the transmission spectra, so this example uses zero SYSREM iterations and leaves molecular retrieval disabled. The `oh_mode: "baseline"` choice keeps the AB sky subtraction and applies no additional OH mask or emission model. Selecting `"mask"` applies the wavelength intervals listed in `pipeline.czesla2024.oh_topocentric_windows_nm`. The supplied WASP-121 b configuration includes these intervals around the OH lines; EXoPLORE applies them automatically when this choice is selected. For another dataset, the intervals can be adjusted in the JSON.
 
-For this night, we follow Czesla et al. (2024): exposures 1–10 and 36–40 form the out-of-transit reference, and exposures 16–32 form the average planetary transmission spectrum.
+EXoPLORE computes the in-transit and out-of-transit exposures from their observing times and the optical transit contacts. The out-of-transit spectra form the stellar reference; the spectra between T2 and T3 form the average planetary transmission spectrum. These selections are made internally, so the JSON contains no exposure-number lists.
 
 The configuration adopts the paper's systemic velocity, 38.35 km s⁻¹, and ephemeris. The extracted wavelengths are already in vacuum. EXoPLORE applies the barycentric and systemic-velocity corrections to align the stellar spectrum, then removes the planet's orbital velocity when constructing the planetary average.
 
@@ -1338,7 +1338,7 @@ python -u scripts/run_exoplore.py configs/wasp121b_crires_czesla2024.json --run
 
 EXoPLORE shifts every spectrum into the stellar frame and normalises its continuum. For this example, a first-order polynomial is fitted in the intervals 1.0823–1.0826 and 1.0839–1.0842 µm. These intervals lie on either side of the helium feature; the continuum prescription is an explicit choice because the paper does not give a complete normalisation recipe.
 
-The out-of-transit reference is the inverse-variance weighted average of exposures 1–10 and 36–40. Dividing each normalised spectrum by this reference gives
+The out-of-transit reference is the inverse-variance weighted average of the exposures selected outside the optical transit. Dividing each normalised spectrum by this reference gives
 
 ```{math}
 \mathcal{T}(\lambda,t)=\frac{F(\lambda,t)}{F_{\mathrm{out}}(\lambda)}.
@@ -1348,24 +1348,22 @@ A transmission of 0.98 therefore corresponds to 2% excess absorption. Displaying
 
 ### Step 5: The result
 
-```{figure} figures/tutorial12_transmission_spectrum.png
+```{figure} figures/tutorial12_helium_transmission_result.png
 :width: 95%
 :align: center
 
-Helium transmission spectra of WASP-121 b. Top: the stellar-frame map, where absorption appears red and follows approximately the expected planetary velocity tracks (red dashed lines). The magenta markers indicate the triplet wavelengths and the horizontal dashed lines mark the optical transit contacts. Second panel: the average transmission after shifting exposures 16–32 into the planetary frame. The line follows the native pixels, with 1σ uncertainties shown by the shading and error bars. The two lower panels show the helium absorption in percent, measured in the planetary and stellar frames. T1–T4 indicate the four optical contacts. Produced by the run as `transmission_diagnostic.png`.
+Helium transmission spectra of WASP-121 b. Top: the stellar-frame map, where absorption appears red. The red dashed lines follow the planetary velocity tracks, the magenta markers show the triplet wavelengths, and the horizontal dashed lines mark the optical contacts. Middle: the planet-frame spectrum, expressed as transmission excess in percent, with its extraction uncertainty shaded. Bottom: the planet-frame helium light curve in the 0.5 Å band, with shaded uncertainties and T1–T4 marked. Negative transmission excess corresponds to absorption. Produced by the run as `transmission_diagnostic.png`.
 ```
 
 The absorption near the stronger triplet components reaches approximately 2%, comparable in scale to the feature reported by Czesla et al. (2024). The map retains the time information, while the planetary average combines the in-transit signal. The weaker component lies blueward of the strong one and carries less information at this noise level.
 
-Each point in the third panel measures the helium absorption in one exposure: we average the transmission over a 0.5 Å band centred on the stronger triplet components in the planetary frame, and express the absorption in percent:
+Each point in the bottom panel measures one exposure. We average the transmission over a 0.5 Å band centred on the stronger triplet components in the planetary frame and express the excess in percent:
 
 ```{math}
-A(t)=100\left[1-\langle\mathcal{T}(\lambda,t)\rangle\right].
+E(t)=100\left[\langle\mathcal{T}(\lambda,t)\rangle-1\right].
 ```
 
-Zero means no excess absorption relative to the reference; positive values mean absorption. Because the band follows the planet's Doppler shift, this curve shows when the planetary signal appears and how its strength changes through transit. Czesla et al. (2024) use this band in their Fig. 5.
-
-The fourth panel measures the same quantity in a 1 Å band fixed at the stellar helium wavelength, following the wavelength selection of their Fig. 6. The moving planetary line enters and leaves this stationary band. This curve helps identify changes that remain near the stellar line, but it contains planetary absorption too. Czesla et al. (2024) subtract their fitted planetary model to examine the remaining variability; this figure shows the measurements before that subtraction. The vertical lines mark ingress starting (T1), full transit starting (T2), full transit ending (T3), and egress ending (T4).
+Zero means no excess absorption relative to the reference; negative values mean absorption. Because the band follows the planet's Doppler shift, this curve shows when the planetary signal appears and how its strength changes through transit. Czesla et al. (2024) use this band in their Fig. 5. T1 marks ingress starting, T2 full transit starting, T3 full transit ending, and T4 egress ending.
 
 Sky OH emission also occurs near the triplet. The baseline choice of analysis retains the AB sky subtraction and marks the OH positions. Molecfit models atmospheric absorption, so residual OH emission must be assessed separately. For a comparison excluding the configured OH intervals, set `oh_mode: "mask"` and select a new output root. The masks are applied before the frame shifts. If masking removes pixels within a light-curve band, that exposure is omitted from the curve: averaging a smaller part of the line would change the quantity being measured.
 

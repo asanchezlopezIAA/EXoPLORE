@@ -532,11 +532,18 @@ class PipelineConfig:
 
     def __post_init__(self) -> None:
         if isinstance(self.carmenes_helium, dict):
-            self.carmenes_helium = CarmenesHeliumConfig(**self.carmenes_helium)
+            choices=dict(self.carmenes_helium)
+            # Ignore removed controls in archived helium configurations.
+            choices.pop('reference_running_numbers',None)
+            choices.pop('in_transit_running_numbers',None)
+            self.carmenes_helium = CarmenesHeliumConfig(**choices)
         if self.name == "carmenes_helium" and self.carmenes_helium is None:
             raise ValueError("pipeline.name='carmenes_helium' requires explicit settings")
         if isinstance(self.czesla2024, dict):
-            self.czesla2024 = Czesla2024Config(**self.czesla2024)
+            choices=dict(self.czesla2024)
+            choices.pop('reference_running_numbers',None)
+            choices.pop('in_transit_running_numbers',None)
+            self.czesla2024 = Czesla2024Config(**choices)
         if self.name == "czesla2024" and self.czesla2024 is None:
             raise ValueError("pipeline.name='czesla2024' requires explicit pipeline.czesla2024 settings")
 

@@ -8,8 +8,9 @@ Exposure membership is computed from observing times and transit geometry.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 import math
+from typing import ClassVar
 
 
 @dataclass(frozen=True)
@@ -52,9 +53,9 @@ class Czesla2024Config:
     equivalent_width_window_nm: list[float]
     monte_carlo_draws: int = 0
     monte_carlo_seed: int = 0
-    # Retained for internal adapters and compatibility with saved products.
-    reference_running_numbers: list[int] = field(default_factory=list)
-    in_transit_running_numbers: list[int] = field(default_factory=list)
+    # Derived runtime membership, excluded from the JSON configuration schema.
+    _reference_indices: ClassVar[tuple[int, ...]] = ()
+    _full_transit_indices: ClassVar[tuple[int, ...]] = ()
 
     def __post_init__(self) -> None:
         """Reject ambiguous scientific settings before starting a run."""
@@ -66,11 +67,6 @@ class Czesla2024Config:
             raise ValueError('OH mode must be baseline or mask; no OH emission model is implemented')
         if self.oh_mode == 'mask' and not self.oh_topocentric_windows_nm:
             raise ValueError('OH mask mode requires explicit native topocentric windows')
-        selections=[self.reference_running_numbers,self.in_transit_running_numbers]
-        if any(any(type(i) is not int or i<1 for i in s) or len(set(s))!=len(s) for s in selections):
-            raise ValueError('Exposure selections must contain unique positive integer running numbers')
-        if set(selections[0])&set(selections[1]):
-            raise ValueError('Reference and in-transit selections must be disjoint')
         if len(self.observatory_lon_lat_height)!=3:
             raise ValueError('Observatory coordinates require longitude, latitude, height in metres')
         if len(self.helium_vacuum_lines_nm)!=3 or len(self.helium_oscillator_strengths)!=3:

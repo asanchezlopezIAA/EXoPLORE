@@ -39,13 +39,6 @@ def planet_wavelength(stellar_nm: np.ndarray, planet_rv_kms: float) -> np.ndarra
     return np.asarray(stellar_nm) / (1 + planet_rv_kms / C_KMS)
 
 
-def czesla_indices(n_exposures: int) -> tuple[np.ndarray, np.ndarray]:
-    """Return zero-based reference 1–10,36–40 and full-transit 16–32 indices."""
-    if n_exposures != 40:
-        raise ValueError("Czesla running numbers require exactly 40 chronological exposures")
-    return np.r_[0:10, 35:40], np.arange(15, 32)
-
-
 def window_mask(wavelength_nm: np.ndarray, windows_nm: list[list[float]]) -> np.ndarray:
     """Mark inclusive windows on the supplied frame's native grid."""
     result = np.zeros(np.shape(wavelength_nm), bool)
