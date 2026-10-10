@@ -228,10 +228,7 @@ def plot_helium_summary(path: Path, result: dict, phase: np.ndarray,
                           path_effects.Normal()]
         helium_handles = []
         for index,line in enumerate(science.helium_vacuum_lines_nm):
-            axes[0].axvline(line/1000,color='black',ls=':',lw=2.6,
-                           path_effects=marker_outline,
-                           label='He I rest wavelengths' if index==0 else None)
-            axes[0].plot(line*(1+rv_kms/C_KMS)/1000,hours,color='cyan',ls='--',lw=2.6,
+            axes[0].plot(line*(1+rv_kms/C_KMS)/1000,hours,color='black',ls='--',lw=2.6,
                          path_effects=marker_outline,
                          label='Planet velocity track' if index==0 else None)
             helium_handles.append(axes[1].axvline(
