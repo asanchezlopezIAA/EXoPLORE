@@ -1214,6 +1214,8 @@ To resume an interrupted sweep, just re-run the command: existing grid points ar
 
 > **Approximate run time:** ~45–50 min for the per-exposure telluric correction of this 40-spectrum night. The saved fits took 61–77 s per exposure, with a total of 46 min. Raw reduction is a separate, one-off calculation.
 
+**Disk footprint:** the helium transmission analysis writes about **3.5 MB** for this night: 2.8 MB for `transmission.npz`, 0.7 MB for the diagnostic figure and 0.04 MB for `summary.json`. This counts only the analysis products; raw spectra, reduction products and molecfit working files are excluded.
+
 The He I triplet near 1.0833 µm probes the upper atmospheres of transiting planets. Here we analyse the CRIRES+ observations of WASP-121 b presented by [Czesla et al. (2024)](https://doi.org/10.1051/0004-6361/202451003), who report helium absorption of approximately 2% and investigate its evolution through transit. We use the same observing sequence to illustrate how EXoPLORE constructs a stellar-frame transmission map, an average planetary transmission spectrum, and helium light curves.
 
 During transit, the planet's orbital motion changes the wavelength at which we observe its helium absorption. We therefore construct the stellar reference after aligning the observations with the star, and average the transmission spectra after aligning them with the planet. The `czesla2024` preparation choice implements this sequence, following Section 3.4 of Czesla et al. (2024).
