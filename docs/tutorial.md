@@ -1382,7 +1382,6 @@ python scripts/plot_crires_czesla2024.py transmission \
   mynight/helium_transmission.png
 ```
 
-This reads the saved products and leaves the reduction, telluric fits and uncertainty calculation unchanged.
 
 ---
 
