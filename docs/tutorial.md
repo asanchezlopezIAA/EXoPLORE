@@ -1359,6 +1359,8 @@ Helium transmission spectra of WASP-121 b. Top: the stellar-frame map, where abs
 
 The absorption near the stronger triplet components reaches approximately 2%, comparable in scale to the feature reported by Czesla et al. (2024). The map retains the time information, while the planetary average combines the in-transit signal. The weaker component lies blueward of the strong one and carries less information at this noise level.
 
+We recover the main features reported by [Czesla et al. (2024)](https://doi.org/10.1051/0004-6361/202451003): approximately 2% helium absorption, a slight redshift of the planetary profile, and an early decrease in transmission before first contact.
+
 Each point in the bottom panel measures one exposure. We average the transmission over a 0.5 Å band centred on the stronger triplet components in the planetary frame and express the excess in percent:
 
 ```{math}
