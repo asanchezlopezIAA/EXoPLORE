@@ -1475,7 +1475,9 @@ Fibre A contains both the stellar spectrum and OH emission from the Earth's atmo
 
 Pallé et al. (2020) used matched extractions for both fibres and measured an A/B factor of 0.88. The first step in assessing the OH correction should be to check whether fibre A and fibre B have been extracted consistently. For this tutorial, we do not have fibre-A spectra extracted in the same way as fibre B. If these products are available for your observations, select `fiber_b_matched_extraction`. EXoPLORE measures the A/B factor from the strong OH line in the out-of-transit spectra and applies it throughout the night. The measured factor is saved in `oh_report.json` and shown in the legend of `oh_correction.png`.
 
-With the files available here, the available choices are:
+Ideally, we would start with both fibres extracted in the same way. Since we do not have those products here, we can try a few alternatives and see what happens. We could mask the OH lines, or even leave them in to see how much they affect the result (not ideal, but useful for learning). We can also fit and subtract the emission using the two approaches below. Let us compare these choices and see how the recovered helium signal changes.
+
+The available choices are:
 
 | `oh_treatment` | How the OH emission is treated |
 |---|---|
