@@ -1410,7 +1410,7 @@ inputs/CARMENES_NIR/GJ3470b/20181226/
     ...
 ```
 
-EXoPLORE reads the wavelength, flux and uncertainty arrays directly from these files, pairs the two fibres and orders the exposures by their recorded BJD. It also writes its usual per-order reference-night FITS products. The helium triplet falls in NIR order **7**, using zero-based indices. The analysis selects this order through `instrument.order_indices`.
+EXoPLORE reads the wavelength, flux and uncertainty arrays directly from these files, pairs the two fibres and orders the exposures by their recorded BJD. The helium analysis works with these arrays directly, so no conversion to separate per-order FITS files is needed. The helium triplet falls in NIR order **7**, using zero-based indices. The analysis selects this order through `instrument.order_indices`.
 
 The reference files are included in the EXoPLORE repository: `configs/gj3470b_carmenes_palle2020_tutorial.json` contains the analysis configuration and `planet_params/GJ3470b_tutorial.json` contains the adopted system parameters. The JSON includes a description of every setting. Its ephemeris and optical contacts define the timing used in this example. EXoPLORE calculates the exposure membership internally.
 
@@ -1614,7 +1614,7 @@ Planetary spectra obtained with the calibrated fibre-B and OOT fibre-A profiles,
 
 Both runs retain the per-exposure corrected spectra in `observations.npz`, the transmission spectra and light curve in `transmission.npz`, their spectral covariance in `planet_coadd_covariance.npz`, and the OH calibration in `oh_report.json` and `oh_model.npz`. These products allow us to inspect the preparation and subsequently fit atmospheric models without repeating the telluric correction.
 
-**Disk footprint:** approximately **230 MB** for one processed night: ~130 MB for the EXoPLORE reference-night FITS files (an intermediate conversion to EXoPLORE's usual input format, which we plan to change soon), ~80 MB for the molecfit working products, and ~20 MB for the corrected spectra, OH models, covariances and figures. This excludes the input CARMENES observations. The alternative OH run writes a separate set of products.
+**Disk footprint:** approximately **100 MB** for one processed night: ~80 MB for the molecfit working products and ~20 MB for the corrected spectra, OH models, covariances and figures. EXoPLORE reads the original CARMENES FITS files directly for this helium analysis. This excludes the input observations. The alternative OH run writes a separate set of products.
 
 ---
 

@@ -133,8 +133,6 @@ def run_palle2020(config, *, pilot: bool=False, pilot_label: str='pilot') -> Pat
         raise ValueError('Output label must be a single directory name')
     output=Path(config.paths.output_root)/config.planet.name/'Palle2020'/label
     output.mkdir(parents=True,exist_ok=False)
-    if not pilot:
-        _write_inputs(output/'reference_night',night)
     with (output/'input_provenance.json').open('x') as stream:
         json.dump(dict(sources=night['sources'],configuration=choices,oh_windows_nm=windows,
                        science_fibre='A',sky_fibre='B',sky_subtraction=uses_sky_fibre(treatment),
