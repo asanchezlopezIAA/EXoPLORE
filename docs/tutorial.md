@@ -1473,7 +1473,9 @@ Molecfit correction in three water-line intervals of the first GJ 3470 b exposur
 
 The OH model follows the profile prescription of Pallé et al. (2020): a Voigt profile for the strong line and two Gaussians sharing width and amplitude for the weak pair. Fibre B determines the profiles and their changing strength throughout the night. The sky model is then expressed in fibre-A flux units and subtracted.
 
-Pallé et al. (2020) used matched extractions for both fibres and measured an A/B factor of 0.88. The files used here have different extraction conventions, so `fiber_b_calibrated` determines their transfer from the strong OH line in out-of-transit fibre A. The available choices are:
+Pallé et al. (2020) used matched extractions for both fibres and measured an A/B factor of 0.88. The first step in assessing the OH correction should be to check whether fibre A and fibre B have been extracted consistently. For this tutorial, we do not have fibre-A spectra extracted in the same way as fibre B. If these products are available for your observations, EXoPLORE provides `fiber_b_matched_extraction`, together with the A/B scaling factor supplied in `oh_fit.fiber_b_scale`. This factor should be determined for your observations.
+
+With the files available here, `fiber_b_calibrated` determines the transfer between fibres from the strong OH line in out-of-transit fibre A. The available choices are:
 
 | `oh_treatment` | What EXoPLORE does |
 |---|---|
@@ -1518,7 +1520,9 @@ Following Pallé et al. (2020), each corrected spectrum is normalized by its mea
 \mathcal{T}(\lambda,t)=\frac{F(\lambda,t)}{F_{\mathrm{out}}(\lambda)}.
 ```
 
-The residual spectra are shifted into the planetary frame and averaged between T2 and T3. This aligns the planetary helium absorption before averaging. The example's automatic timing selects 12 in-transit and 22 out-of-transit exposures, with 10 between T2 and T3. Pallé et al. (2020) report 14 and 20 for their adopted timing. Exposure numbers are not entered in the JSON.
+As always, we encourage careful visual inspection of each step to identify where the results can be improved. This is an example calculation.
+
+The residual spectra are shifted into the planetary frame and averaged between T2 and T3. This aligns the planetary helium absorption before averaging. The example's automatic timing selects 12 in-transit and 22 out-of-transit exposures, with 10 between T2 and T3.
 
 The standard EXoPLORE pipeline-stages figure is produced by the run. We can also recreate it from saved products:
 
@@ -1547,7 +1551,7 @@ GJ 3470 b helium transmission. Top: stellar-frame residual map, with absorption 
 
 The absorption in the 0.40 Å band is approximately 1.3%, comparable to the 1.5 ± 0.3% reported by Pallé et al. (2020). Their Fig. 5 uses a three-point running mean; the standard EXoPLORE result above shows the individual spectral pixels. The band-averaged light curve follows the helium signal through transit. Negative transmission excess means absorption relative to the stellar reference.
 
-The strong OH line overlaps the red wing as the planetary spectrum moves through the night. Its subtraction therefore affects the recovered shape. The shaded errors propagate extraction noise and conditional sky-amplitude uncertainty; shared OH-profile and calibration uncertainties are additional contributions.
+The strong OH line overlaps the red wing as the planetary spectrum moves through the night. Its subtraction therefore affects the recovered shape. The shaded errors include extraction noise and uncertainty in the fitted OH intensity for each exposure. The OH line shape and the calibration between fibres are kept fixed when calculating these errors.
 
 The saved result can be plotted with:
 
@@ -1558,11 +1562,13 @@ python scripts/plot_carmenes_palle2020.py transmission \
   helium_transmission.png
 ```
 
-### Step 6: Compare the OH profile choices
+### Step 6: Assess the effect of OH subtraction
 
-The {download}`OOT-profile JSON <../configs/gj3470b_carmenes_palle2020_oot_tutorial.json>` selects `fiber_a_oot_profile` and writes a separate `night_oot_profile` directory. This option fits a common stellar spectrum in the stellar frame together with OH emission in the Earth frame, using only out-of-transit fibre A for the calibration. Fibre B supplies the sky strength at every exposure, including during transit. The weak OH pair retains its calibrated fibre-B profile.
+The OH emission overlaps the red wing of the planetary helium line. With consistently extracted A/B spectra unavailable for this tutorial, we can now assess how its subtraction affects the recovered spectrum by repeating the analysis with a different estimate of the OH profile. We compare the line shape and the absorption in the same wavelength band to see how sensitive our measurements are to this choice.
 
-The alternative run uses:
+In the calculation above, the OH profile is measured in fibre B and calibrated against fibre A. For this comparison, we instead fit the strong OH profile directly in the out-of-transit fibre-A spectra, together with a common stellar spectrum. The stellar spectrum is aligned in the stellar frame and the OH emission in the Earth frame. Fibre B still supplies the OH intensity for every exposure, including during transit. The weak OH pair retains the previous correction.
+
+We can follow this comparison using the {download}`alternative OH configuration <../configs/gj3470b_carmenes_palle2020_oot_tutorial.json>`. It selects `fiber_a_oot_profile` and saves the result in a separate `night_oot_profile` directory:
 
 ```bash
 python -u scripts/run_exoplore.py \

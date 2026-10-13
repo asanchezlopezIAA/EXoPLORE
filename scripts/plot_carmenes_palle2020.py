@@ -132,7 +132,7 @@ def steps(directory,output_directory,cfg,science):
         for w,f,e in zip(obs['wave_nm'],obs['corrected_flux'],obs['corrected_error'])])
     output_directory.mkdir(exist_ok=False)
     title='Telluric and OH correction'
-    final='Stellar-reference division (Earth-frame display)'
+    final='Divided by master out-of-transit (Earth-frame display)'
     plot_pipeline_steps(f'{cfg.planet.name}_Palle2020',str(output_directory)+'/',native/1000,
         data['phase'],data['with_signal'],data['without_signal'],
         np.flatnonzero(np.isfinite(residual).any(axis=0)),obs['raw_flux'],obs['raw_flux'],residual,

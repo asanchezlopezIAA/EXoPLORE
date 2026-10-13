@@ -290,8 +290,8 @@ def run_palle2020(config, *, pilot: bool=False, pilot_label: str='pilot') -> Pat
         night['flux'][:,order],night['flux'][:,order],display,
         order_label=science.order_segment,xlim_1d=tuple(np.array(science.plot_stellar_window_nm)/1000),
         sysrem_stages={stage:corrected_display,
-                       'Stellar-reference division (Earth-frame display)':display},
-        sysrem_iters=[stage,'Stellar-reference division (Earth-frame display)'],
+                       'Divided by master out-of-transit (Earth-frame display)':display},
+        sysrem_iters=[stage,'Divided by master out-of-transit (Earth-frame display)'],
         use_real_data=True,save_plot=True,show_plot=False)
     with (output/'summary.json').open('x') as stream:
         json.dump(dict(pipeline='Palle2020',reference='https://doi.org/10.1051/0004-6361/202037719',
