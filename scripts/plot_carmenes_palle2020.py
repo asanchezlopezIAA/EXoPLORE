@@ -164,13 +164,17 @@ def main():
     sub=parser.add_subparsers(dest='kind',required=True)
     p=sub.add_parser('exposure');p.add_argument('directory',type=Path);p.add_argument('output',type=Path)
     p.add_argument('--intervals',type=int,nargs='+',default=[1,4,5])
+    p=sub.add_parser('night');p.add_argument('directory',type=Path);p.add_argument('output',type=Path)
     for name in ('sky','transmission','steps'):
         p=sub.add_parser(name);p.add_argument('config',type=Path);p.add_argument('directory',type=Path);p.add_argument('output',type=Path)
         if name=='sky':p.add_argument('--exposure',type=int,default=17)
     p=sub.add_parser('compare');p.add_argument('first',type=Path);p.add_argument('second',type=Path);p.add_argument('output',type=Path)
     args=parser.parse_args()
     if args.output.exists():parser.error('Choose a new output path; existing plots are preserved')
-    if args.kind=='exposure':exposure(args.directory,args.output,args.intervals)
+    if args.kind=='night':
+        from exoplore.plotting.helium_molecfit import plot_molecfit_diagnostics
+        plot_molecfit_diagnostics(args.directory,args.output,'CARMENES_NIR')
+    elif args.kind=='exposure':exposure(args.directory,args.output,args.intervals)
     elif args.kind=='compare':compare([args.first,args.second],args.output)
     else:
         cfg,science=science_config(args.config)

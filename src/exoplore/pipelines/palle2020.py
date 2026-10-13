@@ -211,6 +211,8 @@ def run_palle2020(config, *, pilot: bool=False, pilot_label: str='pilot') -> Pat
             print(f'Palle2020: molecfit {i+1}/{len(raw)} accepted',flush=True)
     if pilot:
         return output
+    from exoplore.plotting.helium_molecfit import plot_molecfit_diagnostics
+    plot_molecfit_diagnostics(output,output/'molecfit_diagnostics.png','CARMENES_NIR')
     waves=np.array([c['wave_nm'] for c in corrections])
     flux=np.array([c['flux'] for c in corrections]);errors=np.array([c['error'] for c in corrections])
     if treatment == 'fiber_a_oot_profile':

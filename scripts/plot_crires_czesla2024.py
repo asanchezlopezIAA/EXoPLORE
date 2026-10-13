@@ -93,29 +93,9 @@ def plot_exposure(directory: Path, number: int, output: Path) -> None:
 
 
 def plot_night(directory: Path, output: Path) -> None:
-    """Compare wavelength refinement, fitted Gaussian width, and fit quality."""
-    reports = read_reports(directory)
-    figure, axes = plt.subplots(3, 1, figsize=(12, 10), sharex=True)
-    fields = [("he_shift_kms", "Wavelength adjustment (km/s)"),
-              ("gaussfwhm", "Gaussian FWHM (pixels)"),
-              ("reduced_chi2", "Reduced chi-squared")]
-    for nod, colour, marker in (("A", "tab:blue", "o"), ("B", "tab:orange", "s")):
-        rows = [row for row in reports if row["nod"] == nod]
-        for axis, (field, label) in zip(axes, fields):
-            values = [row[field] if field == "he_shift_kms" else row["parameters"][field] for row in rows]
-            axis.plot([row["exposure"] for row in rows], values, marker=marker, color=colour, label=f"Nod {nod}", ms=4)
-            axis.set_ylabel(label)
-            axis.grid(alpha=0.2)
-    axes[0].axhline(0, color="0.5", ls=":")
-    axes[0].legend(fontsize=14)
-    axes[-1].set_xlabel("Chronological exposure number")
-    for axis in axes:
-        axis.tick_params(labelsize=14, length=5.6, width=1.1)
-        axis.xaxis.label.set_size(17)
-        axis.yaxis.label.set_size(17)
-    figure.suptitle("Telluric correction across the observing sequence", fontsize=17)
-    figure.tight_layout()
-    save_figure(figure, output)
+    """Use the common helium calibration plot with CRIRES+ nod labels."""
+    from exoplore.plotting.helium_molecfit import plot_molecfit_diagnostics
+    plot_molecfit_diagnostics(directory, output, 'CRIRES+')
 
 
 def main() -> None:

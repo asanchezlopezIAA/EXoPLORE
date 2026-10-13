@@ -191,6 +191,8 @@ def run_carmenes_helium(config, *, expectation_source: Path | None = None):
     times = utc_midpoints(bjd,science)
     print('  Fitting the complete helium order with molecfit, independently per detector...',flush=True)
     night = fit_carmenes_night(output,arrays,raw,raw_error,h,science,times.mjd,config.observation.exposure_time_seconds)
+    from exoplore.plotting.helium_molecfit import plot_molecfit_diagnostics
+    plot_molecfit_diagnostics(output,output/'molecfit_diagnostics.png','CARMENES_NIR')
     good = night['transmittance'] >= science.telluric_min_transmission
     if science.oh_mode=='mask':good &= ~window_mask(arrays['wave_nm'],science.oh_topocentric_windows_nm)
     corrected,error = np.where(good,night['flux'],np.nan),np.where(good,night['error'],np.nan)

@@ -354,6 +354,8 @@ def run_helium_simulation(config) -> Path:
         print('  Fitting the entire synthetic matrix with molecfit...', flush=True)
         night = fit_synthetic_night(output, arrays, raw, raw_error, h, science,
                                     config.observation.exposure_time_seconds)
+        from exoplore.plotting.helium_molecfit import plot_molecfit_diagnostics
+        plot_molecfit_diagnostics(output,output/'molecfit_diagnostics.png','CRIRES+')
         corrected, error = night['flux'], night['error']
         recovered = prepare_transmission(night['wave_nm'], corrected, error, berv, rv, science)
         _write_npz(output/'molecfit_calibration.npz', dict(wavelength_shift_kms=night['wavelength_shift_kms'],

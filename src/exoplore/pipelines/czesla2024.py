@@ -249,6 +249,8 @@ def run_czesla2024(simulation_config) -> Path:
              'inputs':[{'path':str(p.resolve()),'sha256':hashlib.sha256(p.read_bytes()).hexdigest()} for p in night['paths']],
              'raw_header_hashes':night['raw_header_hashes']}
     with (output/'summary.json').open('x') as stream:json.dump(summary,stream,indent=2)
+    from exoplore.plotting.helium_molecfit import plot_molecfit_diagnostics
+    plot_molecfit_diagnostics(Path(config.input_path),output/'molecfit_diagnostics.png','CRIRES+')
     plot_transmission(observed,phase,rv,night['berv_kms'],config,output/'transmission_diagnostic.png')
     print(f'  czesla2024: direct transmission products written to {output}',flush=True)
     return output

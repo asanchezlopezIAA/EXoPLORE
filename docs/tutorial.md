@@ -1542,6 +1542,23 @@ Preparation stages for the helium order. The extracted spectrum and time series 
 
 ### Step 5: The result
 
+We first inspect the telluric fits throughout the night. EXoPLORE produces `molecfit_diagnostics.png` for observed and simulated helium sequences corrected with molecfit. The same plotting routine distinguishes the CRIRES+ nod positions or the CARMENES detector sections, when fitted separately.
+
+```{figure} figures/tutorial12b_molecfit_diagnostics.png
+:width: 95%
+:align: center
+
+Wavelength adjustment, instrumental-kernel widths and reduced chi-squared for the 34 GJ 3470 b exposures. The wavelength adjustments range from −0.30 to +0.16 km/s. Here the Gaussian and Lorentzian widths are fixed to the wavelength-dependent Voigt LSF from Nagel et al. (2023), rather than fitted for each exposure. The widths are expressed in pixels of the grid used by molecfit. Produced with `plot_carmenes_palle2020.py night`.
+```
+
+We can recreate this plot from the saved fits with:
+
+```bash
+python scripts/plot_carmenes_palle2020.py night \
+  outputs/gj3470b_palle2020/GJ3470b/Palle2020/night \
+  molecfit_diagnostics.png
+```
+
 ```{figure} figures/tutorial12b_HeI_transmission.png
 :width: 95%
 :align: center
