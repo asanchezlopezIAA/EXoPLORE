@@ -191,6 +191,8 @@ class SimulationSummary:
     retrieval_enabled: bool
     output_root: str
     helium_backend: Optional[str] = None
+    helium_grid_models: Optional[int] = None
+    helium_observed: bool = False
 
     def __post_init__(self):
         # Backward-compatibility alias
@@ -222,6 +224,15 @@ class SimulationSummary:
         ]
         if self.pipeline in self._SYSREM_PIPELINES:
             lines.append(f"  SYSREM iterations   : {self.sysrem_iterations}")
+        if self.helium_grid_models is not None:
+            lines += ['  Analysis            : Sunbather He I grid fit',
+                      f'  Grid models         : {self.helium_grid_models}',
+                      f'  Output root         : {self.output_root}', '']
+            return '\n'.join(lines)
+        if self.helium_observed:
+            lines += ['  Analysis            : observed He I transmission',
+                      f'  Output root         : {self.output_root}', '']
+            return '\n'.join(lines)
         if self.helium_backend is not None:
             lines += [f"  Atmosphere          : {self.helium_backend}",
                       "  Observations        : synthetic optical transit",
@@ -277,11 +288,19 @@ class ExoploreSimulator:
         cfg = self.config
         from exoplore.core.spectroscopy_mode import spectroscopy_route
         route = spectroscopy_route(cfg)
+        if route == 'helium_grid':
+            from exoplore.retrieval.helium_grid import validate_grid_config
+            validate_grid_config(cfg)
+            return
         if route == "helium_simulation":
             from exoplore.core.helium_simulation import validate_helium_run
             validate_helium_run(cfg)
             return
         if route == "helium_observed":
+            if cfg.pipeline.name == 'Palle2020':
+                from exoplore.pipelines.palle2020 import validate_run_config
+                validate_run_config(cfg)
+                return
             from exoplore.pipelines.czesla2024 import validate_run_config
             validate_run_config(cfg)
 
@@ -327,6 +346,11 @@ class ExoploreSimulator:
         cfg = self.config
         from exoplore.core.spectroscopy_mode import spectroscopy_route
         route = spectroscopy_route(cfg)
+        grid_models=None
+        if route=='helium_grid':
+            from exoplore.config.helium_grid import axis_values
+            grid_models=(len(axis_values(cfg.helium_grid.temperature_grid_K,'temperature_grid_K',True))
+                         *len(axis_values(cfg.helium_grid.log10_mass_loss_grid_g_s,'log10_mass_loss_grid_g_s')))
         return SimulationSummary(
             planet_name=cfg.planet.name,
             instrument=cfg.instrument.name,
@@ -343,6 +367,8 @@ class ExoploreSimulator:
             output_root=cfg.paths.output_root,
             helium_backend=((cfg.atmosphere.helium.backend if cfg.observation.simulate_planet else "no injection")
                             if route == 'helium_simulation' else None),
+            helium_grid_models=grid_models,
+            helium_observed=(route == 'helium_observed'),
         )
 
     # ------------------------------------------------------------------
@@ -386,11 +412,19 @@ class ExoploreSimulator:
         cfg = self.config
         from exoplore.core.spectroscopy_mode import spectroscopy_route
         route = spectroscopy_route(cfg)
+        if route=='helium_grid':
+            from exoplore.retrieval.helium_grid import run_helium_grid
+            run_helium_grid(cfg)
+            return
         if route == "helium_simulation":
             from exoplore.core.helium_simulation import run_helium_simulation
             run_helium_simulation(cfg)
             return
         if route == "helium_observed":
+            if cfg.pipeline.name == 'Palle2020':
+                from exoplore.pipelines.palle2020 import run_palle2020
+                run_palle2020(cfg)
+                return
             from exoplore.pipelines.czesla2024 import run_czesla2024
             run_czesla2024(cfg)
             return

@@ -25,6 +25,7 @@ from typing import Any, Dict, List, Optional
 from exoplore.config.czesla2024 import Czesla2024Config
 from exoplore.config.carmenes_helium import CarmenesHeliumConfig
 from exoplore.config.helium import HeliumPwindsConfig
+from exoplore.config.helium_grid import HeliumGridConfig
 
 
 # ---------------------------------------------------------------------------
@@ -529,10 +530,17 @@ class PipelineConfig:
     # Optional direct-transmission recipe; absent for every existing pipeline.
     czesla2024: Optional[Czesla2024Config] = None
     carmenes_helium: Optional[CarmenesHeliumConfig] = None
+    palle2020: Optional[dict] = None
+    # Explicit OH treatment for direct helium routes; None reads archived modes.
+    oh_treatment: Optional[str] = None
 
     def __post_init__(self) -> None:
+        if self.name == 'Palle2020' and self.carmenes_helium is None and self.palle2020:
+            self.carmenes_helium = self.palle2020.get('transmission')
         if isinstance(self.carmenes_helium, dict):
             choices=dict(self.carmenes_helium)
+            if self.oh_treatment is not None:
+                choices['oh_mode'] = 'mask' if self.oh_treatment == 'mask' else 'baseline'
             # Ignore removed controls in archived helium configurations.
             choices.pop('reference_running_numbers',None)
             choices.pop('in_transit_running_numbers',None)
@@ -541,11 +549,19 @@ class PipelineConfig:
             raise ValueError("pipeline.name='carmenes_helium' requires explicit settings")
         if isinstance(self.czesla2024, dict):
             choices=dict(self.czesla2024)
+            if self.oh_treatment is not None:
+                choices['oh_mode'] = 'mask' if self.oh_treatment == 'mask' else 'baseline'
             choices.pop('reference_running_numbers',None)
             choices.pop('in_transit_running_numbers',None)
             self.czesla2024 = Czesla2024Config(**choices)
         if self.name == "czesla2024" and self.czesla2024 is None:
             raise ValueError("pipeline.name='czesla2024' requires explicit pipeline.czesla2024 settings")
+        if self.oh_treatment is not None:
+            from dataclasses import replace
+            for field in ('czesla2024','carmenes_helium'):
+                science=getattr(self,field)
+                if science is not None:
+                    setattr(self,field,replace(science,oh_mode='mask' if self.oh_treatment=='mask' else 'baseline'))
 
 
 # ---------------------------------------------------------------------------
@@ -1068,6 +1084,12 @@ class SimulationConfig:
         default_factory=DetectabilityConfig
     )
     timing: bool = False
+    helium_grid: Optional[HeliumGridConfig] = None
+
+    def __post_init__(self) -> None:
+        """Construct the opt-in helium grid without changing existing routes."""
+        if isinstance(self.helium_grid,dict):
+            self.helium_grid=HeliumGridConfig(**self.helium_grid)
 
     # ------------------------------------------------------------------
     # Serialization
@@ -1156,6 +1178,7 @@ class SimulationConfig:
             detectability=_safe(
                 DetectabilityConfig, d.get("detectability", {})),
             timing=bool(d.get("timing", False)),
+            helium_grid=d.get('helium_grid'),
         )
 
     @classmethod

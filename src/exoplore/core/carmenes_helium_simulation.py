@@ -27,6 +27,8 @@ from exoplore.planets import load_planet
 
 def validate_carmenes_helium(config):
     """Reject conflicting selections before physical calculations or outputs."""
+    from exoplore.config.helium_oh import validate_oh_treatment
+    validate_oh_treatment(config)
     if config.instrument.name != 'CARMENES_NIR' or config.pipeline.carmenes_helium is None:
         raise ValueError('carmenes_helium requires CARMENES_NIR and explicit preparation settings')
     h = config.atmosphere.helium
@@ -125,6 +127,12 @@ def run_carmenes_helium(config, *, expectation_source: Path | None = None):
         original = json.loads((source/'run_config.json').read_text())
         current = asdict(config)
         for item in (original,current):
+            if item.get('helium_grid') is None:
+                item.pop('helium_grid',None)
+            if item['pipeline'].get('palle2020') is None:
+                item['pipeline'].pop('palle2020',None)
+            if item['pipeline'].get('oh_treatment') is None:
+                item['pipeline'].pop('oh_treatment',None)
             if item['atmosphere']['helium'].get('sunbather') is None:
                 item['atmosphere']['helium'].pop('sunbather', None)
             if item['atmosphere']['helium'].get('completed_night_paths') is None:

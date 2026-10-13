@@ -27,7 +27,13 @@ from exoplore.pipelines.helium_noise_propagation import (
 def _physical_config(config: dict) -> dict:
     """Exclude only output/reuse controls and noise seed from physical identity."""
     result = json.loads(json.dumps(config))
+    if result.get('helium_grid') is None:
+        result.pop('helium_grid',None)
     result['paths']['output_root'] = ''
+    if result['pipeline'].get('oh_treatment') is None:
+        result['pipeline'].pop('oh_treatment',None)
+    if result['pipeline'].get('palle2020') is None:
+        result['pipeline'].pop('palle2020',None)
     result['observation']['n_nights'] = 1
     for recipe in ('czesla2024','carmenes_helium'):
         choices=result.get('pipeline',{}).get(recipe)

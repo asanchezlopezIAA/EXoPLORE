@@ -29,7 +29,9 @@ C_KMS = 299792.458
 
 def validate_helium_run(config) -> None:
     """Validate the optional simulation without importing p-winds or loading data."""
-    if config.pipeline.name == "carmenes_helium":
+    from exoplore.config.helium_oh import validate_oh_treatment
+    validate_oh_treatment(config)
+    if config.pipeline.name in ("carmenes_helium", "Palle2020"):
         from exoplore.core.carmenes_helium_simulation import validate_carmenes_helium
         validate_carmenes_helium(config)
         return
@@ -232,7 +234,7 @@ class NoHeliumTransit:
 def run_helium_simulation(config) -> Path:
     """Automatically calculate p-winds helium, simulate exposures and recover it."""
     validate_helium_run(config)
-    if config.pipeline.name == "carmenes_helium":
+    if config.pipeline.name in ("carmenes_helium", "Palle2020"):
         from exoplore.core.carmenes_helium_simulation import run_carmenes_helium
         return run_carmenes_helium(config)
     h, science = config.atmosphere.helium, config.pipeline.czesla2024
@@ -281,6 +283,13 @@ def run_helium_simulation(config) -> Path:
             if fields.get('completed_night_paths') is None:
                 fields.pop('completed_night_paths', None)
         original['pipeline'].setdefault('carmenes_helium', None)
+        for item in (original,current):
+            if item.get('helium_grid') is None:
+                item.pop('helium_grid',None)
+            if item['pipeline'].get('palle2020') is None:
+                item['pipeline'].pop('palle2020',None)
+            if item['pipeline'].get('oh_treatment') is None:
+                item['pipeline'].pop('oh_treatment',None)
         # Refitting changes only the recovery recipe, never the saved observation.
         old_h.pop('molecfit_config_path', None); new_h.pop('molecfit_config_path', None)
         for key in ('molecfit_workers', 'molecfit_reuse_path'):

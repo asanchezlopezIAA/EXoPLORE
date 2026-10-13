@@ -131,6 +131,8 @@ outer boundary (a-r_max), as prescribed by its native solver.
             boundary='Native Sunbather: irradiation at a-r_max', cosmic_rays=s.cosmic_rays,
             stellar_tidal_gravity=s.stellar_tidal_gravity,
             helium_lower_level=cols[0], warnings=result['warnings']), f, indent=2)
+    from exoplore.plotting.helium_atmosphere import write_atmosphere_diagnostics
+    write_atmosphere_diagnostics(root, settings, planet, result)
     return result
 
 

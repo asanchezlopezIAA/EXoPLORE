@@ -211,6 +211,7 @@ def run_czesla2024(simulation_config) -> Path:
     corrections are upstream inputs, described in the RTD tutorial. Extraction errors are propagated analytically through the reference division
     and interpolation. Fitted continua and telluric models are held fixed.
     """
+    validate_run_config(simulation_config)
     config=simulation_config.pipeline.czesla2024
     if not isinstance(config,Czesla2024Config):raise ValueError('Explicit pipeline.czesla2024 configuration required')
     destination=Path(simulation_config.paths.output_root)/simulation_config.planet.name/'czesla2024'
@@ -262,6 +263,8 @@ def plot_transmission(result: dict,phase: np.ndarray,rv: np.ndarray,berv: np.nda
 
 def validate_run_config(config) -> None:
     """Validate the opt-in direct branch without loading spectra or optional pRT."""
+    from exoplore.config.helium_oh import validate_oh_treatment
+    validate_oh_treatment(config)
     if config.instrument.name not in ('CRIRES+','CRIRES_PLUS'):
         raise ValueError('czesla2024 currently supports observed CRIRES+ datasets')
     if config.observation.event_type!='transit' or not config.observation.use_real_data:
