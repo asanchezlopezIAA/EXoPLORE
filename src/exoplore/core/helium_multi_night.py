@@ -269,7 +269,7 @@ def plot_helium_nights(output, wave, spectra, combined, error, phases,
         axis.set_ylabel('Orbital phase')
     axes[-1, 0].set_xlabel('Wavelength (μm)')
     axes[-1, 0].xaxis.set_major_formatter(FuncFormatter(lambda value, position: f'{value/1000:.4f}'))
-    fig.colorbar(mesh, ax=axes[:, 0].tolist(), label='Transmission excess (%)')
+    fig.colorbar(mesh, ax=axes[:, 0].tolist(), label='Absorption excess (%)')
     fig.savefig(output/'helium_nights_maps.png', dpi=180)
     fig.savefig(output/'helium_nights_maps.pdf')
     plt.close(fig)

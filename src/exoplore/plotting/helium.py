@@ -62,7 +62,7 @@ they do not imply simulated emission or a correction for airglow.
         axis.ticklabel_format(axis='x', useOffset=False)
     axes[0].legend(loc='upper right', fontsize=8)
     axes[-1].set_xlabel(f'{frame.capitalize()}-frame vacuum wavelength (nm)')
-    fig.colorbar(mesh, ax=axes.tolist(), label='Transmission excess / residual (%)')
+    fig.colorbar(mesh, ax=axes.tolist(), label='Absorption excess / residual (%)')
     fig.savefig(stem.with_suffix('.pdf'), bbox_inches='tight')
     fig.savefig(stem.with_suffix('.png'), dpi=180, bbox_inches='tight')
     plt.close(fig)
@@ -187,7 +187,7 @@ def plot_helium_summary(path: Path, result: dict, phase: np.ndarray,
     """Save the common three-panel result for real and simulated helium data.
 
     Show the stellar transmission map, planet-frame spectrum and planetary
-    fixed-band light curve. Lower panels use transmission excess in percent,
+    fixed-band light curve. Lower panels use absorption excess in percent,
     vacuum wavelengths in micrometres and shaded supplied uncertainties.
     Optional night arrays add individual curves to their combined result.
     No selections, binning, fits or uncertainty estimates are made here.
@@ -255,10 +255,6 @@ def plot_helium_summary(path: Path, result: dict, phase: np.ndarray,
                              color=color,lw=1,markersize=3,alpha=.7,label=night_label)
                 axes[2].plot(phase,100*(curve-1),'o-',color=color,lw=1,
                              markersize=4,alpha=.7,label=night_label)
-                if night_lightcurve_errors is not None:
-                    error=night_lightcurve_errors[index]
-                    axes[2].fill_between(phase,100*(curve-1-error),100*(curve-1+error),
-                                         color=color,alpha=.10)
         spectrum=np.asarray(result['planet_coadd'])
         curve=np.asarray(result['planet_lightcurve'])
         axes[1].plot(planet_wave[band],100*(spectrum[band]-1),'ko-',lw=1.5,
@@ -268,10 +264,10 @@ def plot_helium_summary(path: Path, result: dict, phase: np.ndarray,
         axes[2].plot(phase,100*(curve-1),'ko-',lw=2.2,markersize=5,label=label)
         axes[2].fill_between(phase,100*(curve-1-curve_error),
                              100*(curve-1+curve_error),color='black',alpha=.15)
-        axes[1].set(xlim=map_limits,xlabel='Wavelength (μm)',ylabel='Transmission excess (%)',
+        axes[1].set(xlim=map_limits,xlabel='Wavelength (μm)',ylabel='Absorption excess (%)',
                     title='Individual nights and combined He I transmission' if combined else 'Planet-frame He I transmission')
         lo,hi=np.asarray(science.planet_lightcurve_window_nm)/1000
-        axes[2].set(xlabel='Orbital phase',ylabel='Band-averaged transmission excess (%)',
+        axes[2].set(xlabel='Orbital phase',ylabel='Band-averaged absorption excess (%)',
                     title=f'Planet-frame He I light curve ({lo:.6f}–{hi:.6f} μm)')
         for index,contact in enumerate(science.optical_contact_phases,1):
             hour=contact*science.period_days*24

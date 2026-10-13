@@ -129,7 +129,7 @@ def compare(directories,output):
         ax.fill_between(x[b]/1000,100*(smoothed[b]-1-uncertainty[b]),
                         100*(smoothed[b]-1+uncertainty[b]),color=line.get_color(),alpha=.18)
     ax.axhline(0,color='.6',lw=.8)
-    ax.set(xlabel='Wavelength (μm)',ylabel='Transmission excess (%)')
+    ax.set(xlabel='Wavelength (μm)',ylabel='Absorption excess (%)')
     ax.ticklabel_format(axis='x',useOffset=False);ax.xaxis.set_major_locator(MaxNLocator(5))
     ax.legend(title='Three-point running mean',fontsize=14,title_fontsize=14)
     save(fig,output)

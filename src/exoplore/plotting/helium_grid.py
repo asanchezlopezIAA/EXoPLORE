@@ -35,7 +35,7 @@ def plot_helium_grid(output: Path, settings, results: list[dict]) -> None:
         axes[1].fill_between(x,y-e,y+e,color='0.7',alpha=.4)
         axes[1].plot(x,y,'k.-',lw=1,label='Measured transmission')
         axes[1].plot(x,100*(model[indices]-1),lw=2,color='tab:orange',label=f'Sunbather ({best["velocity_shift_kms"]:+.1f} km s⁻¹)')
-        axes[1].set(xlabel='Wavelength (μm)',ylabel='Transmission excess (%)')
+        axes[1].set(xlabel='Wavelength (μm)',ylabel='Absorption excess (%)')
         axes[1].ticklabel_format(axis='x',useOffset=False);axes[1].legend()
         for extension in ('png','pdf'):
             path=output/f'helium_grid_fit.{extension}'

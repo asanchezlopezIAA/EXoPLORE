@@ -1352,7 +1352,7 @@ A transmission of 0.98 therefore corresponds to 2% excess absorption. Displaying
 :width: 95%
 :align: center
 
-Helium transmission spectra of WASP-121 b. Top: the stellar-frame map, where absorption appears red. The red dashed lines follow the planetary velocity tracks, the magenta markers show the triplet wavelengths, and the horizontal dashed lines mark the optical contacts. Middle: the planet-frame spectrum, expressed as transmission excess in percent, with its extraction uncertainty shaded. Bottom: the planet-frame helium light curve in the 0.5 Å band, with shaded uncertainties and T1–T4 marked. Negative transmission excess corresponds to absorption. Produced by the run as `transmission_diagnostic.png`.
+Helium transmission spectra of WASP-121 b. Top: the stellar-frame map, where absorption appears red. The red dashed lines follow the planetary velocity tracks, the magenta markers show the triplet wavelengths, and the horizontal dashed lines mark the optical contacts. Middle: the planet-frame spectrum, expressed as absorption excess in percent, with its extraction uncertainty shaded. Bottom: the planet-frame helium light curve in the 0.5 Å band, with shaded uncertainties and T1–T4 marked. Negative absorption excess corresponds to absorption. Produced by the run as `transmission_diagnostic.png`.
 ```
 
 The absorption near the stronger triplet components reaches approximately 2%, comparable in scale to the feature reported by Czesla et al. (2024). The map retains the time information, while the planetary average combines the in-transit signal. The weaker component lies blueward of the strong one and carries less information at this noise level.
@@ -1570,7 +1570,7 @@ Preparation stages for the helium order. The extracted spectrum and time series 
 GJ 3470 b helium transmission. Top: stellar-frame residual map, with absorption in red and the planet velocity tracks marked. Middle: average planetary spectrum, with individual pixels and shaded extraction uncertainties. Bottom: the planet-frame light curve in the 0.40 Å band around the strong triplet components. T1–T4 mark the optical contacts. Produced by the run as `transmission_diagnostic.png`.
 ```
 
-The absorption in the 0.40 Å band is approximately 1.3%, comparable to the 1.5 ± 0.3% reported by Pallé et al. (2020). Their Fig. 5 uses a three-point running mean. The standard EXoPLORE result above shows the individual spectral pixels. The band-averaged light curve follows the helium signal through transit. Negative transmission excess means absorption relative to the stellar reference.
+The absorption in the 0.40 Å band is approximately 1.3%, comparable to the 1.5 ± 0.3% reported by Pallé et al. (2020). Their Fig. 5 uses a three-point running mean. The standard EXoPLORE result above shows the individual spectral pixels. The band-averaged light curve follows the helium signal through transit. Negative absorption excess means absorption relative to the stellar reference.
 
 The shaded errors include extraction noise and uncertainty in the fitted OH intensity for each exposure. The OH line shape and the calibration between fibres are kept fixed when calculating these errors.
 
