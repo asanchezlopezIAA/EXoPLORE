@@ -150,7 +150,7 @@ def run_palle2020(config, *, pilot: bool=False, pilot_label: str='pilot') -> Pat
         )
         settings=OHFitConfig(**choices['oh_fit']['profile'])
         sky_result=fit_fibre_b(night,order,settings)
-        transfer=(subtract_matched_fibre_b(night,order,sky_result,choices['oh_fit']['fiber_b_scale'],settings)
+        transfer=(subtract_matched_fibre_b(night,order,sky_result,choices['oh_fit'].get('fiber_b_scale'),settings,reference_indices=outside)
                   if treatment=='fiber_b_matched_extraction' else
                   transfer_to_fibre_a(night,order,sky_result,outside,settings))
         raw=transfer['corrected_flux'].copy();error=transfer['conditional_error'].copy()
@@ -257,6 +257,9 @@ def run_palle2020(config, *, pilot: bool=False, pilot_label: str='pilot') -> Pat
             corrected_error=errors,oh_mask=masked,oh_treated_flux=raw,
             oh_treated_error=error,
             telluric_transmission=np.array([c['transmittance'] for c in corrections]))
+    if uses_sky_fibre(treatment):
+        from exoplore.plotting.carmenes_oh import plot_oh_correction
+        plot_oh_correction(output,output/'oh_correction.png',science,int(np.argmin(abs(phase)))+1)
     result=prepare_carmenes_transmission(waves,flux,errors,night['berv_kms'],rv,science)
     from exoplore.pipelines.helium_noise_propagation import carmenes_coadd_covariance, carmenes_lightcurve_covariance
     covariance=carmenes_coadd_covariance(waves,flux,errors,night['berv_kms'],rv,science,result)

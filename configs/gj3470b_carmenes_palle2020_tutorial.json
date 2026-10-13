@@ -295,7 +295,7 @@
     "pipeline.palle2020.oh_fit.oot_profile.maximum_reduced_chi2": "Upper acceptance threshold for the residual OOT chi-square after fitting stellar samples and four OH parameters.",
     "pipeline.palle2020.oh_fit.oot_profile.maximum_profile_condition_number": "Upper condition-number threshold for the OH Jacobian, with velocities/widths expressed on a 0.01 nm scale and the relative transfer amplitude on a unit scale.",
     "pipeline.palle2020.oh_fit.maximum_anchor_change_sigma": "Maximum difference between preliminary and final OH subtraction at molecfit anchors, in native extraction-error units. Reject the final correction if it changes the fitted telluric input beyond this limit.",
-    "pipeline.oh_treatment": "fiber_b_calibrated fits fibre-B OH emission and calibrates its flux scale using out-of-transit fibre A. Alternatives: ignore, mask, fiber_b_matched_extraction (requires an explicit scale), fiber_a_oot_profile (joint stellar/OH fit using OOT A and time-dependent B amplitudes).",
+    "pipeline.oh_treatment": "fiber_b_calibrated fits fibre-B OH emission and calibrates its flux scale using out-of-transit fibre A. Alternatives: ignore, mask, fiber_b_matched_extraction (measures the A/B scale from out-of-transit spectra), fiber_a_oot_profile (joint stellar/OH fit using OOT A and time-dependent B amplitudes).",
     "paths": "Configuration block for paths.",
     "paths.output_root": "Root directory for EXoPLORE products."
   }

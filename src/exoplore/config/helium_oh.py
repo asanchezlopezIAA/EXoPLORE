@@ -57,10 +57,10 @@ def validate_oh_treatment(config) -> str:
             if (isinstance(threshold, bool) or not isinstance(threshold, (int, float))
                     or not math.isfinite(threshold) or threshold <= 0):
                 raise ValueError('fiber_a_oot_profile requires a positive oh_fit.maximum_anchor_change_sigma')
-        if treatment == 'fiber_b_matched_extraction':
+        if treatment == 'fiber_b_matched_extraction' and fit.get('fiber_b_scale') is not None:
             scale = fit.get('fiber_b_scale')
             values = scale if isinstance(scale, list) else [scale]
             if not values or any(isinstance(v, bool) or not isinstance(v, (int,float))
                                  or not math.isfinite(v) or v <= 0 for v in values):
-                raise ValueError('fiber_b_matched_extraction requires oh_fit.fiber_b_scale: a positive B-to-A flux multiplier, or one multiplier per exposure, calibrated for these observations. There is no default scaling factor.')
+                raise ValueError('Optional oh_fit.fiber_b_scale must be a positive B-to-A flux multiplier or one positive multiplier per exposure. Omit it to measure the factor from out-of-transit spectra.')
     return treatment

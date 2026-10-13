@@ -1412,7 +1412,7 @@ inputs/CARMENES_NIR/GJ3470b/20181226/
 
 EXoPLORE reads the wavelength, flux and uncertainty arrays directly from these files, pairs the two fibres and orders the exposures by their recorded BJD. It also writes its usual per-order reference-night FITS products. The helium triplet falls in NIR order **7**, using zero-based indices. The analysis selects this order through `instrument.order_indices`.
 
-The complete reference files for this tutorial are {download}`the analysis JSON <../configs/gj3470b_carmenes_palle2020_tutorial.json>` and {download}`the adopted system parameters <../planet_params/GJ3470b_tutorial.json>`. The JSON includes a description of every setting. Its ephemeris and optical contacts define the timing used in this example. EXoPLORE calculates the exposure membership internally.
+The reference files are included in the EXoPLORE repository: `configs/gj3470b_carmenes_palle2020_tutorial.json` contains the analysis configuration and `planet_params/GJ3470b_tutorial.json` contains the adopted system parameters. The JSON includes a description of every setting. Its ephemeris and optical contacts define the timing used in this example. EXoPLORE calculates the exposure membership internally.
 
 ### Step 2: Select the preparation
 
@@ -1439,7 +1439,7 @@ The main choices are:
 
 The downloaded JSON also contains `pipeline.palle2020`, with the input directory, molecfit fitting intervals, continuum band and OH settings. We can adjust `input_directory` to the location of the spectra and `molecfit.esorex` to the ESO recipe executable. The example uses `esorex` from the executable search path. The [ESO molecfit page](https://www.eso.org/sci/software/pipelines/molecfit/) provides the installation and recipe documentation.
 
-With these choices, the helium signal is measured directly after division by the stellar reference. Molecular retrieval is disabled. We can inspect the selected analysis with:
+We can inspect the selected analysis with:
 
 ```bash
 python scripts/run_exoplore.py configs/gj3470b_carmenes_palle2020_tutorial.json
@@ -1447,7 +1447,7 @@ python scripts/run_exoplore.py configs/gj3470b_carmenes_palle2020_tutorial.json
 
 ### Step 3: Correct the telluric absorption and OH emission
 
-Water produces absorption lines in this order, while OH produces sky emission. Molecfit fits the water transmission separately for each exposure. The example uses the wavelength-dependent Gaussian and Lorentzian instrumental widths from [Nagel et al. (2023)](https://doi.org/10.1051/0004-6361/202346524), evaluated on the fitting grid. The science spectra retain their native pixel sampling.
+Water produces absorption lines in this order, while OH produces sky emission. Molecfit fits the water transmission separately for each exposure. The example uses the wavelength-dependent Gaussian and Lorentzian instrumental widths from [Nagel et al. (2023)](https://doi.org/10.1051/0004-6361/202346524), evaluated on the fitting grid.
 
 We first fit one exposure:
 
@@ -1471,21 +1471,21 @@ python scripts/plot_carmenes_palle2020.py exposure \
 Molecfit correction in three water-line intervals of the first GJ 3470 b exposure. Top: observation and fitted model. Middle: locally normalized spectrum before and after correction. Bottom: residuals divided by the extraction uncertainty. The stronger water lines are substantially reduced. Produced with `plot_carmenes_palle2020.py exposure`.
 ```
 
-The OH model follows the profile prescription of Pallé et al. (2020): a Voigt profile for the strong line and two Gaussians sharing width and amplitude for the weak pair. Fibre B determines the profiles and their changing strength throughout the night. The sky model is then expressed in fibre-A flux units and subtracted.
+Fibre A contains both the stellar spectrum and OH emission from the Earth's atmosphere. Fibre B observes the sky, so it helps us measure the OH emission separately. To subtract it from fibre A, we need its line shape, its intensity in each exposure, and the factor that converts the measured fibre-B flux into fibre-A flux. The emission model follows Pallé et al. (2020): a Voigt profile for the strong OH line and two Gaussians sharing width and amplitude for the weak pair.
 
-Pallé et al. (2020) used matched extractions for both fibres and measured an A/B factor of 0.88. The first step in assessing the OH correction should be to check whether fibre A and fibre B have been extracted consistently. For this tutorial, we do not have fibre-A spectra extracted in the same way as fibre B. If these products are available for your observations, EXoPLORE provides `fiber_b_matched_extraction`, together with the A/B scaling factor supplied in `oh_fit.fiber_b_scale`. This factor should be determined for your observations.
+Pallé et al. (2020) used matched extractions for both fibres and measured an A/B factor of 0.88. The first step in assessing the OH correction should be to check whether fibre A and fibre B have been extracted consistently. For this tutorial, we do not have fibre-A spectra extracted in the same way as fibre B. If these products are available for your observations, select `fiber_b_matched_extraction`. EXoPLORE measures the A/B factor from the strong OH line in the out-of-transit spectra and applies it throughout the night. The measured factor is saved in `oh_report.json` and shown in the legend of `oh_correction.png`.
 
-With the files available here, `fiber_b_calibrated` determines the transfer between fibres from the strong OH line in out-of-transit fibre A. The available choices are:
+With the files available here, the available choices are:
 
-| `oh_treatment` | What EXoPLORE does |
+| `oh_treatment` | How the OH emission is treated |
 |---|---|
-| `ignore` | Retains the OH emission. |
-| `mask` | Excludes windows located from `oh_catalogue_nm` and widened by `oh_mask_halfwidth_nm`. |
-| `fiber_b_matched_extraction` | Subtracts the fibre-B model with the required `oh_fit.fiber_b_scale` (a number applies to the night, a list supplies one value per exposure). |
-| `fiber_b_calibrated` | Calibrates the fibre-B profile against out-of-transit fibre A. |
-| `fiber_a_oot_profile` | Fits the strong-line shape jointly with the stellar spectrum in out-of-transit fibre A (fibre B supplies the changing sky amplitude). |
+| `ignore` | We leave the OH emission in the spectra. Any overlap with planetary helium remains in the transmission spectrum. |
+| `mask` | We exclude the pixels around the OH lines from the analysis. This also removes any planetary signal falling on those pixels. The JSON specifies the OH wavelengths in `oh_catalogue_nm` and the half-width of each excluded interval in `oh_mask_halfwidth_nm`. |
+| `fiber_b_matched_extraction` | For fibres extracted in the same way, we measure the OH line shape and its changing intensity in fibre B. EXoPLORE measures the A/B scaling factor from out-of-transit fibre A, then subtracts the scaled emission from every science exposure. This choice requires matched extractions, which are unavailable for this tutorial. |
+| `fiber_b_calibrated` | For differently extracted fibres, we still use the OH line shape measured in fibre B. We fit its strength and wavelength offset against the strong OH line in out-of-transit fibre A, then apply that calibration throughout the night. Fibre B tracks how the sky intensity changes between exposures. This is the choice used above. |
+| `fiber_a_oot_profile` | We measure the strong OH line shape directly in out-of-transit fibre A. We fit the stellar spectrum at the same time to separate stellar absorption from sky emission. Fibre B tracks the changing OH intensity, allowing us to subtract the fitted emission during transit as well. The weak OH pair keeps the correction from `fiber_b_calibrated`. We explore this alternative in Step 6. |
 
-The matched-extraction choice requires compatible A/B products. The two calibrated choices are EXoPLORE extensions for the supplied extractions. Their fitting intervals, width bounds and acceptance thresholds are given in the JSON.
+Both `fiber_b_calibrated` and `fiber_a_oot_profile` are EXoPLORE extensions for the differently extracted spectra available here. Their fitting intervals, width bounds and acceptance thresholds are given in the JSON.
 
 ### Step 4: Prepare the night
 
@@ -1511,7 +1511,7 @@ python scripts/plot_carmenes_palle2020.py sky \
 :width: 100%
 :align: center
 
-OH correction in the weak pair and strong sky line. The upper panels compare fibre B with its fitted emission model. The lower panels show fibre A before and after subtraction. The two fibres have different flux conventions, so their vertical scales differ. Produced with `plot_carmenes_palle2020.py sky`.
+OH correction in the weak pair and strong sky line. The upper panels compare fibre B with its fitted emission model. The lower panels show fibre A before and after subtraction, with the B-to-A factor in the legend. The two fibres have different flux conventions, so their vertical scales differ. Produced by the run as `oh_correction.png`, or with `plot_carmenes_palle2020.py sky`.
 ```
 
 Following Pallé et al. (2020), each corrected spectrum is normalized by its mean flux between 1.0815962 and 1.0827624 µm. EXoPLORE then aligns the spectra in the stellar frame, computes the arithmetic-mean out-of-transit reference and divides every exposure by it:
@@ -1585,7 +1585,7 @@ The OH emission overlaps the red wing of the planetary helium line. With consist
 
 In the calculation above, the OH profile is measured in fibre B and calibrated against fibre A. For this comparison, we instead fit the strong OH profile directly in the out-of-transit fibre-A spectra, together with a common stellar spectrum. The stellar spectrum is aligned in the stellar frame and the OH emission in the Earth frame. Fibre B still supplies the OH intensity for every exposure, including during transit. The weak OH pair retains the previous correction.
 
-We can follow this comparison using the {download}`alternative OH configuration <../configs/gj3470b_carmenes_palle2020_oot_tutorial.json>`. It selects `fiber_a_oot_profile` and saves the result in a separate `night_oot_profile` directory:
+We can follow this comparison using `configs/gj3470b_carmenes_palle2020_oot_tutorial.json`, also included in the repository. It selects `fiber_a_oot_profile` and saves the result in a separate `night_oot_profile` directory:
 
 ```bash
 python -u scripts/run_exoplore.py \

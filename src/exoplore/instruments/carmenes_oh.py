@@ -195,13 +195,16 @@ def fit_fibre_b(night: dict, order: int, settings: OHFitConfig) -> dict:
 
 
 def transfer_to_fibre_a(night: dict, order: int, sky: dict,
-                        reference_indices: np.ndarray, settings: OHFitConfig) -> dict:
+                        reference_indices: np.ndarray, settings: OHFitConfig,
+                        *, fit_wavelength_shift: bool = True) -> dict:
     """Measure a common B-to-A flux scale and wavelength offset on OOT spectra.
 
     Only the strong OH interval calibrates the transfer. In-transit spectra
     never set the scale. A linear stellar background is fitted independently
     per calibration exposure. The returned uncertainties hold this global
     calibration and master profile fixed; their systematics remain explicit.
+    Matched extractions use ``fit_wavelength_shift=False`` to fit only the
+    common throughput factor and per-exposure background at the fibre-B grid.
     """
     s = settings
     indices = np.asarray(reference_indices,int)
@@ -217,27 +220,30 @@ def transfer_to_fibre_a(night: dict, order: int, sky: dict,
     y=np.concatenate([flux[i,m] for i,m in zip(indices,selected)])
     e=np.concatenate([errors[i,m] for i,m in zip(indices,selected)])
     pivot=np.mean(s.strong_fit_window_nm)
+    offset=2 if fit_wavelength_shift else 1
     def function(dummy,p):
-        return np.concatenate([p[0]*sky['amplitudes'][i]*strong(wave[i,m],p[1])
-            +p[2+2*k]+p[3+2*k]*(wave[i,m]-pivot)
+        shift=p[1] if fit_wavelength_shift else 0.
+        return np.concatenate([p[0]*sky['amplitudes'][i]*strong(wave[i,m],shift)
+            +p[offset+2*k]+p[offset+1+2*k]*(wave[i,m]-pivot)
             for k,(i,m) in enumerate(zip(indices,selected))])
     peak=np.median([np.ptp(flux[i,m])/sky['amplitudes'][i] for i,m in zip(indices,selected)])
-    initial=[max(peak,1e-12),0.]+[v for i,m in zip(indices,selected) for v in (np.median(flux[i,m]),0.)]
-    low=[0.,s.transfer_shift_bounds_nm[0]]+[-np.inf]*(2*len(indices))
-    high=[np.inf,s.transfer_shift_bounds_nm[1]]+[np.inf]*(2*len(indices))
+    initial=[max(peak,1e-12)]+([0.] if fit_wavelength_shift else [])+[v for i,m in zip(indices,selected) for v in (np.median(flux[i,m]),0.)]
+    low=[0.]+([s.transfer_shift_bounds_nm[0]] if fit_wavelength_shift else [])+[-np.inf]*(2*len(indices))
+    high=[np.inf]+([s.transfer_shift_bounds_nm[1]] if fit_wavelength_shift else [])+[np.inf]*(2*len(indices))
     p,cov,good,chi=_robust_fit(function,initial,(low,high),np.arange(len(y)),y,e,s.rejection_sigma)
-    if not s.transfer_shift_bounds_nm[0] < p[1] < s.transfer_shift_bounds_nm[1]:
+    if fit_wavelength_shift and not s.transfer_shift_bounds_nm[0] < p[1] < s.transfer_shift_bounds_nm[1]:
         raise ValueError('Inter-fibre wavelength offset hit its fit boundary')
+    shift=float(p[1]) if fit_wavelength_shift else 0.
     weak=sky['master_parameters']['weak']
-    templates=np.array([strong(w,p[1])+sky['weak_to_strong_peak_ratio']*
-        _sampled_profile(w,np.asarray(weak['centres_nm'])+p[1],weak['sigma_nm'],0.,s.pixel_quadrature_points)
+    templates=np.array([strong(w,shift)+sky['weak_to_strong_peak_ratio']*
+        _sampled_profile(w,np.asarray(weak['centres_nm'])+shift,weak['sigma_nm'],0.,s.pixel_quadrature_points)
         for w in wave])
     model=p[0]*sky['amplitudes'][:,None]*templates
     variance=p[0]**2*sky['amplitude_variance'][:,None]*templates**2
     return dict(model_a=model,conditional_model_variance=variance,
                 corrected_flux=flux-model,conditional_error=np.sqrt(errors**2+variance),
                 transfer_scale=float(p[0]),transfer_scale_error=float(np.sqrt(max(cov[0,0],0))),
-                transfer_shift_nm=float(p[1]),transfer_shift_error_nm=float(np.sqrt(max(cov[1,1],0))),
+                transfer_shift_nm=shift,transfer_shift_error_nm=float(np.sqrt(max(cov[1,1],0))) if fit_wavelength_shift else 0.,
                 transfer_reduced_chi2=chi,transfer_reference_indices=indices.tolist(),
                 rejected_transfer_samples=np.flatnonzero(~good).tolist(),
                 uncertainty_scope='Native A extraction error plus independent B amplitude variance; shared master/transfer covariance excluded',
@@ -245,11 +251,14 @@ def transfer_to_fibre_a(night: dict, order: int, sky: dict,
 
 
 def subtract_matched_fibre_b(night: dict, order: int, sky: dict,
-                            scale, settings: OHFitConfig) -> dict:
-    """Subtract the fitted sky using the user's positive A/B flux multipliers.
+                            scale, settings: OHFitConfig,
+                            *, reference_indices: np.ndarray | None = None) -> dict:
+    """Measure the matched A/B throughput on OOT spectra and subtract the sky.
 
-    A scalar applies to this night; an array supplies one multiplier per
-    exposure. Selecting this mode asserts compatible extraction/flux units.
+    With ``scale=None``, fit a common throughput factor using only OOT
+    fibre-A spectra, holding the fibre-B profile and wavelength offset fixed.
+    Existing explicit scalar/per-exposure scales remain optional overrides.
+    Selecting this mode asserts compatible extraction/flux units.
     Contradictory recorded FOX extraction metadata causes an explicit error.
     The scale and master profile are held fixed in the conditional errors.
     """
@@ -257,6 +266,14 @@ def subtract_matched_fibre_b(night: dict, order: int, sky: dict,
         af,bf=a.get('CARACAL FOX VERSION'),b.get('CARACAL FOX VERSION')
         if (af is None)!=(bf is None) or (af is not None and af!=bf):
             raise ValueError('fiber_b_matched_extraction conflicts with the recorded A/B FOX extraction metadata; provide compatibly extracted spectra or choose fiber_b_calibrated')
+    if scale is None:
+        if reference_indices is None:
+            raise ValueError('Automatic matched-fibre scaling requires out-of-transit indices')
+        result=transfer_to_fibre_a(night,order,sky,reference_indices,settings,
+                                  fit_wavelength_shift=False)
+        result.update(fiber_b_scale=[result['transfer_scale']]*len(night['flux']),
+                      calibration='B-to-A throughput measured jointly on OOT spectra with matched extraction and zero inter-fibre wavelength offset')
+        return result
     flux=night['flux'][:,order]; error=night['error'][:,order]
     factors=np.broadcast_to(np.asarray(scale,float),(len(flux),))
     if not np.isfinite(factors).all() or np.any(factors<=0):

@@ -56,12 +56,11 @@ class HeliumPolicyTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'oot_profile settings'):
             validate_oh_treatment(cfg)
 
-    def test_existing_choices_and_required_matched_scale(self):
+    def test_existing_choices_and_optional_matched_scale(self):
         for mode in ('ignore','mask','fiber_b_calibrated','fiber_b_matched_extraction'):
             cfg=policy_config();cfg.pipeline.oh_treatment=mode
             if mode=='fiber_b_matched_extraction':
-                with self.assertRaisesRegex(ValueError,'fiber_b_scale'):
-                    validate_oh_treatment(cfg)
+                self.assertEqual(validate_oh_treatment(cfg),mode)
                 cfg.pipeline.palle2020['oh_fit']['fiber_b_scale']=[.88,.89]
             self.assertEqual(validate_oh_treatment(cfg),mode)
 
