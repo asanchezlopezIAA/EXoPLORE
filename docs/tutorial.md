@@ -1389,6 +1389,208 @@ python scripts/plot_crires_czesla2024.py transmission \
 
 ---
 
+## Tutorial 12b: He I transmission spectroscopy with CARMENES (GJ 3470 b)
+
+> **Approximate run time:** ~30 min for the 34-exposure night with two molecfit workers on an Apple Mac Studio M2 Ultra (64 GB RAM). The saved fits took approximately 100 s per exposure. The first-exposure fit takes ~1–2 min; plotting saved results takes seconds.
+
+Here we analyse the CARMENES observations of GJ 3470 b presented by [Pallé et al. (2020)](https://doi.org/10.1051/0004-6361/202037719). Their second night, 26 December 2018, contains the clearest helium absorption, measured at 1.5 ± 0.3%. We use this night to illustrate the `Palle2020` preparation: telluric correction, sky-emission subtraction, division by the stellar reference, and averaging in the planetary frame.
+
+As in Tutorial 12, the result is a spectral map, a transmission spectrum and a helium light curve. CARMENES also records the sky through a second fibre. This gives us a measurement of the OH emission near the triplet, which we can subtract before constructing the transmission spectra.
+
+### Step 1: The observations and reference files
+
+The example starts from the CARACAL-extracted NIR spectra, available through the [Calar Alto archive](https://caha.sdc.cab.inta-csic.es/calto/). Select GJ 3470 and the night of 26–27 December 2018. We need the 34 science exposures and their simultaneous sky spectra: fibre A contains the star; fibre B observes the nearby sky. Each exposure lasts approximately 498 s.
+
+The paired files can be kept together under:
+
+```text
+inputs/CARMENES_NIR/GJ3470b/20181226/
+    car-20181226T21h42m07s-sci-czes-nir_A.fits
+    car-20181226T21h42m07s-sci-czes-nir_B.fits
+    ...
+```
+
+EXoPLORE reads the wavelength, flux and uncertainty arrays directly from these files, pairs the two fibres and orders the exposures by their recorded BJD. It also writes its usual per-order reference-night FITS products. The helium triplet falls in NIR order **7**, using zero-based indices. The analysis selects this order through `instrument.order_indices`.
+
+The complete reference files for this tutorial are {download}`the analysis JSON <../configs/gj3470b_carmenes_palle2020_tutorial.json>` and {download}`the adopted system parameters <../planet_params/GJ3470b_tutorial.json>`. The JSON includes a description of every setting. Its ephemeris and optical contacts define the timing used in this example; EXoPLORE calculates the exposure membership internally.
+
+### Step 2: Select the preparation
+
+The main choices are:
+
+```json
+"instrument": {
+  "name": "CARMENES_NIR",
+  "order_indices": [7]
+},
+"observation": {
+  "event_type": "transit",
+  "helium_transmission_spectroscopy": true,
+  "use_real_data": true,
+  "simulate_planet": false,
+  "n_nights": 1
+},
+"pipeline": {
+  "name": "Palle2020",
+  "sysrem_iterations": 0,
+  "oh_treatment": "fiber_b_calibrated"
+}
+```
+
+The downloaded JSON also contains `pipeline.palle2020`, with the input directory, molecfit fitting intervals, continuum band and OH settings. We can adjust `input_directory` to the location of the spectra and `molecfit.esorex` to the ESO recipe executable. The example uses `esorex` from the executable search path. The [ESO molecfit page](https://www.eso.org/sci/software/pipelines/molecfit/) provides the installation and recipe documentation.
+
+With these choices, the helium signal is measured directly after division by the stellar reference. Molecular retrieval is disabled. We can inspect the selected analysis with:
+
+```bash
+python scripts/run_exoplore.py configs/gj3470b_carmenes_palle2020_tutorial.json
+```
+
+### Step 3: Correct the telluric absorption and OH emission
+
+Water produces absorption lines in this order, while OH produces sky emission. Molecfit fits the water transmission separately for each exposure. The example uses the wavelength-dependent Gaussian and Lorentzian instrumental widths from [Nagel et al. (2023)](https://doi.org/10.1051/0004-6361/202346524), evaluated on the fitting grid. The science spectra retain their native pixel sampling.
+
+We first fit one exposure:
+
+```bash
+python scripts/prepare_carmenes_palle2020.py \
+  configs/gj3470b_carmenes_palle2020_tutorial.json --run
+```
+
+This writes the pilot under `outputs/gj3470b_palle2020/GJ3470b/Palle2020/pilot/`. The saved fit can then be plotted with:
+
+```bash
+python scripts/plot_carmenes_palle2020.py exposure \
+  outputs/gj3470b_palle2020/GJ3470b/Palle2020/pilot/molecfit/exposure_01 \
+  telluric_first_exposure.png --intervals 1 4 5
+```
+
+```{figure} figures/tutorial12b_telluric_fit.png
+:width: 100%
+:align: center
+
+Molecfit correction in three water-line intervals of the first GJ 3470 b exposure. Top: observation and fitted model. Middle: locally normalized spectrum before and after correction. Bottom: residuals divided by the extraction uncertainty. The stronger water lines are substantially reduced. Produced with `plot_carmenes_palle2020.py exposure`.
+```
+
+The OH model follows the profile prescription of Pallé et al. (2020): a Voigt profile for the strong line and two Gaussians sharing width and amplitude for the weak pair. Fibre B determines the profiles and their changing strength throughout the night. The sky model is then expressed in fibre-A flux units and subtracted.
+
+Pallé et al. (2020) used matched extractions for both fibres and measured an A/B factor of 0.88. The files used here have different extraction conventions, so `fiber_b_calibrated` determines their transfer from the strong OH line in out-of-transit fibre A. The available choices are:
+
+| `oh_treatment` | What EXoPLORE does |
+|---|---|
+| `ignore` | Retains the OH emission. |
+| `mask` | Excludes windows located from `oh_catalogue_nm` and widened by `oh_mask_halfwidth_nm`. |
+| `fiber_b_matched_extraction` | Subtracts the fibre-B model with the required `oh_fit.fiber_b_scale`; a number applies to the night, a list supplies one value per exposure. |
+| `fiber_b_calibrated` | Calibrates the fibre-B profile against out-of-transit fibre A. |
+| `fiber_a_oot_profile` | Fits the strong-line shape jointly with the stellar spectrum in out-of-transit fibre A; fibre B supplies the changing sky amplitude. |
+
+The matched-extraction choice requires compatible A/B products. The two calibrated choices are EXoPLORE extensions for the supplied extractions. Their fitting intervals, width bounds and acceptance thresholds are given in the JSON.
+
+### Step 4: Prepare the night
+
+Once the first fit is successful, the normal runner processes the night:
+
+```bash
+python -u scripts/run_exoplore.py \
+  configs/gj3470b_carmenes_palle2020_tutorial.json --run
+```
+
+The result directory is `outputs/gj3470b_palle2020/GJ3470b/Palle2020/night/`. It contains the corrected spectra, OH models and the transmission products. An existing result directory is preserved; another analysis uses a new `output_name`.
+
+We can inspect the sky subtraction for an exposure near mid-transit with:
+
+```bash
+python scripts/plot_carmenes_palle2020.py sky \
+  configs/gj3470b_carmenes_palle2020_tutorial.json \
+  outputs/gj3470b_palle2020/GJ3470b/Palle2020/night \
+  oh_correction.png --exposure 17
+```
+
+```{figure} figures/tutorial12b_oh_correction.png
+:width: 100%
+:align: center
+
+OH correction in the weak pair and strong sky line. The upper panels compare fibre B with its fitted emission model; the lower panels show fibre A before and after subtraction. The two fibres have different flux conventions, so their vertical scales differ. Produced with `plot_carmenes_palle2020.py sky`.
+```
+
+Following Pallé et al. (2020), each corrected spectrum is normalized by its mean flux between 1.0815962 and 1.0827624 µm. EXoPLORE then aligns the spectra in the stellar frame, computes the arithmetic-mean out-of-transit reference and divides every exposure by it:
+
+```{math}
+\mathcal{T}(\lambda,t)=\frac{F(\lambda,t)}{F_{\mathrm{out}}(\lambda)}.
+```
+
+The residual spectra are shifted into the planetary frame and averaged between T2 and T3. This aligns the planetary helium absorption before averaging. The example's automatic timing selects 12 in-transit and 22 out-of-transit exposures, with 10 between T2 and T3. Pallé et al. (2020) report 14 and 20 for their adopted timing. Exposure numbers are not entered in the JSON.
+
+The standard EXoPLORE pipeline-stages figure is produced by the run. We can also recreate it from saved products:
+
+```bash
+python scripts/plot_carmenes_palle2020.py steps \
+  configs/gj3470b_carmenes_palle2020_tutorial.json \
+  outputs/gj3470b_palle2020/GJ3470b/Palle2020/night \
+  gj3470_pipeline_steps
+```
+
+```{figure} figures/tutorial12b_pipeline_steps.png
+:width: 100%
+:align: center
+
+Preparation stages for the helium order. The extracted spectrum and time series are followed by the telluric/OH-corrected matrix and the residuals after stellar-reference division. These matrices are displayed on the Earth-frame wavelength grid. The reference division itself is performed in the stellar frame. The standard renderer writes `pipeline_steps_GJ3470b_Palle2020.pdf`.
+```
+
+### Step 5: The result
+
+```{figure} figures/tutorial12b_HeI_transmission.png
+:width: 95%
+:align: center
+
+GJ 3470 b helium transmission. Top: stellar-frame residual map, with absorption in red and the planet velocity tracks marked. Middle: average planetary spectrum, with individual pixels and shaded extraction uncertainties. Bottom: the planet-frame light curve in the 0.40 Å band around the strong triplet components. T1–T4 mark the optical contacts. Produced by the run as `transmission_diagnostic.png`.
+```
+
+The absorption in the 0.40 Å band is approximately 1.3%, comparable to the 1.5 ± 0.3% reported by Pallé et al. (2020). Their Fig. 5 uses a three-point running mean; the standard EXoPLORE result above shows the individual spectral pixels. The band-averaged light curve follows the helium signal through transit. Negative transmission excess means absorption relative to the stellar reference.
+
+The strong OH line overlaps the red wing as the planetary spectrum moves through the night. Its subtraction therefore affects the recovered shape. The shaded errors propagate extraction noise and conditional sky-amplitude uncertainty; shared OH-profile and calibration uncertainties are additional contributions.
+
+The saved result can be plotted with:
+
+```bash
+python scripts/plot_carmenes_palle2020.py transmission \
+  configs/gj3470b_carmenes_palle2020_tutorial.json \
+  outputs/gj3470b_palle2020/GJ3470b/Palle2020/night \
+  helium_transmission.png
+```
+
+### Step 6: Compare the OH profile choices
+
+The {download}`OOT-profile JSON <../configs/gj3470b_carmenes_palle2020_oot_tutorial.json>` selects `fiber_a_oot_profile` and writes a separate `night_oot_profile` directory. This option fits a common stellar spectrum in the stellar frame together with OH emission in the Earth frame, using only out-of-transit fibre A for the calibration. Fibre B supplies the sky strength at every exposure, including during transit. The weak OH pair retains its calibrated fibre-B profile.
+
+The alternative run uses:
+
+```bash
+python -u scripts/run_exoplore.py \
+  configs/gj3470b_carmenes_palle2020_oot_tutorial.json --run
+```
+
+After both results are available, their spectra can be compared with:
+
+```bash
+python scripts/plot_carmenes_palle2020.py compare \
+  outputs/gj3470b_palle2020/GJ3470b/Palle2020/night \
+  outputs/gj3470b_palle2020/GJ3470b/Palle2020/night_oot_profile \
+  oh_profile_comparison.png
+```
+
+```{figure} figures/tutorial12b_oh_comparison.png
+:width: 95%
+:align: center
+
+Planetary spectra obtained with the calibrated fibre-B and OOT fibre-A profiles, displayed with a three-point running mean. The principal difference is in the red wing, where OH overlaps the helium signal. The band depths are approximately 1.34% and 1.37%, respectively. Smoothing is applied only to this comparison plot; the analysis retains the original pixels. Produced with `plot_carmenes_palle2020.py compare`.
+```
+
+Both runs retain the per-exposure corrected spectra in `observations.npz`, the transmission spectra and light curve in `transmission.npz`, their spectral covariance in `planet_coadd_covariance.npz`, and the OH calibration in `oh_report.json` and `oh_model.npz`. These products allow us to inspect the preparation and subsequently fit atmospheric models without repeating the telluric correction.
+
+**Disk footprint:** approximately **230 MB** for one processed night: ~130 MB for the EXoPLORE reference-night FITS files, ~80 MB for the molecfit working products, and ~20 MB for the corrected spectra, OH models, covariances and figures. This excludes the input CARMENES observations. The alternative OH run writes a separate set of products.
+
+---
+
 ## Troubleshooting
 
 **Missing `--run` flag**, Running without `--run` only prints the simulation summary and exits. The `--run` flag must be added to actually execute the simulation.

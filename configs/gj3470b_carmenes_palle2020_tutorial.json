@@ -1,0 +1,302 @@
+{
+  "planet": {
+    "name": "GJ3470b",
+    "parameter_file": "planet_params/GJ3470b_tutorial.json"
+  },
+  "instrument": {
+    "name": "CARMENES_NIR",
+    "order_indices": [
+      7
+    ]
+  },
+  "observation": {
+    "event_type": "transit",
+    "use_real_data": true,
+    "simulate_planet": false,
+    "n_nights": 1,
+    "helium_transmission_spectroscopy": true,
+    "exposure_time_seconds": 498.0
+  },
+  "pipeline": {
+    "name": "Palle2020",
+    "sysrem_iterations": 0,
+    "prepare_template": false,
+    "palle2020": {
+      "input_directory": "inputs/CARMENES_NIR/GJ3470b/20181226",
+      "molecfit_workers": 2,
+      "validated_first_exposure_path": "",
+      "oh_catalogue_nm": [
+        1083.2103,
+        1083.2412,
+        1083.43338
+      ],
+      "oh_mask_halfwidth_nm": 0.02,
+      "transmission": {
+        "wavelength_frame": "topocentric_vacuum_nm",
+        "oh_mode": "baseline",
+        "oh_topocentric_lines_nm": [
+          1083.2103,
+          1083.2412,
+          1083.43338
+        ],
+        "oh_topocentric_windows_nm": [
+          [
+            1083.19,
+            1083.23
+          ],
+          [
+            1083.2212,
+            1083.2612
+          ],
+          [
+            1083.41338,
+            1083.45338
+          ]
+        ],
+        "gamma_kms": 26.51691,
+        "kp_kms": 115.73518298081379,
+        "t0_bjd_tdb": 2455983.70421,
+        "period_days": 3.3366496,
+        "observatory_lon_lat_height": [
+          -2.5463,
+          37.2236,
+          2168.0
+        ],
+        "target_ra_deg": 119.7735021,
+        "target_dec_deg": 15.391209,
+        "exposure_time_keyword": "EXPTIME",
+        "telluric_min_transmission": 0.15,
+        "inflate_by_telluric_rms": false,
+        "continuum_stellar_windows_nm": [
+          [
+            1081.5962,
+            1082.7624
+          ]
+        ],
+        "continuum_polynomial_degree": 0,
+        "planet_lightcurve_window_nm": [
+          1083.30722809,
+          1083.34722809
+        ],
+        "helium_vacuum_lines_nm": [
+          1083.2057472,
+          1083.3216751,
+          1083.3306444
+        ],
+        "helium_oscillator_strengths": [
+          0.0599,
+          0.179693,
+          0.299482
+        ],
+        "helium_atomic_source": "Geach et al. 2025, doi:10.1029/2024GL112885 Table 1; matches Sanz-Forcada et al. 2025 footnote to ~0.001 A",
+        "optical_contact_phases": [
+          -0.01205073969544965,
+          -0.010258228990434286,
+          0.010258228990434286,
+          0.01205073969544965
+        ],
+        "equivalent_width_window_nm": [
+          1082.95,
+          1083.48
+        ],
+        "input_path": "inputs/CARMENES_NIR/GJ3470b/20181226",
+        "order_segment": "CARMENES_NIR_ORDER_7",
+        "minimum_continuum_pixels": 30,
+        "max_wavelength_shift_kms": 1.0,
+        "stellar_lightcurve_window_nm": [
+          1083.277,
+          1083.377
+        ],
+        "plot_stellar_window_nm": [
+          1082.95,
+          1083.55
+        ]
+      },
+      "molecfit": {
+        "lsf_mode": "nagel2023_nir",
+        "gaussian_relative_fwhm": 1.18e-05,
+        "lorentzian_relative_fwhm": 1.7e-06,
+        "lsf_source": "Nagel et al. (2023), A&A 680 A73, Table 2; doi:10.1051/0004-6361/202346524",
+        "esorex": "esorex",
+        "windows_nm": [
+          [
+            1084.343051,
+            1084.413051
+          ],
+          [
+            1085.993848,
+            1086.063848
+          ],
+          [
+            1089.481356,
+            1089.561356
+          ],
+          [
+            1090.359112,
+            1090.439112
+          ],
+          [
+            1093.775231,
+            1093.855231
+          ],
+          [
+            1094.514221,
+            1094.594221
+          ],
+          [
+            1093.345267,
+            1093.425267
+          ]
+        ],
+        "helium_guard_kms": 50.0,
+        "_palle2020_reported_pixel_widths": {
+          "gaussian": 5.26,
+          "lorentzian": 0.75
+        },
+        "max_reduced_chi2": 10.0,
+        "timeout_seconds": 1800.0
+      },
+      "output_name": "night",
+      "oh_fit": {
+        "profile": {
+          "weak_centres_nm": [
+            1083.2103,
+            1083.2412
+          ],
+          "strong_centre_nm": 1083.43338,
+          "weak_fit_window_nm": [
+            1083.17,
+            1083.28
+          ],
+          "strong_fit_window_nm": [
+            1083.39,
+            1083.48
+          ],
+          "centre_tolerance_nm": 0.015,
+          "sigma_bounds_nm": [
+            0.002,
+            0.015
+          ],
+          "lorentz_hwhm_bounds_nm": [
+            0.0,
+            0.015
+          ],
+          "initial_sigma_nm": 0.007,
+          "initial_lorentz_hwhm_nm": 0.001,
+          "rejection_sigma": 6.0,
+          "pixel_quadrature_points": 5,
+          "transfer_shift_bounds_nm": [
+            -0.012,
+            0.012
+          ],
+          "minimum_transfer_exposures": 5
+        },
+        "oot_profile": {
+          "fit_window_nm": [
+            1083.39,
+            1083.48
+          ],
+          "relative_svd_cutoff": 1e-10,
+          "minimum_sky_amplitude_cv": 0.05,
+          "maximum_reduced_chi2": 3.0,
+          "maximum_profile_condition_number": 10000.0
+        },
+        "maximum_anchor_change_sigma": 0.01
+      }
+    },
+    "oh_treatment": "fiber_b_calibrated"
+  },
+  "paths": {
+    "output_root": "outputs/gj3470b_palle2020"
+  },
+  "_descriptions": {
+    "planet": "Configuration block for planet.",
+    "planet.name": "Selected planet, instrument or preparation pipeline.",
+    "planet.parameter_file": "Adopted system parameters for this worked example; the observing ephemeris and contacts are supplied in pipeline.palle2020.transmission.",
+    "instrument": "Configuration block for instrument.",
+    "instrument.name": "Selected planet, instrument or preparation pipeline.",
+    "instrument.order_indices": "Instrument order indices to use; order 7 contains He I in this CARMENES_NIR dataset.",
+    "observation": "Configuration block for observation.",
+    "observation.event_type": "Observed event; transit for transmission spectroscopy.",
+    "observation.use_real_data": "True fits observed spectra rather than generating synthetic observations.",
+    "observation.simulate_planet": "Enable planet injection for synthetic observations; false for this observed-data grid.",
+    "observation.n_nights": "Number of observing nights.",
+    "observation.helium_transmission_spectroscopy": "Select the direct He I spectroscopy route.",
+    "observation.exposure_time_seconds": "Exposure duration in seconds.",
+    "pipeline": "Configuration block for pipeline.",
+    "pipeline.name": "Selected planet, instrument or preparation pipeline.",
+    "pipeline.sysrem_iterations": "Number of SYSREM iterations; zero for this direct helium route.",
+    "pipeline.prepare_template": "Whether to detrend a CCF template; false for this direct grid.",
+    "pipeline.palle2020": "Configuration block for palle2020.",
+    "pipeline.palle2020.input_directory": "Directory of the extracted observed FITS exposures.",
+    "pipeline.palle2020.molecfit_workers": "Concurrent exposure fits when preparing observations; the grid reuses saved corrections.",
+    "pipeline.palle2020.validated_first_exposure_path": "Previously accepted pilot correction, or empty to fit the first exposure.",
+    "pipeline.palle2020.oh_catalogue_nm": "Topocentric vacuum OH line positions in nm.",
+    "pipeline.palle2020.oh_mask_halfwidth_nm": "Half-width in nm around each OH line when masking.",
+    "pipeline.palle2020.transmission": "Configuration block for transmission.",
+    "pipeline.palle2020.transmission.wavelength_frame": "Wavelength and rest-frame convention of the supplied observations.",
+    "pipeline.palle2020.transmission.oh_mode": "Internal OH convention: baseline or mask.",
+    "pipeline.palle2020.transmission.oh_topocentric_lines_nm": "Vacuum nm positions of OH lines in the observer frame.",
+    "pipeline.palle2020.transmission.oh_topocentric_windows_nm": "Observer-frame vacuum nm intervals excluded in mask mode.",
+    "pipeline.palle2020.transmission.gamma_kms": "Stellar systemic velocity in km/s.",
+    "pipeline.palle2020.transmission.kp_kms": "Planet orbital radial-velocity amplitude in km/s.",
+    "pipeline.palle2020.transmission.t0_bjd_tdb": "Reference transit midpoint in BJD_TDB.",
+    "pipeline.palle2020.transmission.period_days": "Orbital period in days.",
+    "pipeline.palle2020.transmission.observatory_lon_lat_height": "Observatory longitude and latitude in degrees, elevation in metres.",
+    "pipeline.palle2020.transmission.target_ra_deg": "Target right ascension in degrees.",
+    "pipeline.palle2020.transmission.target_dec_deg": "Target declination in degrees.",
+    "pipeline.palle2020.transmission.exposure_time_keyword": "FITS keyword containing exposure duration.",
+    "pipeline.palle2020.transmission.telluric_min_transmission": "Reject pixels with telluric transmission below this threshold.",
+    "pipeline.palle2020.transmission.inflate_by_telluric_rms": "Apply the configured telluric residual error inflation when true.",
+    "pipeline.palle2020.transmission.continuum_stellar_windows_nm": "Stellar-frame vacuum nm intervals used for continuum normalization.",
+    "pipeline.palle2020.transmission.continuum_polynomial_degree": "Degree of the continuum normalization polynomial.",
+    "pipeline.palle2020.transmission.planet_lightcurve_window_nm": "Planet-frame vacuum nm band used for the helium light curve.",
+    "pipeline.palle2020.transmission.helium_vacuum_lines_nm": "Rest wavelengths of the three He I components in vacuum nm.",
+    "pipeline.palle2020.transmission.helium_oscillator_strengths": "Oscillator strengths in the same order as the triplet wavelengths.",
+    "pipeline.palle2020.transmission.helium_atomic_source": "Reference for the adopted helium atomic data.",
+    "pipeline.palle2020.transmission.optical_contact_phases": "Optical transit contact phases T1, T2, T3 and T4.",
+    "pipeline.palle2020.transmission.equivalent_width_window_nm": "Planet-frame vacuum nm interval for equivalent width integration.",
+    "pipeline.palle2020.transmission.input_path": "Input directory for the transmission preparation.",
+    "pipeline.palle2020.transmission.order_segment": "Name of the selected detector/order segment.",
+    "pipeline.palle2020.transmission.minimum_continuum_pixels": "Minimum valid samples needed to normalize an exposure.",
+    "pipeline.palle2020.transmission.max_wavelength_shift_kms": "Maximum accepted molecfit wavelength shift in km/s.",
+    "pipeline.palle2020.transmission.stellar_lightcurve_window_nm": "Fixed stellar-frame vacuum nm light-curve band.",
+    "pipeline.palle2020.transmission.plot_stellar_window_nm": "Stellar-frame vacuum nm interval displayed in the transmission map.",
+    "pipeline.palle2020.molecfit": "Configuration block for molecfit.",
+    "pipeline.palle2020.molecfit.lsf_mode": "Instrumental line-spread function prescription for molecfit.",
+    "pipeline.palle2020.molecfit.gaussian_relative_fwhm": "Gaussian LSF FWHM divided by wavelength.",
+    "pipeline.palle2020.molecfit.lorentzian_relative_fwhm": "Lorentzian LSF FWHM divided by wavelength.",
+    "pipeline.palle2020.molecfit.lsf_source": "Reference for the adopted instrumental LSF.",
+    "pipeline.palle2020.molecfit.esorex": "ESO recipe executable; use esorex when available on PATH, otherwise its absolute installation path.",
+    "pipeline.palle2020.molecfit.windows_nm": "Topocentric vacuum nm intervals used in telluric fitting.",
+    "pipeline.palle2020.molecfit.helium_guard_kms": "Velocity guard around predicted helium lines excluded from telluric fitting.",
+    "pipeline.palle2020.molecfit.max_reduced_chi2": "Upper acceptance threshold for molecfit reduced chi-square.",
+    "pipeline.palle2020.molecfit.timeout_seconds": "Maximum wall time per molecfit exposure fit.",
+    "pipeline.palle2020.output_name": "Night directory under output_root/GJ3470b/Palle2020; choose a new name for an OH comparison.",
+    "pipeline.palle2020.oh_fit": "Configuration block for oh fit.",
+    "pipeline.palle2020.oh_fit.profile": "Configuration block for profile.",
+    "pipeline.palle2020.oh_fit.profile.weak_centres_nm": "Initial vacuum nm centres of the weak OH pair.",
+    "pipeline.palle2020.oh_fit.profile.strong_centre_nm": "Initial vacuum nm centre of the strong OH line.",
+    "pipeline.palle2020.oh_fit.profile.weak_fit_window_nm": "Vacuum nm interval used to fit the weak OH pair.",
+    "pipeline.palle2020.oh_fit.profile.strong_fit_window_nm": "Vacuum nm interval used to fit the strong OH line.",
+    "pipeline.palle2020.oh_fit.profile.centre_tolerance_nm": "Allowed displacement of fitted OH centres in nm.",
+    "pipeline.palle2020.oh_fit.profile.sigma_bounds_nm": "Allowed Gaussian OH sigma range in nm.",
+    "pipeline.palle2020.oh_fit.profile.lorentz_hwhm_bounds_nm": "Allowed Lorentzian OH half-width range in nm.",
+    "pipeline.palle2020.oh_fit.profile.initial_sigma_nm": "Initial Gaussian OH sigma in nm.",
+    "pipeline.palle2020.oh_fit.profile.initial_lorentz_hwhm_nm": "Initial Lorentzian OH half-width in nm.",
+    "pipeline.palle2020.oh_fit.profile.rejection_sigma": "Robust residual threshold for rejecting sky-fit outliers.",
+    "pipeline.palle2020.oh_fit.profile.pixel_quadrature_points": "Integration samples per detector pixel for the OH profile.",
+    "pipeline.palle2020.oh_fit.profile.transfer_shift_bounds_nm": "Allowed wavelength displacement when transferring fibre-B OH into fibre A.",
+    "pipeline.palle2020.oh_fit.profile.minimum_transfer_exposures": "Minimum out-of-transit exposures needed to calibrate the A/B transfer.",
+    "pipeline.palle2020.oh_fit.oot_profile": "Explicit settings for the joint stellar-template and strong-OH profile fit; transit membership remains automatically computed.",
+    "pipeline.palle2020.oh_fit.oot_profile.fit_window_nm": "Native topocentric vacuum nm interval for OOT strong-OH fitting.",
+    "pipeline.palle2020.oh_fit.oot_profile.relative_svd_cutoff": "Relative singular-value threshold for eliminating the common stellar-template samples.",
+    "pipeline.palle2020.oh_fit.oot_profile.minimum_sky_amplitude_cv": "Minimum relative variation of fibre-B amplitude divided by fibre-A continuum needed to separate OH from the common stellar spectrum.",
+    "pipeline.palle2020.oh_fit.oot_profile.maximum_reduced_chi2": "Upper acceptance threshold for the residual OOT chi-square after fitting stellar samples and four OH parameters.",
+    "pipeline.palle2020.oh_fit.oot_profile.maximum_profile_condition_number": "Upper condition-number threshold for the OH Jacobian, with velocities/widths expressed on a 0.01 nm scale and the relative transfer amplitude on a unit scale.",
+    "pipeline.palle2020.oh_fit.maximum_anchor_change_sigma": "Maximum difference between preliminary and final OH subtraction at molecfit anchors, in native extraction-error units. Reject the final correction if it changes the fitted telluric input beyond this limit.",
+    "pipeline.oh_treatment": "fiber_b_calibrated fits fibre-B OH emission and calibrates its flux scale using out-of-transit fibre A. Alternatives: ignore, mask, fiber_b_matched_extraction (requires an explicit scale), fiber_a_oot_profile (joint stellar/OH fit using OOT A and time-dependent B amplitudes).",
+    "paths": "Configuration block for paths.",
+    "paths.output_root": "Root directory for EXoPLORE products."
+  }
+}

@@ -1,0 +1,135 @@
+{
+  "name": "GJ3470b",
+  "orbital_period_days": 3.3366496,
+  "transit_epoch_bjd": 2455983.70421,
+  "semi_major_axis_au": 0.0355,
+  "inclination_deg": 89.13,
+  "planet_radius_rjup": 0.40770809,
+  "planet_mass_mjup": 0.04373407,
+  "stellar_radius_rsun": 0.547,
+  "stellar_mass_msun": 0.539,
+  "stellar_teff_K": 3600.0,
+  "stellar_logg": 4.695,
+  "stellar_metallicity": 0.2,
+  "systemic_velocity_kms": 26.51691,
+  "equilibrium_temperature_K": 593.5,
+  "ra_deg": 119.7735021,
+  "dec_deg": 15.391209,
+  "eccentricity": 0.0,
+  "argument_of_periastron_deg": 90.0,
+  "v_rotsini_kms": 0.0,
+  "kp_kms": null,
+  "stellar_rv_semiamplitude_kms": null,
+  "transit_duration_hours": null,
+  "limb_darkening_coeffs": [],
+  "t_int_K": 200.0,
+  "kappa_ir": 0.01,
+  "gamma_guillot": 0.4,
+  "_description": "Adopted GJ 3470 system parameters for the observed CARMENES worked example. Most bulk/orbit values follow Awiphan et al. (2016); this is not a new determination or the Pall\u00e9 et al. (2020) parameter table.",
+  "_source": "https://exoplanetarchive.ipac.caltech.edu/",
+  "_provenance": {
+    "orbital_period_days": {
+      "archive_column": "pl_orbper",
+      "reference": "<a refstr=AWIPHAN_ET_AL__2016 href=https://ui.adsabs.harvard.edu/abs/2016MNRAS.463.2574A/abstract target=ref>Awiphan et al. 2016</a>",
+      "upper_error": 3.9e-06,
+      "lower_error": -3.3e-06
+    },
+    "transit_epoch_bjd": {
+      "archive_column": "pl_tranmid",
+      "reference": "<a refstr=AWIPHAN_ET_AL__2016 href=https://ui.adsabs.harvard.edu/abs/2016MNRAS.463.2574A/abstract target=ref>Awiphan et al. 2016</a>",
+      "upper_error": null,
+      "lower_error": null
+    },
+    "semi_major_axis_au": {
+      "archive_column": "pl_orbsmax",
+      "reference": "<a refstr=AWIPHAN_ET_AL__2016 href=https://ui.adsabs.harvard.edu/abs/2016MNRAS.463.2574A/abstract target=ref>Awiphan et al. 2016</a>",
+      "upper_error": 0.0019,
+      "lower_error": -0.0019
+    },
+    "inclination_deg": {
+      "archive_column": "pl_orbincl",
+      "reference": "<a refstr=AWIPHAN_ET_AL__2016 href=https://ui.adsabs.harvard.edu/abs/2016MNRAS.463.2574A/abstract target=ref>Awiphan et al. 2016</a>",
+      "upper_error": 0.26,
+      "lower_error": -0.34
+    },
+    "planet_radius_rjup": {
+      "archive_column": "pl_radj",
+      "reference": "<a refstr=AWIPHAN_ET_AL__2016 href=https://ui.adsabs.harvard.edu/abs/2016MNRAS.463.2574A/abstract target=ref>Awiphan et al. 2016</a>",
+      "upper_error": 0.01605852,
+      "lower_error": -0.01605852
+    },
+    "planet_mass_mjup": {
+      "archive_column": "pl_bmassj",
+      "reference": "<a refstr=AWIPHAN_ET_AL__2016 href=https://ui.adsabs.harvard.edu/abs/2016MNRAS.463.2574A/abstract target=ref>Awiphan et al. 2016</a>",
+      "upper_error": 0.0047195,
+      "lower_error": -0.0047195
+    },
+    "stellar_radius_rsun": {
+      "archive_column": "st_rad",
+      "reference": "<a refstr=AWIPHAN_ET_AL__2016 href=https://ui.adsabs.harvard.edu/abs/2016MNRAS.463.2574A/abstract target=ref>Awiphan et al. 2016</a>",
+      "upper_error": 0.018,
+      "lower_error": -0.018
+    },
+    "stellar_mass_msun": {
+      "archive_column": "st_mass",
+      "reference": "<a refstr=AWIPHAN_ET_AL__2016 href=https://ui.adsabs.harvard.edu/abs/2016MNRAS.463.2574A/abstract target=ref>Awiphan et al. 2016</a>",
+      "upper_error": 0.047,
+      "lower_error": -0.043
+    },
+    "stellar_teff_K": {
+      "archive_column": "st_teff",
+      "reference": "<a refstr=AWIPHAN_ET_AL__2016 href=https://ui.adsabs.harvard.edu/abs/2016MNRAS.463.2574A/abstract target=ref>Awiphan et al. 2016</a>",
+      "upper_error": 100.0,
+      "lower_error": -100.0
+    },
+    "stellar_logg": {
+      "archive_column": "st_logg",
+      "reference": "<a refstr=AWIPHAN_ET_AL__2016 href=https://ui.adsabs.harvard.edu/abs/2016MNRAS.463.2574A/abstract target=ref>Awiphan et al. 2016</a>",
+      "upper_error": 0.046,
+      "lower_error": -0.046
+    },
+    "stellar_metallicity": {
+      "archive_column": "st_met",
+      "reference": "<a refstr=AWIPHAN_ET_AL__2016 href=https://ui.adsabs.harvard.edu/abs/2016MNRAS.463.2574A/abstract target=ref>Awiphan et al. 2016</a>",
+      "upper_error": 0.1,
+      "lower_error": -0.1
+    },
+    "systemic_velocity_kms": {
+      "archive_column": "st_radv",
+      "reference": "<a refstr=KOKORI_ET_AL__2023 href=https://ui.adsabs.harvard.edu/abs/2023ApJS..265....4K/abstract target=ref>Kokori et al. 2023</a>",
+      "upper_error": 0.00053,
+      "lower_error": -0.00053
+    },
+    "equilibrium_temperature_K": {
+      "archive_column": "pl_eqt",
+      "reference": "<a refstr=AWIPHAN_ET_AL__2016 href=https://ui.adsabs.harvard.edu/abs/2016MNRAS.463.2574A/abstract target=ref>Awiphan et al. 2016</a>",
+      "upper_error": 96.5,
+      "lower_error": -96.5
+    },
+    "ra_deg": {
+      "archive_column": "ra",
+      "reference": "<a refstr=STASSUN_ET_AL__2019 href=https://ui.adsabs.harvard.edu/abs/2019AJ....158..138S/abstract target=ref>TICv8</a>",
+      "upper_error": 1.46928333333333e-08,
+      "lower_error": -1.46928333333333e-08
+    },
+    "dec_deg": {
+      "archive_column": "dec",
+      "reference": "<a refstr=STASSUN_ET_AL__2019 href=https://ui.adsabs.harvard.edu/abs/2019AJ....158..138S/abstract target=ref>TICv8</a>",
+      "upper_error": 8.65877777777778e-09,
+      "lower_error": -8.65877777777778e-09
+    }
+  },
+  "_assumptions": {
+    "orbit": "Circular approximation required by the current helium simulator; archive e=0.017 is retained below.",
+    "archive_eccentricity": 0.017,
+    "rotation": "Zero rotational broadening is a provisional simulation choice, not a measured v sin i.",
+    "limb_darkening": "Uniform disc is provisional; helium-band coefficients have not been adopted.",
+    "timing": "Epoch from the archive; verify original time scale before scheduling a calendar-date observation.",
+    "legacy_thermal_parameters": "Numerical placeholders unused by Sunbather; not an atmospheric inference."
+  },
+  "_photometry": {
+    "J_mag": 8.794,
+    "J_error_mag": 0.026
+  },
+  "_source_sha256": "67667d44499e026de24f3ab3b3fd42d4ad6a993438579e35973c0acc39feadaf"
+}
