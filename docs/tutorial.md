@@ -1609,7 +1609,7 @@ python scripts/plot_carmenes_palle2020.py compare \
 :width: 95%
 :align: center
 
-Planetary spectra obtained with the calibrated fibre-B and OOT fibre-A profiles, displayed with a three-point running mean. The principal difference is in the red wing, where OH overlaps the helium signal. The band depths are approximately 1.34% and 1.37%, respectively. Smoothing is applied only to this comparison plot (the analysis retains the original pixels). Produced with `plot_carmenes_palle2020.py compare`.
+Planetary spectra obtained with the calibrated fibre-B and OOT fibre-A profiles, displayed with a three-point running mean. The shaded bands show ±1σ uncertainties propagated through the running mean, including correlations between neighbouring pixels. The principal difference is in the red wing, where OH overlaps the helium signal. The band depths are approximately 1.34% and 1.37%, respectively. Smoothing is applied only to this comparison plot (the analysis retains the original pixels). Produced with `plot_carmenes_palle2020.py compare`.
 ```
 
 Both runs retain the per-exposure corrected spectra in `observations.npz`, the transmission spectra and light curve in `transmission.npz`, their spectral covariance in `planet_coadd_covariance.npz`, and the OH calibration in `oh_report.json` and `oh_model.npz`. These products allow us to inspect the preparation and subsequently fit atmospheric models without repeating the telluric correction.

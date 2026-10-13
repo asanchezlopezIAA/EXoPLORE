@@ -107,14 +107,27 @@ def steps(directory,output_directory,cfg,science):
 
 
 def compare(directories,output):
-    """Compare saved planetary coadds with a three-point display mean."""
+    """Compare three-point display means with covariance-propagated 1σ bands."""
+    from scipy.sparse import csr_matrix, load_npz
     fig,ax=plt.subplots(figsize=(11,6),constrained_layout=True)
     labels=['Calibrated fibre-B profile','OOT fibre-A profile']
     for directory,label in zip(directories,labels):
         data=archive(directory/'transmission.npz');w=data['planet_wave_nm'];f=data['planet_coadd']
         smoothed=(f[:-2]+f[1:-1]+f[2:])/3;x=w[1:-1]
-        b=(x>=1083.1)&(x<=1083.48)&np.isfinite(smoothed)
-        ax.plot(x[b]/1000,100*(smoothed[b]-1),lw=2,label=label)
+        covariance=load_npz(directory/'planet_coadd_covariance.npz')
+        if covariance.shape!=(len(f),len(f)):
+            raise ValueError('Saved spectral covariance does not match the coadd')
+        indices=np.arange(len(f)-2)
+        smoother=csr_matrix((np.full(3*len(indices),1/3),
+            (np.tile(indices,3),np.concatenate([indices,indices+1,indices+2]))),
+            shape=(len(indices),len(f)))
+        uncertainty=np.sqrt(np.maximum((smoother@covariance@smoother.T).diagonal(),0))
+        widths=np.diff(w)
+        contiguous=(widths[:-1]<=5*np.median(widths))&(widths[1:]<=5*np.median(widths))
+        b=(x>=1083.1)&(x<=1083.48)&np.isfinite(smoothed)&np.isfinite(uncertainty)&contiguous
+        line,=ax.plot(x[b]/1000,100*(smoothed[b]-1),lw=2,label=label)
+        ax.fill_between(x[b]/1000,100*(smoothed[b]-1-uncertainty[b]),
+                        100*(smoothed[b]-1+uncertainty[b]),color=line.get_color(),alpha=.18)
     ax.axhline(0,color='.6',lw=.8)
     ax.set(xlabel='Wavelength (μm)',ylabel='Transmission excess (%)')
     ax.ticklabel_format(axis='x',useOffset=False);ax.xaxis.set_major_locator(MaxNLocator(5))
