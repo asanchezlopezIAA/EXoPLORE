@@ -125,7 +125,8 @@ def compare(directories,output):
         widths=np.diff(w)
         contiguous=(widths[:-1]<=5*np.median(widths))&(widths[1:]<=5*np.median(widths))
         b=(x>=1083.1)&(x<=1083.48)&np.isfinite(smoothed)&np.isfinite(uncertainty)&contiguous
-        line,=ax.plot(x[b]/1000,100*(smoothed[b]-1),lw=2,label=label)
+        line,=ax.plot(x[b]/1000,100*(smoothed[b]-1),lw=2,
+                      marker='o',markersize=4,label=label)
         ax.fill_between(x[b]/1000,100*(smoothed[b]-1-uncertainty[b]),
                         100*(smoothed[b]-1+uncertainty[b]),color=line.get_color(),alpha=.18)
     ax.axhline(0,color='.6',lw=.8)

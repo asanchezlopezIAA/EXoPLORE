@@ -321,15 +321,8 @@ def run_helium_simulation(config) -> Path:
         if instrument_order is None:
             raw_error = np.full_like(expected, 1/h.snr_per_pixel)
         else:
-            # Scale only target shot noise with the transit flux. The ETC already
-            # includes sky, detector readout and dark variance in extracted units.
-            counts = instrument_order['target'][None, :]
-            # Map the ETC target counts to the injected out-of-transit spectrum.
-            # Thus its fractional baseline uncertainty is exactly 1/(ETC S/N),
-            # including the ETC's existing stellar and atmospheric attenuation.
-            baseline = control/arrays['opaque_continuum'][:, None]
-            gain = counts/baseline
-            raw_error = np.sqrt(gain*expected+instrument_order['variance_fixed'][None, :])/gain
+            # Impose the supplied per-pixel ETC uncertainty in normalized units.
+            raw_error = np.broadcast_to(1/instrument_order['snr'][None, :], expected.shape).copy()
         rng = np.random.default_rng(h.noise_seed)
         raw = expected+photon_noise(1/raw_error, rng=rng) if h.noise_mode == "gaussian" else expected.copy()
     divisor = tell if h.telluric_correction == "known_model" else np.ones_like(tell)
@@ -428,7 +421,8 @@ def run_helium_simulation(config) -> Path:
         telluric_correction=h.telluric_correction, sky_emission="Absent",
         uncertainty_scope=("Native independent Gaussian noise, normalization, shared reference and resampling; excludes atmospheric, stellar and telluric systematics"
                            if len(draws) else "Conditional marginal pixel weights only, holding reference and fitted continuum fixed; interpolation covariance and shared-reference uncertainty excluded. No EW uncertainty or significance inferred."),
-        noise_convention="ETC per-pixel target counts and existing sky/read/dark budget mapped to the injected baseline; one Gaussian draw via EXoPLORE photon_noise",
+        noise_convention=("Original saved observation uncertainties retained" if h.resume_simulation_path else
+                          "Continuum-normalized flux error = 1 / SNR_pixel; one Gaussian draw via EXoPLORE photon_noise"),
         stellar_assumptions="Static PHOENIX photosphere shifted by gamma and BERV; no chromospheric helium, RM/CLV, or rotational broadening",
         airmass=h.airmass,
         noise_realizations=1 if h.noise_mode == 'gaussian' else 0,

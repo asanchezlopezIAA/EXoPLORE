@@ -1605,7 +1605,7 @@ python scripts/plot_carmenes_palle2020.py compare \
   oh_profile_comparison.png
 ```
 
-```{figure} figures/tutorial12b_oh_comparison.png
+```{figure} figures/tutorial12b_oh_comparison_points.png
 :width: 95%
 :align: center
 

@@ -13,7 +13,7 @@ import numpy as np
 from astropy.io import fits
 from exoplore.atmosphere.helium_pwinds import contact_phases
 from exoplore.atmosphere.helium_provider import solve_outflow, HeliumTransit
-from exoplore.core.helium_etc import require_helium_orders
+from exoplore.core.helium_etc import CARMENES_NOISE_CONVENTION, require_helium_orders
 from exoplore.core.helium_simulation import observing_arrays, _write_npz, plot_simulation, NoHeliumTransit
 from exoplore.core.helium_synthetic_observation import utc_midpoints
 from exoplore.instruments import load_instrument_v2, get_WaveGrid_v2
@@ -122,8 +122,13 @@ def run_carmenes_helium(config, *, expectation_source: Path | None = None):
     output = Path(config.paths.output_root)/config.planet.name/('helium_sunbather' if h.backend == 'sunbather' else 'helium_pwinds')
     output.mkdir(parents=True,exist_ok=False)
     with (output/'run_config.json').open('x') as f:json.dump(asdict(config),f,indent=2)
+    noise_convention = CARMENES_NOISE_CONVENTION
     if h.resume_simulation_path:
         source = Path(h.resume_simulation_path)
+        provenance_path = source/'provenance.json'
+        noise_convention = (json.loads(provenance_path.read_text()).get(
+            'noise_convention', 'Original saved observation uncertainties retained')
+            if provenance_path.exists() else 'Original saved observation uncertainties retained')
         original = json.loads((source/'run_config.json').read_text())
         current = asdict(config)
         for item in (original,current):
@@ -157,6 +162,8 @@ def run_carmenes_helium(config, *, expectation_source: Path | None = None):
         from exoplore.core.helium_multi_night import read_saved_expectation
         arrays, profile, raw_error = read_saved_expectation(expectation_source, config)
         expected, control, tell = (arrays[k] for k in ('expected_flux', 'no_helium_flux', 'telluric_transmission'))
+        # Reuse physical spectra, never a previous noise prescription.
+        raw_error = np.broadcast_to(1/order['snr'][None, :], expected.shape).copy()
         rng = np.random.default_rng(h.noise_seed)
         raw = expected + photon_noise(1/raw_error, rng=rng) if h.noise_mode == 'gaussian' else expected.copy()
         print(f'  New independent observation-noise realization, seed {h.noise_seed}; noiseless expectation reused.', flush=True)
@@ -176,11 +183,9 @@ def run_carmenes_helium(config, *, expectation_source: Path | None = None):
             model = NoHeliumTransit(h,planet)
         arrays = observing_carmenes_arrays(h,science,planet,model,config.observation.exposure_time_seconds,order['wave_nm'])
         expected,control,tell = (arrays[k] for k in ('expected_flux','no_helium_flux','telluric_transmission'))
-        # ETC includes its star/telluric/throughput and detector noise. Preserve
-        # its wavelength dependence; do not apply a second blaze/telluric factor.
-        # Here normalized-flux uncertainty is specified directly by the ETC S/N.
-        baseline = control/arrays['opaque_continuum'][:,None]
-        raw_error = baseline/order['snr'][None,:]
+        # Impose the ETC uncertainty in continuum-normalized flux units.
+        # Resolved synthetic absorption does not rescale this prescription.
+        raw_error = np.broadcast_to(1/order['snr'][None, :], expected.shape).copy()
         rng = np.random.default_rng(h.noise_seed)
         raw = expected+photon_noise(1/raw_error,rng=rng) if h.noise_mode=='gaussian' else expected.copy()
     berv = np.asarray(h.berv_kms);rv=science.kp_kms*np.sin(2*np.pi*phases)
@@ -215,7 +220,7 @@ def run_carmenes_helium(config, *, expectation_source: Path | None = None):
         sources.extend([str(Path(h.resume_simulation_path)/name) for name in ('run_config.json','simulated_observations.npz','outflow.npz')])
     if expectation_source is not None:
         sources.extend([str(expectation_source/name) for name in ('run_config.json','simulated_observations.npz','outflow.npz')])
-    summary=dict(reused_noiseless_expectation_path=str(expectation_source) if expectation_source else None, noise_seed=h.noise_seed, reused_simulation_path=h.resume_simulation_path or None,pipeline='carmenes_helium',scientific_reference='https://doi.org/10.1051/0004-6361/202037719',p_winds_version=profile['p_winds_version'],solver_warnings=profile['warnings'],source_sha256={str(Path(p).resolve()):hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in sources},normalization='Native mean over 1081.5962--1082.7624 nm before stellar alignment',reference='Arithmetic mean of optical out-of-transit spectra',coaddition='Arithmetic mean of exposures entirely within T2--T3',noise_realizations=1 if h.noise_mode=='gaussian' else 0,uncertainty_resamples=0,uncertainty_scope='Spectral coadd errors are reference-fixed marginal errors. Light-curve errors retain native interpolation and shared-reference covariance, conditional on fitted continua and molecfit parameters; not a detection significance',noise_convention='Full ETC resel curve converted using local native sampling; normalized flux error = baseline_flux / ETC_pixel_SNR; no second blaze, telluric or detector-noise factor',oh_emission='Not simulated; no OH subtraction claimed',optical_gate='None; atmospheric overlap outside optical contacts retained',irradiation='GJ674 coronal/transition-region SED times 2.2/a_AU^2; no photospheric UV',stellar_assumptions='Static PHOENIX 3700K/logg5.0/FeH0, uniform disc, no stellar helium variability/RM/CLV/rotation',truth_equivalent_width_mA=ew(truth) if np.isfinite(ew(truth)) else None,recovered_equivalent_width_mA=ew(recovered) if np.isfinite(ew(recovered)) else None)
+    summary=dict(reused_noiseless_expectation_path=str(expectation_source) if expectation_source else None, noise_seed=h.noise_seed, reused_simulation_path=h.resume_simulation_path or None,pipeline='carmenes_helium',scientific_reference='https://doi.org/10.1051/0004-6361/202037719',p_winds_version=profile['p_winds_version'],solver_warnings=profile['warnings'],source_sha256={str(Path(p).resolve()):hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in sources},normalization='Native mean over 1081.5962--1082.7624 nm before stellar alignment',reference='Arithmetic mean of optical out-of-transit spectra',coaddition='Arithmetic mean of exposures entirely within T2--T3',noise_realizations=1 if h.noise_mode=='gaussian' else 0,uncertainty_resamples=0,uncertainty_scope='Spectral coadd errors are reference-fixed marginal errors. Light-curve errors retain native interpolation and shared-reference covariance, conditional on fitted continua and molecfit parameters; not a detection significance',noise_convention=noise_convention,oh_emission='Not simulated; no OH subtraction claimed',optical_gate='None; atmospheric overlap outside optical contacts retained',irradiation='GJ674 coronal/transition-region SED times 2.2/a_AU^2; no photospheric UV',stellar_assumptions='Static PHOENIX 3700K/logg5.0/FeH0, uniform disc, no stellar helium variability/RM/CLV/rotation',truth_equivalent_width_mA=ew(truth) if np.isfinite(ew(truth)) else None,recovered_equivalent_width_mA=ew(recovered) if np.isfinite(ew(recovered)) else None)
     summary['physical_backend'] = h.backend
     summary['irradiation'] = h.irradiation_source
     if h.backend == 'sunbather':

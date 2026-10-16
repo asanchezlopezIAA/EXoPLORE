@@ -8,6 +8,12 @@ from __future__ import annotations
 import warnings
 import numpy as np
 
+CARMENES_NOISE_CONVENTION = (
+    'Full ETC resel curve converted using local native sampling; '
+    'continuum-normalized flux error = 1 / ETC_pixel_SNR; '
+    'no additional stellar, telluric, blaze or detector-noise factor'
+)
+
 
 def etc_pixel_noise(snr_per_resel: np.ndarray,
                     pixels_per_resel: float | np.ndarray) -> tuple[np.ndarray, np.ndarray]:
