@@ -43,6 +43,8 @@ def _physical_config(config: dict) -> dict:
     h = result['atmosphere']['helium']
     # A significance estimator changes reporting, not the saved observations.
     h.pop('allart2023_significance', None)
+    if h.get('sysrem_iterations') is None:
+        h.pop('sysrem_iterations',None)
     if h.get('sunbather') is None:
         h.pop('sunbather', None)
     for key in ('completed_night_paths', 'resume_simulation_path', 'noise_seed'):
@@ -53,8 +55,11 @@ def _physical_config(config: dict) -> dict:
 def _verify_completed(source: Path, config) -> None:
     """Check a completed night against requested physics, inputs and fit gates."""
     required = ('run_config.json', 'provenance.json', 'observations.npz',
-                'transmission.npz', 'molecfit_calibration.npz',
+                'transmission.npz',
                 'simulated_observations.npz', 'outflow.npz')
+    correction_file=('sysrem_correction.npz' if config.atmosphere.helium.telluric_correction=='sysrem'
+                     else 'molecfit_calibration.npz')
+    required=required+(correction_file,)
     for name in required:
         if not (source/name).is_file():
             raise ValueError(f'Incomplete saved helium night: {source/name}')
@@ -65,6 +70,8 @@ def _verify_completed(source: Path, config) -> None:
     for name, digest in provenance['source_sha256'].items():
         if hashlib.sha256(Path(name).read_bytes()).hexdigest() != digest:
             raise ValueError(f'Changed input of completed night: {name}')
+    if config.atmosphere.helium.telluric_correction=='sysrem':
+        return
     reports = list((source/'molecfit').glob('exposure_*/detector_*/report.json'))
     with np.load(source/'simulated_observations.npz') as data:
         wave = data['wave_nm'][0]
@@ -127,8 +134,12 @@ def combine_helium_nights(output: Path, sources: list[Path], science, settings):
             obs = {k: data[k].copy() for k in data.files}
         with np.load(source/'transmission.npz') as data:
             result = {k: data[k].copy() for k in data.files}
-        with np.load(source/'molecfit_calibration.npz') as data:
-            calibration = {k: data[k].copy() for k in data.files}
+        if settings.telluric_correction=='sysrem':
+            with np.load(source/'sysrem_correction.npz') as data:
+                calibration={'refined_wave_nm':data['wave_nm'].copy()}
+        else:
+            with np.load(source/'molecfit_calibration.npz') as data:
+                calibration = {k: data[k].copy() for k in data.files}
         from exoplore.pipelines.czesla2024 import timed_exposure_selection
         config=json.loads((source/'run_config.json').read_text())
         science,_,_,_=timed_exposure_selection(science,obs['bjd_tdb'],
@@ -302,8 +313,9 @@ def run_carmenes_multi_night(config):
         json.dump(asdict(config), stream, indent=2)
     while len(paths) < count:
         index = len(paths)
-        seed = h.noise_seed if index == 0 else int(np.random.SeedSequence([h.noise_seed, index]).generate_state(1)[0])
-        if seed in seeds:
+        seed = (None if h.noise_seed is None else
+                h.noise_seed if index == 0 else int(np.random.SeedSequence([h.noise_seed, index]).generate_state(1)[0]))
+        if seed is not None and seed in seeds:
             raise ValueError('Independent nights require distinct observation-noise seeds')
         seed_config = replace(single,
             paths=replace(single.paths, output_root=str(output/f'night_{index+1}')),

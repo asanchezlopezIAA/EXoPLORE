@@ -1,0 +1,46 @@
+{
+  "_description": "Copy the Sunbather settings below into atmosphere.helium.sunbather in your main simulation JSON. This is a settings fragment, not a complete observing configuration.",
+  "_sunbather_documentation": "https://sunbather.readthedocs.io/en/latest/faq.html#how-do-i-choose-the-composition-of-the-atmosphere",
+  "_helium_field_descriptions": {
+    "telluric_correction": "Set atmosphere.helium.telluric_correction to molecfit or sysrem (SYSREM can aggressively remove the planetary signal).",
+    "sysrem_iterations": "For sysrem, supply a positive integer in atmosphere.helium.sysrem_iterations and use uncertainty_mode=conditional. The surrounding pipeline.sysrem_iterations remains zero for the helium route.",
+    "noise_seed": "Set atmosphere.helium.noise_seed to null for fresh independent noise in each new night, or a non-negative integer for reproducible simulations.",
+    "noise_convention": "New helium simulations use normalized-flux uncertainty 1/SNR_pixel and one independent Gaussian draw per exposure and pixel."
+  },
+  "_field_descriptions": {
+    "include_metals": "false (default example): H and He only, for quicker exploration. true: include all 28 metals at metal_scale when metal_elements is null. Metals affect the computed temperature and helium populations.",
+    "metal_scale": "Linear metal-to-hydrogen abundance scale relative to solar (1 = solar, 100 = 100 times solar). Applied only when include_metals is true. Choose the enrichment for your planet.",
+    "metal_elements": "null includes all supported metals when enabled. Advanced use: a list of atomic symbols retains only those metals, without redistributing their abundances. H and He are always retained. See the Sunbather composition documentation.",
+    "hydrogen_number_fraction": "The H/(H+He) number fraction remains in the surrounding helium block. Metal abundances are configured separately.",
+    "stellar_tidal_gravity": "false by default. true includes stellar tidal gravity in the Parker wind.",
+    "parker_mu_tolerance": "Relative mean-particle-mass convergence tolerance for a metal-bearing Parker wind (0.01 is the native Sunbather default). Unused with include_metals=false.",
+    "parker_mu_max_iterations": "Maximum Parker/Cloudy mean-mass iterations (7 is the native Sunbather default). Nonconvergence rejects the model. Unused with include_metals=false.",
+    "parker_initialization": "pwinds initializes the mean particle mass using H/He ionisation, then Cloudy accounts for enabled metals. neutral starts from neutral gas instead. Unused with include_metals=false.",
+    "heating_cooling_factor": "Heating/cooling convergence factor for the temperature solution (1.1 in this example).",
+    "maximum_iterations": "Maximum nonisothermal temperature iterations (20 in this example).",
+    "starting_temperature": "constant starts the temperature iteration at Parker T0. free uses Sunbather's native initialization.",
+    "cosmic_rays": "Explicit acknowledgement of the cosmic-ray background used by the native Sunbather solver. Required to be true in this adapter.",
+    "cloudy_path": "Local Cloudy installation directory containing source/cloudy.exe.",
+    "project_path": "New atmosphere output directory. The high-level simulation/grid runner assigns an individual directory to each atmosphere. Existing products are preserved."
+  },
+  "atmosphere": {
+    "helium": {
+      "backend": "sunbather",
+      "sunbather": {
+        "include_metals": false,
+        "metal_scale": 1.0,
+        "metal_elements": null,
+        "stellar_tidal_gravity": false,
+        "cloudy_path": "path/to/c23.01",
+        "project_path": "new_sunbather_project",
+        "heating_cooling_factor": 1.1,
+        "maximum_iterations": 20,
+        "starting_temperature": "constant",
+        "cosmic_rays": true,
+        "parker_mu_tolerance": 0.01,
+        "parker_mu_max_iterations": 7,
+        "parker_initialization": "pwinds"
+      }
+    }
+  }
+}

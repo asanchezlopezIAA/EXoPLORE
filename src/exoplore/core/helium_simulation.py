@@ -292,7 +292,7 @@ def run_helium_simulation(config) -> Path:
                 item['pipeline'].pop('oh_treatment',None)
         # Refitting changes only the recovery recipe, never the saved observation.
         old_h.pop('molecfit_config_path', None); new_h.pop('molecfit_config_path', None)
-        for key in ('molecfit_workers', 'molecfit_reuse_path'):
+        for key in ('molecfit_workers', 'molecfit_reuse_path', 'telluric_correction', 'sysrem_iterations'):
             old_h.pop(key, None); new_h.pop(key, None)
         if old_h != new_h or original['pipeline'] != current['pipeline'] or original['planet'] != current['planet'] or original['instrument'] != current['instrument'] or original['observation'] != current['observation']:
             raise ValueError('Resume must use the exact original atmosphere, exposures, instrument and preparation')
@@ -359,6 +359,16 @@ def run_helium_simulation(config) -> Path:
                                      truth_error, berv, rv, science)
         null = prepare_transmission(arrays['wave_nm'], np.where(valid, control/tell, np.nan),
                                     truth_error, berv, rv, science)
+    elif h.telluric_correction == 'sysrem':
+        from exoplore.pipelines.helium_sysrem import correct_helium_sysrem
+        print(f'  Earth-frame helium SYSREM: {h.sysrem_iterations} iterations (conditional errors).',flush=True)
+        night=correct_helium_sysrem(arrays['wave_nm'],raw,raw_error,science,h.sysrem_iterations)
+        _write_npz(output/'sysrem_correction.npz',night)
+        corrected,error=night['flux'],night['error']
+        recovered=prepare_transmission(night['wave_nm'],corrected,error,berv,rv,science)
+        truth_error=np.where(valid,raw_error/tell,np.nan)
+        truth=prepare_transmission(arrays['wave_nm'],np.where(valid,expected/tell,np.nan),truth_error,berv,rv,science)
+        null=prepare_transmission(arrays['wave_nm'],np.where(valid,control/tell,np.nan),truth_error,berv,rv,science)
     else:
         recovered, truth, null = prepare(corrected), prepare(corrected_expected), prepare(corrected_control)
     draws = []

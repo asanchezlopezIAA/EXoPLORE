@@ -36,8 +36,8 @@ def validate_carmenes_helium(config):
         raise ValueError('Select synthetic transits with explicit p-winds settings')
     if config.pipeline.sysrem_iterations != 0 or config.retrieval.enabled or config.atmosphere.limb_asymmetries:
         raise ValueError('The direct spherical-helium route uses no SYSREM or molecular retrieval')
-    if h.observing_grid_mode != 'instrument' or h.telluric_correction != 'molecfit':
-        raise ValueError('This CARMENES route requires its native ETC grid and molecfit correction')
+    if h.observing_grid_mode != 'instrument' or h.telluric_correction not in ('molecfit','sysrem'):
+        raise ValueError('This CARMENES route requires its native ETC grid and molecfit or SYSREM correction')
     if config.observation.different_nights:
         raise ValueError('Different epochs/BERV/cadences are not connected to the helium multi-night route yet')
     if h.completed_night_paths and config.observation.n_nights == 1:
@@ -145,6 +145,8 @@ def run_carmenes_helium(config, *, expectation_source: Path | None = None):
             item['atmosphere']['helium']['resume_simulation_path'] = ''
             # Correction settings do not change an already saved observation.
             item['atmosphere']['helium']['molecfit_config_path'] = ''
+            item['atmosphere']['helium'].pop('sysrem_iterations',None)
+            item['atmosphere']['helium']['telluric_correction'] = ''
             item['paths']['output_root'] = ''
         if original != current:
             raise ValueError('Resume must preserve the atmosphere, cadence, ETC, seed and preparation configuration')
@@ -194,11 +196,18 @@ def run_carmenes_helium(config, *, expectation_source: Path | None = None):
     _write_npz(output/'outflow.npz',{k:v for k,v in profile.items() if k not in ('warnings','p_winds_version')})
     with (output/'outflow_metadata.json').open('x') as f:json.dump(dict(p_winds_version=profile['p_winds_version'],warnings=profile['warnings']),f,indent=2)
     times = utc_midpoints(bjd,science)
-    print('  Fitting the complete helium order with molecfit, independently per detector...',flush=True)
-    night = fit_carmenes_night(output,arrays,raw,raw_error,h,science,times.mjd,config.observation.exposure_time_seconds)
-    from exoplore.plotting.helium_molecfit import plot_molecfit_diagnostics
-    plot_molecfit_diagnostics(output,output/'molecfit_diagnostics.png','CARMENES_NIR')
-    good = night['transmittance'] >= science.telluric_min_transmission
+    if h.telluric_correction == 'sysrem':
+        from exoplore.pipelines.helium_sysrem import correct_helium_sysrem
+        print(f'  Earth-frame helium SYSREM: {h.sysrem_iterations} iterations (conditional errors).',flush=True)
+        night=correct_helium_sysrem(arrays['wave_nm'],raw,raw_error,science,h.sysrem_iterations)
+        _write_npz(output/'sysrem_correction.npz',night)
+        good=np.isfinite(night['flux'])
+    else:
+        print('  Fitting the complete helium order with molecfit, independently per detector...',flush=True)
+        night = fit_carmenes_night(output,arrays,raw,raw_error,h,science,times.mjd,config.observation.exposure_time_seconds)
+        from exoplore.plotting.helium_molecfit import plot_molecfit_diagnostics
+        plot_molecfit_diagnostics(output,output/'molecfit_diagnostics.png','CARMENES_NIR')
+        good = night['transmittance'] >= science.telluric_min_transmission
     if science.oh_mode=='mask':good &= ~window_mask(arrays['wave_nm'],science.oh_topocentric_windows_nm)
     corrected,error = np.where(good,night['flux'],np.nan),np.where(good,night['error'],np.nan)
     recovered = prepare_carmenes_transmission(night['wave_nm'],corrected,error,berv,rv,science)
@@ -211,17 +220,23 @@ def run_carmenes_helium(config, *, expectation_source: Path | None = None):
     curve_error = np.sqrt(np.diag(curve_covariance))
     _write_npz(output/'observations.npz',dict(**arrays,raw_flux=raw,raw_error=raw_error,corrected_flux=corrected,corrected_error=error,phase=phases,berv_kms=berv,planet_rv_kms=rv,bjd_tdb=bjd))
     _write_npz(output/'transmission.npz',dict(**recovered,coadd_error=coadd_error,lightcurve_error=curve_error,lightcurve_covariance=curve_covariance,truth_planet_wave_nm=truth['planet_wave_nm'],truth_planet_coadd=truth['planet_coadd'],truth_planet_lightcurve=truth['planet_lightcurve']))
-    _write_npz(output/'molecfit_calibration.npz',dict(wavelength_shift_kms=night['shift'],refined_wave_nm=night['wave_nm']))
+    if h.telluric_correction == 'molecfit':
+        _write_npz(output/'molecfit_calibration.npz',dict(wavelength_shift_kms=night['shift'],refined_wave_nm=night['wave_nm']))
     def ew(result):
         band=window_mask(result['planet_wave_nm'],[science.equivalent_width_window_nm])
         return float(np.trapz(1-result['planet_coadd'][band],result['planet_wave_nm'][band])*1e4)
     sources=order['source_files']+[str(config.planet.parameter_file),h.irradiation_spectrum_path,h.stellar_template_path,h.telluric_template_path,h.molecfit_config_path,str(Path(config.paths.inputs_dir)/'input_provenance.json')]
+    sources=[p for p in sources if p]
     if h.resume_simulation_path:
         sources.extend([str(Path(h.resume_simulation_path)/name) for name in ('run_config.json','simulated_observations.npz','outflow.npz')])
     if expectation_source is not None:
         sources.extend([str(expectation_source/name) for name in ('run_config.json','simulated_observations.npz','outflow.npz')])
     summary=dict(reused_noiseless_expectation_path=str(expectation_source) if expectation_source else None, noise_seed=h.noise_seed, reused_simulation_path=h.resume_simulation_path or None,pipeline='carmenes_helium',scientific_reference='https://doi.org/10.1051/0004-6361/202037719',p_winds_version=profile['p_winds_version'],solver_warnings=profile['warnings'],source_sha256={str(Path(p).resolve()):hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in sources},normalization='Native mean over 1081.5962--1082.7624 nm before stellar alignment',reference='Arithmetic mean of optical out-of-transit spectra',coaddition='Arithmetic mean of exposures entirely within T2--T3',noise_realizations=1 if h.noise_mode=='gaussian' else 0,uncertainty_resamples=0,uncertainty_scope='Spectral coadd errors are reference-fixed marginal errors. Light-curve errors retain native interpolation and shared-reference covariance, conditional on fitted continua and molecfit parameters; not a detection significance',noise_convention=noise_convention,oh_emission='Not simulated; no OH subtraction claimed',optical_gate='None; atmospheric overlap outside optical contacts retained',irradiation='GJ674 coronal/transition-region SED times 2.2/a_AU^2; no photospheric UV',stellar_assumptions='Static PHOENIX 3700K/logg5.0/FeH0, uniform disc, no stellar helium variability/RM/CLV/rotation',truth_equivalent_width_mA=ew(truth) if np.isfinite(ew(truth)) else None,recovered_equivalent_width_mA=ew(recovered) if np.isfinite(ew(recovered)) else None)
     summary['physical_backend'] = h.backend
+    summary['telluric_correction'] = h.telluric_correction
+    if h.telluric_correction == 'sysrem':
+        summary['sysrem_iterations'] = h.sysrem_iterations
+        summary['uncertainty_scope'] = 'Conditional on Earth reference and fitted SYSREM components. SYSREM fitting covariance and signal attenuation excluded.'
     summary['irradiation'] = h.irradiation_source
     if h.backend == 'sunbather':
         summary['sunbather_version'] = profile.get('sunbather_version')

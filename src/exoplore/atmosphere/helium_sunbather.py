@@ -20,6 +20,7 @@ import numpy as np
 
 from exoplore.config.sunbather import SunbatherConfig
 from exoplore.atmosphere.helium_pwinds import geometry
+from exoplore.atmosphere.helium_sunbather_metals import save_metal_parker_profile, _select_metal_abundances
 
 
 @contextmanager
@@ -95,12 +96,17 @@ outer boundary (a-r_max), as prescribed by its native solver.
     spectrum = construct_parker.cloudy_spec_to_pwinds(str(sed), tools.AU, p.a-settings.radial_max_rp*p.R)
     mdot = float(np.log10(settings.mass_loss_rate_g_s))
     he_scale = (1-settings.hydrogen_number_fraction)/settings.hydrogen_number_fraction/0.1
-    zdict = tools.get_zdict(z=s.metal_scale, zelem={'He':he_scale})
+    zdict = tools.get_zdict(z=s.effective_metal_scale, zelem={'He':he_scale})
+    zdict = _select_metal_abundances(zdict,s.metal_elements)
     with warnings.catch_warnings(record=True) as caught, _preserve_solver_files(tools, solveT):
         warnings.simplefilter('always')
-        construct_parker.save_plain_parker_profile(p, mdot, settings.temperature_K, spectrum,
-            h_fraction=settings.hydrogen_number_fraction, pdir='exoplore', overwrite=False,
-            no_tidal=not s.stellar_tidal_gravity, altmax=int(settings.radial_max_rp))
+        if not s.metals_enabled:
+            construct_parker.save_plain_parker_profile(p, mdot, settings.temperature_K, spectrum,
+                h_fraction=settings.hydrogen_number_fraction, pdir='exoplore', overwrite=False,
+                no_tidal=not s.stellar_tidal_gravity, altmax=int(settings.radial_max_rp))
+        else:
+            save_metal_parker_profile(construct_parker,tools,p,mdot,int(settings.temperature_K),
+                spectrum,zdict,s,int(settings.radial_max_rp),root)
         convergeT_parker.run_s(planet.name, mdot, int(settings.temperature_K), 1,
             s.heating_cooling_factor, 'exoplore', 'real', False,
             s.starting_temperature, 'exoplore', zdict=zdict,
@@ -130,6 +136,16 @@ outer boundary (a-r_max), as prescribed by its native solver.
             irradiation_sha256=hashlib.sha256(Path(settings.irradiation_spectrum_path).read_bytes()).hexdigest(),
             boundary='Native Sunbather: irradiation at a-r_max', cosmic_rays=s.cosmic_rays,
             stellar_tidal_gravity=s.stellar_tidal_gravity,
+            metal_scale=s.effective_metal_scale,
+            configured_metal_scale=s.metal_scale,
+            include_metals=s.metals_enabled,
+            metal_elements=[element for element,scale in zdict.items() if element!='He' and scale>0],
+            abundance_scale_factors=zdict,
+            hydrogen_fraction_convention='H/(H+He) by number, excluding metals',
+            parker_method='H/He p-winds' if not s.metals_enabled else 'Sunbather iterative p-winds/Cloudy mean particle mass',
+            parker_mu_tolerance=s.parker_mu_tolerance,
+            parker_mu_max_iterations=s.parker_mu_max_iterations,
+            parker_initialization=s.parker_initialization,
             helium_lower_level=cols[0], warnings=result['warnings']), f, indent=2)
     from exoplore.plotting.helium_atmosphere import write_atmosphere_diagnostics
     write_atmosphere_diagnostics(root, settings, planet, result)

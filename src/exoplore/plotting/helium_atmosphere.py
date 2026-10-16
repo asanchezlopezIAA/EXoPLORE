@@ -14,7 +14,9 @@ def write_atmosphere_diagnostics(directory: Path, settings, planet, profile: dic
     import matplotlib.pyplot as plt
 
     directory = Path(directory)
-    paths = list((directory / 'parker_profiles').rglob('pprof_*.txt'))
+    # Metal-bearing models retain intermediate mean-mass profiles underneath
+    # mu_iterations. Only the final, top-level profile enters the atmosphere.
+    paths = list((directory / 'parker_profiles' / planet.name / 'exoplore').glob('pprof_*.txt'))
     if len(paths) != 1:
         raise ValueError('Expected one original Parker profile for this atmosphere')
     parker = np.loadtxt(paths[0])

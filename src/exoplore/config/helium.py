@@ -65,7 +65,7 @@ class HeliumPwindsConfig:
     telluric_correction: str
     noise_mode: str
     snr_per_pixel: float
-    noise_seed: int
+    noise_seed: int | None
     observing_grid_mode: str = "generated"
     uncertainty_mode: str = "monte_carlo"
     airmass: list[float] | None = None
@@ -76,6 +76,7 @@ class HeliumPwindsConfig:
     completed_night_paths: list[str] | None = None
     sunbather: dict | None = None
     allart2023_significance: dict | None = None
+    sysrem_iterations: int | None = None
 
     def __post_init__(self) -> None:
         """Reject incomplete inputs and unsupported physical assumptions."""
@@ -163,7 +164,12 @@ class HeliumPwindsConfig:
             raise ValueError("Supply a valid airmass for every exposure")
         if self.telluric_correction == "molecfit" and (not self.molecfit_config_path or self.telluric_mode == "none"):
             raise ValueError("Molecfit requires injected tellurics and explicit fitting settings")
-        if self.telluric_correction not in ("known_model", "none", "molecfit") or self.noise_mode not in ("none", "gaussian"):
+        if self.telluric_correction == "sysrem":
+            if type(self.sysrem_iterations) is not int or self.sysrem_iterations < 1:
+                raise ValueError("Helium SYSREM requires an explicit positive sysrem_iterations")
+            if self.uncertainty_mode != "conditional":
+                raise ValueError("Helium SYSREM uses conditional errors, without uncertainty resampling")
+        if self.telluric_correction not in ("known_model", "none", "molecfit", "sysrem") or self.noise_mode not in ("none", "gaussian"):
             raise ValueError("Select the correction and noise experiment explicitly")
-        if type(self.noise_seed) is not int or self.noise_seed < 0:
-            raise ValueError("Noise seed must be a non-negative integer")
+        if self.noise_seed is not None and (type(self.noise_seed) is not int or self.noise_seed < 0):
+            raise ValueError("Noise seed must be null (fresh random noise) or a non-negative integer")
