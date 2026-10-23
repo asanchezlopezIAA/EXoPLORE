@@ -253,10 +253,10 @@ iv) Add a test in `tests/test_instruments.py` and document the input files in `d
 If you use EXoPLORE in your research, please cite the primary reference
 (end-to-end simulator, 2D retrieval framework, ANDES detectability studies):
 
-> Sánchez-López, A., Pallé, E., & Millán, A. P. (2026).
+> Sánchez-López, A., Pallé, E. & Millán, A. P.,
 > *Resolving inhomogeneous hot and ultra-hot Jupiter atmospheres with ANDES:
 > insights from simulated ELT observations.*
-> A&A, submitted.
+> Accepted in A&A.
 
 If your work builds on the published applications, please also cite the
 relevant one:

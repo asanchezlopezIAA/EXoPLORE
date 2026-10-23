@@ -88,6 +88,21 @@ from exoplore.analysis.stats import statistical_study, plot_stats
 # Helpers
 # ---------------------------------------------------------------------------
 
+def _apply_throughput(flux, observation, order_index, night_index):
+    """Apply throughput with stable order/night streams, or leave flux intact."""
+    if observation.noiseless or not observation.add_throughput_variations:
+        return np.copy(flux)
+
+    seed = None
+    if observation.throughput_seed is not None:
+        # Physical order IDs keep streams stable under selection/reordering.
+        # The final tag separates this from a Gaussian RNG with the base seed.
+        seed = int(np.random.SeedSequence([
+            observation.throughput_seed, int(order_index), int(night_index), 1,
+        ]).generate_state(1)[0])
+    return add_throughput(F=flux, jitter_frac=0.02, seed=seed)
+
+
 def _format_number(x: float) -> str:
     """Format a float for use in simulation names.
 
@@ -2178,10 +2193,8 @@ class ExoploreSimulator:
                         _gauss_noise_b5[b, n_spectra:, :] = np.nan
 
                 # 5d.2, throughput variations
-                if not _nl and cfg.observation.add_throughput_variations:
-                    _spec_tp = add_throughput(F=spec_mat, jitter_frac=0.02)
-                else:
-                    _spec_tp = np.copy(spec_mat)
+                _spec_tp = _apply_throughput(
+                    spec_mat, cfg.observation, order_selection[h], b)
 
                 # 5d.3, noise standard-deviation matrix
                 _nc = cfg.noise.noise_choice
@@ -3237,6 +3250,7 @@ class ExoploreSimulator:
                     xlim_1d           = (tuple(cfg.plotting.pipeline_steps_xlim_um)
                                          if cfg.plotting.pipeline_steps_xlim_um
                                          else None),
+                    noise_illustration_factor = cfg.plotting.pipeline_steps_noise_illustration_factor,
                     sysrem_stages     = _sysrem_stages,
                     sysrem_iters      = _sysrem_iters,
                     use_real_data     = cfg.observation.use_real_data,

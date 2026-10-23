@@ -140,6 +140,7 @@ Stored in `planet_params/<PlanetName>.json`. All values use natural astronomical
   "noiseless": false,
   "first_night_noiseless": false,
   "add_throughput_variations": true,
+  "throughput_seed": null,
   "exposure_time_seconds_per_night": null,
   "mask_v_rotsini": false
 }
@@ -170,6 +171,7 @@ Stored in `planet_params/<PlanetName>.json`. All values use natural astronomical
 | `noiseless` | `true`, `false` | If `true`, produce fully noiseless simulated spectra (photon noise = 0). Useful for testing the signal model in isolation. |
 | `first_night_noiseless` | `true`, `false` | If `true`, only the first night is noiseless; subsequent nights have noise. Useful for testing signal injection. |
 | `add_throughput_variations` | `true`, `false` | If `true`, add realistic time-varying throughput variations (airmass + instrumental drift) to the simulated spectra. |
+| `throughput_seed` | non-negative int or `null` | Optional throughput base seed; default `null` preserves unseeded draws. The public simulator derives separate streams from the physical order ID and zero-based night index using `SeedSequence([base_seed, order_id, night_index, 1])`. Independent of `noise.noise_seed`; ignored when throughput is disabled or the run is noiseless. Tutorial 1 sets both base seeds to `12345`. |
 | `exposure_time_seconds_per_night` | list of float or `null` | Per-night exposure times in seconds. Only valid when `different_nights: true`. When set, the JD grid for each night is regenerated with that night's own DIT, enabling different cadences per night without requiring separate JD FITS files. Length must equal `n_nights`. `null` (default) uses the same `exposure_time_seconds` for all nights. |
 | `mask_v_rotsini` | `true`, `false` | If `true`, mask the CCF velocity range within ±v_rot_sini of Vsys=0 to avoid the stellar line broadening region. |
 
@@ -209,6 +211,8 @@ The atmosphere section contains up to six sub-blocks. Each describes a separate 
 | `morning_night` | Morning limb, nightside |
 | `evening_day` | Evening limb, dayside |
 | `evening_night` | Evening limb, nightside |
+
+For the `gradual`, `asymmetric` and `simplified_step` modes, the morning and evening models are read from `morning_day` and `evening_day`; the `_night` sub-blocks are unused. Their chemistry settings therefore do not affect Tutorial 1.
 
 **Which sub-blocks are used** depends on `limb_asymmetries` and `limb_divisions`:
 
@@ -588,7 +592,7 @@ Controls diagnostic plots automatically generated at the end of every run.
 
 ### Pipeline-steps diagnostic plot
 
-Every run automatically saves `<run_dir>/plots/pipeline_steps_<sim_name>.pdf`, a stacked grey-scale figure illustrating the data-simulation and preparation steps for the displayed order (set by `pipeline_steps_order`). The top panel is the 1-D in-silico flux at mid-transit, noiseless (black) and noisy (red), zoomed to `pipeline_steps_xlim_um` if set; below it are time-series matrices (wavelength on the horizontal axis, spectrum number on the vertical), with masked channels shown as uniform grey and ingress/egress marked by red dashed lines. The number of matrix panels depends on the pipeline:
+Every run automatically saves `<run_dir>/plots/pipeline_steps_<sim_name>.pdf`, a stacked grey-scale figure illustrating the data-simulation and preparation steps for the displayed order (set by `pipeline_steps_order`). The top panel is the 1-D in-silico flux at mid-transit, noiseless (black) and noisy (red), zoomed to `pipeline_steps_xlim_um` if set; below it are time-series matrices (wavelength on the horizontal axis, spectrum number on the vertical), with masked channels in the prepared panels shown as white and ingress/egress marked by red dashed lines. The number of matrix panels depends on the pipeline:
 
 - **Polynomial pipelines (BL19, Blain24)** have no iterations, so two matrix panels: the **raw** matrix (throughput + tellurics) and the **corrected (residual)** matrix after `preparing_pipeline`. Raw → corrected.
 - **SYSREM pipelines (ASL19, Gibson22)** show the systematics peeling away iteration by iteration: the **raw** matrix, then one panel per iteration listed in `pipeline_steps_sysrem_iterations` (for example after iteration 1 and after iteration 5). The intermediate residuals are reconstructed with `apply_sysrem` on the displayed order, so the production preparation is unchanged.

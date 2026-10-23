@@ -34,6 +34,7 @@ def plot_pipeline_steps(
         use_real_data=False,
         save_plot=True,
         show_plot=False,
+        noise_illustration_factor=None,
 ):
     """Four-panel pipeline-steps diagnostic figure.
 
@@ -68,6 +69,9 @@ def plot_pipeline_steps(
         Optional wavelength window for Panel A only.  If the requested
         range falls outside the order's coverage, the full range is used.
         The 2D panels always show the complete good-pixel wavelength range.
+    noise_illustration_factor : float or None
+        Add a labelled display-only curve: noiseless + factor * (noisy - noiseless).
+        Original spectra and the actual noisy curve remain unchanged.
     save_plot : bool
     show_plot : bool
     """
@@ -75,6 +79,10 @@ def plot_pipeline_steps(
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
     import matplotlib.cm as cm
+
+    if noise_illustration_factor is not None:
+        if not np.isfinite(noise_illustration_factor) or noise_illustration_factor <= 0:
+            raise ValueError("noise_illustration_factor must be finite and positive")
 
     n_spectra, n_pixels = mat_noiseless.shape
 
@@ -100,7 +108,7 @@ def plot_pipeline_steps(
             sim_name, plots_dir, wave_ins, phase, with_signal, good,
             mat_noiseless, mat_noisy, sysrem_stages, sysrem_iters,
             spec_idx, order_label, xlim_1d, use_real_data,
-            save_plot, show_plot,
+            save_plot, show_plot, noise_illustration_factor,
         )
         return
 
@@ -136,10 +144,15 @@ def plot_pipeline_steps(
     ax = axes[0]
     ax.plot(wave_good,
             mat_noiseless[spec_idx, good],
-            'k', linewidth=1.5, label='Noiseless')
+            'k', linewidth=1.5, alpha=0.65, label='Noiseless')
     ax.plot(wave_good,
             mat_noisy[spec_idx, good],
-            color='firebrick', linewidth=0.8, alpha=0.7, label='Noisy')
+            color='firebrick', linewidth=0.8, alpha=0.8, label='Noisy')
+    if noise_illustration_factor is not None:
+        baseline = mat_noiseless[spec_idx, good]
+        illustrative = baseline + noise_illustration_factor * (mat_noisy[spec_idx, good] - baseline)
+        ax.plot(wave_good, illustrative, color='royalblue', linewidth=0.7, alpha=0.6,
+                label=f'{noise_illustration_factor:g}× noise deviations (illustration only)')
     # x-axis for Panel A, zoom if xlim_1d overlaps order coverage
     _xlo = wave_good.min()
     _xhi = wave_good.max()
@@ -265,7 +278,7 @@ def _plot_sysrem_waterfall(
         sim_name, plots_dir, wave_ins, phase, with_signal, good,
         mat_noiseless, mat_noisy, sysrem_stages, sysrem_iters,
         spec_idx, order_label, xlim_1d, use_real_data,
-        save_plot, show_plot):
+        save_plot, show_plot, noise_illustration_factor=None):
     """Stacked grayscale SYSREM waterfall.
 
     One column shared across panels: a 1-D spectrum on top, then the raw
@@ -323,23 +336,32 @@ def _plot_sysrem_waterfall(
     # ── Panel 0: 1-D spectrum (same wavelength window as the matrices) ────────
     ax = axes[0]
     _g1 = (wave_ins >= _mxlo) & (wave_ins <= _mxhi)
+    # Keep gaps at excluded channels; do not amplify mask-fill values as noise.
+    _valid1 = np.zeros(wave_ins.size, dtype=bool)
+    _valid1[good] = True
+    _visible_good = _valid1[_g1]
     if use_real_data:
-        ax.plot(wave_ins[_g1], mat_noisy[spec_idx, _g1], 'k', lw=1.0 * _pub_scale,
+        ax.plot(wave_ins[_g1], np.where(_visible_good, mat_noisy[spec_idx, _g1], np.nan), 'k', lw=1.0 * _pub_scale,
                 label='Measured')
         _ylab = 'Measured flux (a.u.)'
     else:
-        _nl = mat_noiseless[spec_idx, _g1]
-        # Display only: exaggerate the noise by 40% so the noisy curve is
-        # visibly distinct from the noiseless one in this diagnostic. The data
-        # and all matrices are unchanged; this affects the top panel only.
-        _ny = _nl + 1.4 * (mat_noisy[spec_idx, _g1] - _nl)
-        ax.plot(wave_ins[_g1], _nl, 'k', lw=1.2 * _pub_scale, label='Noiseless')
+        _nl = np.where(_visible_good, mat_noiseless[spec_idx, _g1], np.nan)
+        # Plot the actual simulated noisy flux without rescaling its deviations.
+        _ny = np.where(_visible_good, mat_noisy[spec_idx, _g1], np.nan)
+        ax.plot(wave_ins[_g1], _nl, 'k', lw=0.9 * _pub_scale,
+                zorder=1, alpha=0.65, label='Noiseless')
         ax.plot(wave_ins[_g1], _ny, color='firebrick',
-                lw=0.8 * _pub_scale, alpha=0.8, label='Noisy')
+                lw=0.8 * _pub_scale, alpha=0.8, zorder=4, label='Noisy')
+        if noise_illustration_factor is not None:
+            illustrative = _nl + noise_illustration_factor * (_ny - _nl)
+            ax.plot(wave_ins[_g1], illustrative, color='royalblue',
+                    lw=0.7 * _pub_scale, zorder=2, alpha=0.6,
+                    label=f'{noise_illustration_factor:g}× noise deviations (illustration only)')
         _ylab = 'In-silico flux (a.u.)'
     ax.set_xlim(_mxlo, _mxhi)
     ax.set_ylabel(_ylab, fontsize=12 * _pub_scale)
-    ax.legend(fontsize=10 * _pub_scale, loc='lower right', framealpha=0.6)
+    ax.legend(fontsize=9 * _pub_scale, loc='lower left',
+              bbox_to_anchor=(0, 1.03), ncol=3, frameon=False)
     ax.tick_params(direction='in', which='both')
     ax.set_xticklabels([])
 
@@ -347,7 +369,7 @@ def _plot_sysrem_waterfall(
     import copy as _copy
     n_spectra = mat_noisy.shape[0]
     _cmap = _copy.copy(cm.binary_r)
-    _cmap.set_bad('0.55')   # uniform grey for masked columns
+    _cmap.set_bad('white')  # masked channels are distinct from valid residual flux
     for j, (mat, label) in enumerate(panels):
         ax = axes[j + 1]
         _vis = mat[:, _colvis]

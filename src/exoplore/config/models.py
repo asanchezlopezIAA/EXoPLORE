@@ -153,6 +153,10 @@ class ObservationConfig:
         Make only the first simulated night noiseless.
     add_throughput_variations:
         Add random throughput variations to each exposure.
+    throughput_seed:
+        Optional non-negative base seed for throughput variations. Child
+        streams use the physical order and night indices, independently of
+        ``noise.noise_seed``. ``None`` keeps unseeded draws.
     mask_v_rotsini:
         Mask the stellar v sin(i) velocity interval in the CCF
         (relevant for dayside observations).
@@ -192,6 +196,15 @@ class ObservationConfig:
     exposure_time_seconds_per_night: Optional[List[float]] = None
     # Append to preserve positional construction of older configurations.
     helium_transmission_spectroscopy: Optional[bool] = None
+    throughput_seed: Optional[int] = None
+
+    def __post_init__(self) -> None:
+        if self.throughput_seed is not None and (
+            isinstance(self.throughput_seed, bool)
+            or not isinstance(self.throughput_seed, int)
+            or self.throughput_seed < 0
+        ):
+            raise ValueError("observation.throughput_seed must be a non-negative integer or None.")
 
 
 # ---------------------------------------------------------------------------
@@ -890,6 +903,8 @@ class PlottingConfig:
     pipeline_steps_sysrem_iterations: List[int] = field(
         default_factory=lambda: [1, 5]
     )
+    # Optional extra display curve; the actual noisy spectrum is always retained.
+    pipeline_steps_noise_illustration_factor: Optional[float] = None
 
 
 # ---------------------------------------------------------------------------

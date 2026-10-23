@@ -21,7 +21,12 @@ Furthermore, the PHOENIX stellar model files must be placed on disk and the path
 
 ## Tutorial 1: Run the reference HD 189733 b ANDES simulation
 
-> **Approximate run time:** ~32 min on an Apple Mac Studio M2 Ultra (64 GB RAM) (measured: all 76 ANDES orders, one night, no retrieval; the [petitRADTRANS](https://petitradtrans.readthedocs.io) forward model is 95% of the total). The times quoted in these tutorials are approximate and machine-dependent. With `timing: true` in the config, each run writes a `timing_report_<date>.txt` to its output directory with the exact per-block breakdown and total.
+> **Want to follow this example interactively?**
+> {download}`Download the fully executable Jupyter notebook <../notebooks/01_first_ANDES_simulation.ipynb>`,
+> which reproduces this tutorial with commented code, intermediate diagnostics
+> and additional visualisations.
+
+> **Run time:** the updated full 76-order reference run took **28.9 min** on this machine while the notebook was running concurrently. Runtime depends on hardware and competing workloads. With `timing: true`, each run writes its per-block timings and total to its output directory.
 
 This is the reference case. It simulates one ANDES transit of HD 189733 b using a realistic multi-species atmosphere (H₂O, CO, CH₄, NH₃, H₂S, HCN, Fe, Ca) with limb asymmetries enabled, and a H₂O-only CCF template. In the following we describe each step in detail.
 
@@ -135,7 +140,7 @@ Consecutively, the simulator will:
 
 1. Load planet parameters from `planet_params/HD189733b.json`
 2. Build the ANDES wavelength grid (76 spectral orders: 55 YJH + 21 K, R = 100,000, 2048 px/order)
-3. Compute equilibrium chemistry with [EasyChem](https://easychem.readthedocs.io) (C/O = 0.41, Z = 0.53 dex) for each limb sub-block
+3. Compute equilibrium chemistry with [EasyChem](https://easychem.readthedocs.io) (C/O = 0.41, Z = 0.53 dex) for the active morning and evening models (`morning_day` and `evening_day` in this `gradual` setup; the `_night` blocks are unused)
 4. Run petitRADTRANS for each of the six atmospheric models (planet, CCF template, four limb regions)
 5. Build the stellar continuum matrix from the PHOENIX model
 6. Simulate the full observing sequence (~390 exposures at 30 s, ~3.3 h baseline + 1.94 h transit)
@@ -154,7 +159,7 @@ CCF matrix in the Earth rest frame, co-added over all 76 ANDES YJHK orders. The 
 :::{figure} figures/tutorial1_kpvsys_andes.png
 :width: 80%
 :align: center
-Cross-correlation S/N map as a function of the assumed planetary orbital velocity semi-amplitude K<sub>P</sub> and rest-frame planet velocity v<sub>rest</sub>, obtained from the reference HD 189733 b ANDES simulation (Tutorial 1). The colour scale gives the significance of the cross-correlation signal in units of the off-peak standard deviation. The red dashed lines indicate the expected position assuming a circular orbit and no net atmospheric wind (K<sub>P</sub> = 149.4 km s<sup>-1</sup> as configured; literature value 152.5 km s<sup>-1</sup>; v<sub>rest</sub> = 0 km s<sup>-1</sup>). With Blain24 preparation, the peak significance of ~43σ is recovered close to this position (K<sub>P</sub> = 143 km s<sup>-1</sup>, v<sub>rest</sub> = -4 km s<sup>-1</sup>) across the 76 ANDES YJHK orders in a single simulated transit; the small offset reflects noise and the K<sub>P</sub>-v<sub>rest</sub> degeneracy over one transit rather than a physical wind.
+Cross-correlation map as a function of the trial planetary orbital velocity amplitude K<sub>P</sub> and rest-frame velocity offset v<sub>rest</sub>, from the updated 76-order Tutorial 1 simulation. The active morning and evening limb models use EasyChem equilibrium chemistry. In this `gradual` configuration they are read from `morning_day` and `evening_day`; the `_night` blocks are unused. The peak map S/N is **43.17** at K<sub>P</sub> = **143 km s<sup>-1</sup>** and v<sub>rest</sub> = **-4 km s<sup>-1</sup>**. The reference lines mark the configured orbital amplitude (149.44 km s<sup>-1</sup>) and nominal zero rest-frame offset. Map S/N uses EXoPLORE's off-peak normalisation; it is not automatically a calibrated Gaussian significance. The injected limb regions have different velocities, so the recovered offset combines their contributions rather than measuring a single wind.
 :::
 
 :::{note}
@@ -169,7 +174,7 @@ A non-zero v<sub>rest</sub> at the peak indicates that the absorbing gas has a n
 A measured v<sub>rest</sub> offset is most commonly interpreted as a day-to-nightside wind, but it is not uniquely diagnostic. Planetary rotation, an offset dayside hotspot, or species-dependent dynamics can produce comparable shifts ([Brogi et al. 2023](https://doi.org/10.3847/1538-3881/acaf5c); [Smith et al. 2024](https://doi.org/10.3847/1538-3881/ad8574)), as can residual uncertainties in the velocity solution or the wavelength calibration. Such an offset should therefore always be cross-checked against independent indicators before being attributed to winds.
 :::
 
-The peak S/N and its position depend on the noise seed (`noise.noise_seed`, default `12345`); changing it draws a different noise realisation. Fully-masked orders (deep telluric bands) are skipped and reported in `<run_name>/warnings/fully_masked_orders_<run_name>.txt`.
+The reference fixes `noise.noise_seed` and `observation.throughput_seed` to `12345`. With both the Gaussian-noise and throughput seeds fixed, the stochastic realisation is reproducible. End-to-end floating-point results may still differ at machine-precision level, so bitwise-identical output is not guaranteed. Changing either seed changes its corresponding random component. Fully-masked orders (deep telluric bands) are skipped and reported in `<run_name>/warnings/fully_masked_orders_<run_name>.txt`.
 
 ### Step 5: Check the outputs
 
@@ -342,7 +347,7 @@ Set to `null` for a cloud-free atmosphere. Strong molecular absorption bands at 
 :::{note}
 **The physical origin of limb asymmetries**
 
-Tidally locked hot Jupiters are expected to develop significant temperature and chemical gradients between their dayside and nightside hemispheres. The morning (leading) limb probes the night-to-day transition of the terminator (gas arriving from the cool nightside), while the evening (trailing) limb probes the day-to-night transition (gas arriving from the hot dayside). These two limbs can therefore exhibit different temperatures, chemistry, and condensate coverage. The degree of asymmetry is expected to depend strongly on the equilibrium temperature, atmospheric composition, and drag regime of each planet (Sánchez-López et al. submitted).
+Tidally locked hot Jupiters are expected to develop significant temperature and chemical gradients between their dayside and nightside hemispheres. The morning (leading) limb probes the night-to-day transition of the terminator (gas arriving from the cool nightside), while the evening (trailing) limb probes the day-to-night transition (gas arriving from the hot dayside). These two limbs can therefore exhibit different temperatures, chemistry, and condensate coverage. The degree of asymmetry is expected to depend strongly on the equilibrium temperature, atmospheric composition, and drag regime of each planet (Sánchez-López, Pallé & Millán, Accepted in A&A).
 
 For ultra-hot Jupiters, dayside temperatures can exceed ∼2000 to 3000 K, sufficient to keep refractory species such as neutral iron in the gas phase. On the cooler nightside, these same species may condense, depleting the gas phase. The morning limb, probing gas that has come from the nightside, may therefore carry condensed or depleted species compared to the evening limb, where gas from the hot dayside remains in an atomic or ionic state. This scenario was observationally supported for WASP-76 b: a neutral iron signal grows from ingress to egress and is predominantly blueshifted, interpreted as iron being largely condensed at the morning terminator while remaining in gas phase at the hotter evening terminator, with day-to-night winds contributing an additional blueshift of ∼-5 km s<sup>-1</sup> at the limbs (Ehrenreich et al. 2020). A possible eastward offset of the hot spot towards the evening terminator may further enhance this asymmetry.
 

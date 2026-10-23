@@ -7,9 +7,10 @@ relevant dependencies listed below.
 
 ## EXoPLORE
 
-> Sánchez-López, A., Pallé, E. & Millán, A. P. (A&A, submitted), 
+> Sánchez-López, A., Pallé, E. & Millán, A. P.,
 > *Resolving inhomogeneous hot and ultra-hot Jupiter atmospheres with ANDES:
 > insights from simulated ELT observations*
+> Accepted in A&A.
 
 ---
 
