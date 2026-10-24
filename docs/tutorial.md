@@ -26,7 +26,7 @@ Furthermore, the PHOENIX stellar model files must be placed on disk and the path
 > which reproduces this tutorial with commented code, intermediate diagnostics
 > and additional visualisations.
 
-> **Run time:** the updated full 76-order reference run took **28.9 min** on this machine while the notebook was running concurrently. Runtime depends on hardware and competing workloads. With `timing: true`, each run writes its per-block timings and total to its output directory.
+> **Run time:** the updated full 76-order reference run took **28.9 min** on an **Apple Mac Studio (M2 Ultra, 64 GB RAM)** while the notebook was running concurrently. Runtime depends on hardware and competing workloads. With `timing: true`, each run writes its per-block timings and total to its output directory.
 
 This is the reference case. It simulates one ANDES transit of HD 189733 b using a realistic multi-species atmosphere (H₂O, CO, CH₄, NH₃, H₂S, HCN, Fe, Ca) with limb asymmetries enabled, and a H₂O-only CCF template. In the following we describe each step in detail.
 
