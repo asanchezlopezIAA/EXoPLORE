@@ -10,10 +10,9 @@ Usage
         --emulator_dir emulators/carmenes_nir/order_23
 """
 
-# Where this script fits
-# This compares predicted spectra against actual atmospheric-model
-# calculations. Spectral agreement is one diagnostic; it does not establish that
-# the experimental emulator yields an accurate retrieval posterior.
+# Role in the calculation
+# Compare emulator spectra with spectra calculated by the atmospheric model. The
+# residuals measure the emulator's spectral approximation errors.
 
 
 import argparse, os, sys

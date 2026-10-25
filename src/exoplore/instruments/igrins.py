@@ -63,11 +63,9 @@ Cheverall et al. 2026, MNRAS, L 98-59 d analysis with IGRINS on Gemini South
 
 from __future__ import annotations
 
-# Reading this file
-# This loader describes IGRINS reference-night or observed-data inputs.
-# The preparation script converts upstream PLP products into that input format.
-# The instrument's order layout then has to stay consistent across wavelength,
-# flux, uncertainty and timing arrays.
+# Role in the calculation
+# Resolve the IGRINS reference-night or observed-data files. The reader uses the order
+# and pixel layout written by the PLP preparation script.
 
 
 import os as _os

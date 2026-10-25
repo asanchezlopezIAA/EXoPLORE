@@ -26,11 +26,10 @@ Quickstart
 >>> sim.summary()
 """
 
-# Reading these imports
-# This top-level module identifies the package and its version. Start a run
-# through config.SimulationConfig and core.ExoploreSimulator; importing the
-# package name alone is not the same operation as executing an experiment.
+# Public imports
+# The package defines its version and author here. SimulationConfig reads the
+# experiment settings, and core.ExoploreSimulator executes the calculation.
 
 
 __version__ = "0.2.0"
-__author__ = "Ana Sánchez-López"
+__author__ = "Alejandro Sánchez-López"

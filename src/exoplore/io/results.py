@@ -1,8 +1,7 @@
-"""Read/write compact result products without rerunning scientific analysis.
+"""Read and write compact CCF and detection-map products.
 
-The private state adapter below is the single bridge from the current molecular
-runner's dictionaries to named results. It can be replaced when stages are
-extracted, without exposing those dictionaries as a new public contract.
+The private _combined_ccf_from_state function selects arrays from a completed
+molecular run and constructs a CCFResult with their axes and observing metadata.
 """
 
 from copy import deepcopy
@@ -17,7 +16,7 @@ __all__ = ["load_detection_map", "save_ccf_result", "load_ccf_result"]
 
 
 def _result_array(value, copy: bool) -> np.ndarray:
-    """Detach public arrays by default; never change the source's write flag."""
+    """Return a copy or a read-only view of the supplied array."""
     array = np.array(value, copy=True) if copy else np.asarray(value).view()
     if not copy:
         array.setflags(write=False)
@@ -25,7 +24,7 @@ def _result_array(value, copy: bool) -> np.ndarray:
 
 
 def _combined_ccf_from_state(state, order_indices, metadata, *, night_index=None, copy=True) -> CCFResult:
-    """Adapt existing arrays; do not sum, interpolate or renormalize the CCF."""
+    """Select a completed CCF and its axes from the simulator state."""
     raw = state.get("ccf_complete")
     if raw is None:
         raise RuntimeError("This run has no combined CCF; check the configured analysis route.")
@@ -53,12 +52,12 @@ def _combined_ccf_from_state(state, order_indices, metadata, *, night_index=None
         selected = state["with_signal"][night_index]
         berv = state["berv"][night_index]
     else:
-        # Injection/iteration dimensions must be selected by their own analysis;
+        # Injection/iteration dimensions must be selected by their own analysis.
         # silently squeezing them could expose the wrong scientific product.
         raise NotImplementedError("CCFs with injection/iteration axes are not supported by this accessor.")
 
-    # The runner can store a single phase row. Flatten only singleton wrapping,
-    # not multiple observing sequences; the result's shape check catches mismatch.
+    # Convert a single phase row to a one-dimensional exposure axis.
+    # A remaining second dimension identifies multiple observing sequences.
     phase = np.asarray(phase).squeeze()
     if phase.ndim > 1:
         raise ValueError("Select one observing sequence before exposing its phase axis.")
@@ -79,8 +78,8 @@ def _combined_ccf_from_state(state, order_indices, metadata, *, night_index=None
 def load_detection_map(path, *, metric="snr") -> DetectionMapResult:
     """Load the simulator's explicitly named S/N or Welch NPZ map.
 
-    No transpose or normalization is applied. Missing Vrest convention metadata
-    in older products is reported as unspecified rather than reconstructed.
+    Array orientation and normalization come from the archive. A missing Vrest
+    convention is labelled unspecified.
     """
     keys = {"snr": "ccf_tot_sn", "welch": "ccf_tot_welch"}
     if metric not in keys:
@@ -100,10 +99,10 @@ def load_detection_map(path, *, metric="snr") -> DetectionMapResult:
 
 
 def save_ccf_result(result: CCFResult, path, *, overwrite=False) -> Path:
-    """Save the CCF and its conventions; preserve existing files by default.
+    """Save the CCF and its conventions. preserve existing files by default.
 
-    This compact NPZ contains no pickled objects. Its CCF/phase/velocity keys
-    match the existing compact export, but map grids are separate products.
+    The NPZ stores CCF, phase, velocity and JSON metadata arrays.
+    Detection-map grids are saved as separate products.
     """
     path = Path(path)
     if path.suffix != ".npz":
@@ -125,7 +124,7 @@ def save_ccf_result(result: CCFResult, path, *, overwrite=False) -> Path:
 
 
 def load_ccf_result(path) -> CCFResult:
-    """Load a compact CCF, including compatible existing notebook exports."""
+    """Load CCF, phase, velocity and metadata from a compact NPZ export."""
     with np.load(path, allow_pickle=False) as archive:
         metadata = json.loads(str(archive["metadata_json"].item()))
         axes = metadata.get("axis_order")

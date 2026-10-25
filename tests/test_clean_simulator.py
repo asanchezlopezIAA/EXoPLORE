@@ -16,7 +16,7 @@ def test_clean_simulator_summary():
 
     assert isinstance(summary, SimulationSummary)
     assert summary.planet_name == "HD189733b"   # clean name
-    assert summary.planet == "HD189733b"        # backward-compat alias
+    assert summary.planet == "HD189733b"        # Planet name exposed by the summary.
     assert summary.instrument == "ANDES_YJHK"
     assert summary.event_type == "transit"      # clean name
     assert summary.n_nights == 1

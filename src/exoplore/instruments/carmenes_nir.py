@@ -31,7 +31,7 @@ Mode B, Reference-night, synthetic spectra (recommended)
 
     The ``_0`` suffix is always required, even for a single night.
     For multi-night simulations (``different_nights = True``) add
-    ``julian_date_1.fits``, ``snr_1.fits``, etc. for each subsequent night.
+    ``julian_date_1.fits``, ``snr_1.fits``, etc. For each subsequent night.
 
 Mode C, Real-data analysis
     ``use_real_data = True``
@@ -41,7 +41,7 @@ Mode C, Real-data analysis
 Execution-path matrix
 ---------------------
 ``use_real_data`` × ``specific_event`` × ``different_nights`` × ``fixed_snr``
-create eight paths; the most commonly useful ones are:
+create eight paths. The most commonly useful ones are:
 
     (False, False, False, False)  Fully synthetic, single night, ETC SNR
     (False, False, False, True )  Fully synthetic, single night, constant SNR
@@ -53,7 +53,7 @@ create eight paths; the most commonly useful ones are:
 Required input files
 --------------------
 Mode A  : ``inputs_dir/CARMENES_NIR_ETC_WAVE_SNR_<planet>.fits``
-           (user-supplied; must contain wavelength and SNR arrays)
+           (user-supplied, must contain wavelength and SNR arrays)
 Mode B/C: ``instruments/data/wave_CARMENES_NIR.fits``  (bundled with EXoPLORE)
            and ``inputs_dir/reference_night/{julian_date,airmass,snr}.fits``
 
@@ -65,11 +65,10 @@ Reiners et al. 2018, A&A, CARMENES instrument paper
 
 from __future__ import annotations
 
-# Reading this file
-# This loader selects NIR input locations for the requested observing mode.
-# get_WaveGrid reads the arrays afterward. A user grid can take precedence over
-# the bundled reference; a fixed S/N can bypass an S/N file. Those choices must
-# be distinguished from generating or preparing the spectral time series.
+# Role in the calculation
+# Resolve CARMENES NIR wavelength and S/N inputs for the selected observing mode.
+# get_WaveGrid reads the selected files. A supplied grid or fixed S/N takes precedence
+# over the corresponding reference file.
 
 
 import os as _os

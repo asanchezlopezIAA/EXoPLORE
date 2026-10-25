@@ -1,10 +1,8 @@
 """Select the physical spectrum provider only inside the helium branch."""
 
-# Reading this file
-# The helium runner asks this small selector for its configured physical
-# backend. Imports happen inside that choice so a molecular run need not load
-# these optional solvers. HeliumTransit here is a factory function: it returns
-# the selected backend object, rather than defining another atmosphere model.
+# Role in the calculation
+# Select the configured helium atmosphere solver. HeliumTransit returns an instance of
+# that solver. Imports occur when the solver is selected.
 
 
 

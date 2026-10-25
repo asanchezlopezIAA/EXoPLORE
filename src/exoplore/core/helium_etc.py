@@ -5,11 +5,10 @@ noise, reconstruct a blaze profile, or change the selected instrument orders.
 """
 from __future__ import annotations
 
-# Reading this file
-# The detector simulation needs noise amplitudes at actual pixels and a
-# selection covering the helium feature. These helpers check/convert those
-# inputs; drawing noise and generating an atmosphere happen elsewhere. A stated
-# S/N must be interpreted with its pixel/exposure convention.
+# Role in the calculation
+# Read and convert detector noise inputs and select pixels covering the helium feature.
+# S/N values carry their pixel and exposure conventions into the observation
+# calculation.
 
 
 import warnings
@@ -27,7 +26,7 @@ def etc_pixel_noise(snr_per_resel: np.ndarray,
     """Return pixel S/N and normalized-flux noise standard deviation.
 
     Accept an entire (..., orders, pixels) S/N array. Sampling can be a
-    scalar or an array broadcastable to the S/N shape; use (orders, 1)
+    scalar or an array broadcastable to the S/N shape. Use (orders, 1)
     for per-order sampling. Equal signal and independent equal-noise pixels
     within each resolution element give S/N_pixel = S/N_resel / sqrt(n).
     Invalid or zero ETC S/N gives zero pixel S/N and infinite uncertainty,
@@ -48,12 +47,12 @@ def etc_pixel_noise(snr_per_resel: np.ndarray,
 
 def require_helium_orders(wave_orders_nm: np.ndarray, included_orders: list[int],
                           helium_lines_nm: list[float]) -> list[int]:
-    """Warn on missing triplet coverage; refuse a selection with no helium.
+    """Warn on missing triplet coverage. refuse a selection with no helium.
 
-    Inspect actual vacuum wavelength grids (orders, pixels), not a fixed
-    instrument order number. Empty selection means all orders. Detect gaps
+    Select the orders and pixels covering the helium interval from their
+    vacuum wavelength grids. Empty selection means all orders. Detect gaps
     larger than five times the median native pixel spacing. Coverage here
-    is at rest wavelengths; Doppler-track edge coverage needs a later check.
+    is at rest wavelengths. Doppler-track edge coverage needs a later check.
     Return native zero-based indices covering at least one triplet component.
     Never silently replace the user's included_orders.
     """

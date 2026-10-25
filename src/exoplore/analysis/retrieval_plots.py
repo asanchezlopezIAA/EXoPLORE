@@ -5,11 +5,9 @@ exoplore.analysis.retrieval_plots
 Post-processing plots for Bayesian atmospheric retrievals (MultiNest output).
 """
 
-# Reading this file
-# These routines read retrieval products and compare samples, evidences
-# or derived abundance ratios. A ratio derived from sampled abundances is
-# postprocessing, not another forward atmospheric fit. Keep the source runs and
-# parameter conventions attached when comparing their figures.
+# Role in the calculation
+# Read retrieval products and plot posterior distributions, evidences and abundance
+# ratios. Derived quantities use the samples from the selected source runs.
 
 
 import numpy as np
@@ -256,8 +254,8 @@ def compare_retrieval_corners(base_dir,
     legend_loc=(0.98, 0.96)
     ):
     """
-    Overplot multiple MultiNest posteriors using corner, with robust axis ranges
-    and robust diagonal histogram scaling so contours and histogram peaks are
+    Overplot MultiNest posteriors with percentile-based axis ranges
+    and scaled diagonal histograms so contours and histogram peaks are
     fully encapsulated.
 
     Parameters
@@ -293,7 +291,7 @@ def compare_retrieval_corners(base_dir,
         Fractional padding added to each parameter x/y range when automatically computed.
 
     use_extreme_percentiles : bool, optional
-        If True, automatic ranges are based on extreme percentiles instead of exact min/max.
+        If True, use extreme percentiles to set the automatic axis ranges.
 
     extreme_percentiles : tuple, optional
         Percentiles used if use_extreme_percentiles=True.
@@ -455,7 +453,7 @@ def compare_retrieval_corners(base_dir,
         
         # Safety: if array is accidentally transposed, fix it
         if samples.shape[0] < samples.shape[1]:
-            # probably got (ndim, nsamples) instead of (nsamples, ndim)
+            # Transpose parameter-by-sample input to sample-by-parameter order.
             samples = samples.T
         
         # Final sanity check
@@ -510,7 +508,7 @@ def compare_retrieval_corners(base_dir,
         )
 
     # -------------------------
-    # COMPUTE ROBUST GLOBAL RANGES
+    # Calculate shared axis ranges from the selected sample percentiles
     # -------------------------
     if user_ranges is None:
         all_samples = np.vstack(samples_list)
@@ -698,7 +696,7 @@ def compare_multinest_evidence(base_dir,
 
     prefix_suffixes_to_try : list of str, optional
         Candidate suffixes to append to each prefix when searching for the
-        evidence file. If None, a robust default list is used.
+        evidence file. If None, search the default candidate filenames.
 
     verbose : bool, optional
         If True, print extensive diagnostic output.
@@ -763,7 +761,7 @@ def compare_multinest_evidence(base_dir,
     if len(labels) != 2:
         raise ValueError("labels must contain exactly two entries")
 
-    # Robust list of common MultiNest / PyMultiNest stats filenames
+    # Candidate MultiNest / PyMultiNest statistics filenames
     if prefix_suffixes_to_try is None:
         prefix_suffixes_to_try = [
             "_stats.dat",
@@ -1132,8 +1130,8 @@ def compare_CtoO_corners_from_multispecies(base_dir,
     w_He_fixed = 0.24
 
     # Hydrogen number abundance from the fixed H2 background.
-    # The He value does not enter C/O or C+O/H directly, but is kept here
-    # explicitly to document the retrieval convention.
+    # The fixed background composition specifies the hydrogen abundance used
+    # in the C+O/H denominator.
     n_H_from_H2_fixed = 2.0 * w_H2_fixed / mu["H2"]
 
     # Retrieved species available in this run.
@@ -1186,10 +1184,9 @@ def compare_CtoO_corners_from_multispecies(base_dir,
         CO_ratio = C / O
 
         # Retrieval-consistent C+O/H proxy.
-        # H is the number of hydrogen nuclei, not the number of H2 molecules.
-        # We include the fixed H2 background plus the hydrogen nuclei contained
-        # in the retrieved molecules. H2S and NH3 affect this denominator if
-        # they are retrieved, even though they do not enter the C+O numerator.
+        # Count hydrogen nuclei from the fixed H2 background and retrieved
+        # molecules. Each H2S or NH3 molecule contributes its hydrogen atoms
+        # to this denominator. C and O above supply the numerator.
         n_H = n_H_from_H2_fixed + H_from_molecules
 
         COH = (C + O) / n_H

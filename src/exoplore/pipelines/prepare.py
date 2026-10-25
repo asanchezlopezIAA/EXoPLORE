@@ -2,7 +2,7 @@
 exoplore.pipelines.prepare
 ==========================
 
-Main pipeline orchestrator and injection utilities.
+Preparation selection and injection utilities.
 
 This module provides:
 
@@ -25,7 +25,7 @@ import numpy as np
 
 
 # ---------------------------------------------------------------------------
-# Main pipeline orchestrator
+# Preparation selection
 # ---------------------------------------------------------------------------
 
 
@@ -60,19 +60,19 @@ def preparing_pipeline(
         ``'preparing_pipeline'``, ``'telluric_variation'``,
         ``'sysrem_its'``, ``'SYSREM_robust_halt'``,
         ``'Opt_PCA_its_ord_by_ord'``, ``'Use_real_data'``.
-    data : ndarray
+    Data : ndarray
         Spectral matrix, shape ``(n_spectra, n_pixels)``.
-    noise : ndarray
+    Noise : ndarray
         Noise matrix, same shape.
     wave : ndarray
         Wavelength array, shape ``(n_pixels,)``.
     useful_spectral_points : ndarray
         Integer indices of good columns.
-    mask : ndarray
+    Mask : ndarray
         Integer mask of bad columns.
     airmass : ndarray
         Airmass per spectrum, shape ``(n_spectra,)``.
-    phase : ndarray
+    Phase : ndarray
         Orbital phase per spectrum, shape ``(n_spectra,)``.
     without_signal : ndarray
         Integer indices of out-of-transit exposures.
@@ -98,20 +98,18 @@ def preparing_pipeline(
         masking telluric lines.  A wavelength column is masked if the fitted
         telluric transmittance ``exp T(t, lambda)`` drops below this value in
         any exposure.  Default is ``0.8`` (Blain, Sanchez-Lopez & Molliere
-        2024, Sec. 4.1; matches petitRADTRANS ``polyfit`` preparing pipeline).
+        2024, Sec. 4.1, matches petitRADTRANS ``polyfit`` preparing pipeline).
     sysrem_division : bool, optional
-        If ``True``, SYSREM corrects by division instead of subtraction.
+        If ``True``, SYSREM corrects by division.
         Default is ``False`` (subtraction mode).
 
     Returns
     -------
     Varies by branch (see the per-branch code for the full return signature).
     """
-    # This dispatcher is shared by data preparation and the configured model
-    # reprocessing paths. A prepared-data/model comparison needs compatible
-    # masks and processing; retrieval-specific flags below carry that context.
-    # Do not replace a branch with another normalization because names look
-    # similar: the operators and uncertainty treatment can differ scientifically.
+    # Select the configured preparation method for the data or model.
+    # Retrieval flags carry the mask and uncertainty settings needed to
+    # compare the prepared model with the prepared data.
     # Lazy imports to avoid circular dependencies
     if inp_dat['preparing_pipeline'] == 'Palle2020':
         from exoplore.pipelines.palle2020 import preparing_pipeline_adapter
@@ -155,15 +153,14 @@ def preparing_pipeline(
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
 
-    # A call handles one order/night: rows are exposures, columns are wavelength
-    # channels. mask/useful_spectral_points are integer column indices, whereas
-    # some intermediate routines construct boolean selections. Check each
-    # boundary rather than assuming every variable named mask is boolean.
+    # A call handles one order/night: rows are exposures and columns are
+    # wavelength channels. mask and useful_spectral_points contain integer
+    # column indices. Intermediate boolean arrays select those columns.
     n_spectra, n_pixels = data.shape
     data_prepared = np.ones_like(data)
     propag_noise = np.ones_like(data)
 
-    # Local aliases, inp_dat is accessed throughout; naming key values
+    # Local aliases, inp_dat is accessed throughout. naming key values
     # once avoids repeating long dict lookups and aids readability.
     _pipeline      = inp_dat['preparing_pipeline']
     _has_tellurics = inp_dat['telluric_variation']
@@ -426,7 +423,7 @@ def preparing_pipeline(
 
                 if _criterion == 'DeltaSigma':
                     # Model-independent per-order optimisation
-                    # (Parker et al. 2025, MNRAS 538, 3263;
+                    # (Parker et al. 2025, MNRAS 538, 3263,
                     #  Peláez-Torres et al. 2026, A&A 705, A256).
                     # Halts when fractional σ-drop < threshold.
                     _threshold = inp_dat.get('sysrem_delta_sigma_threshold', 0.01)
@@ -465,9 +462,9 @@ def preparing_pipeline(
 
                 else:
                     # Model-dependent injection-recovery optimisation
-                    # (Maximum / Max_Diff).  Kept for backward compatibility
-                    # and testing; known to introduce biases (Cabot et al.
-                    # 2019; Cheverall et al. 2023).
+                    # (Maximum / Max_Diff). This selection can introduce biases
+                    # when optimized on the target signal (Cabot et al.
+                    # 2019. Cheverall et al. 2023).
                     _n_used = _n_sysrem
                     data_prepared = np.ones(
                         (n_spectra, n_pixels, 2, _n_sysrem), float
@@ -490,7 +487,7 @@ def preparing_pipeline(
                     )
                     # Intermediate mask/useful-point snapshot, required so the
                     # 9-value return signature is satisfied (inter_mask,
-                    # inter_useful); mirrors the DeltaSigma and Cheverall26 paths.
+                    # inter_useful). mirrors the DeltaSigma and Cheverall26 paths.
                     inter_mask   = np.copy(mask)
                     inter_useful = np.copy(useful_spectral_points)
 
@@ -522,7 +519,7 @@ def preparing_pipeline(
             #           Vsys), run SYSREM for N=1..max, select N where marginal
             #           signal recovery (ΔCCF first difference) is maximised.
             #           Follows Holmberg & Madhusudhan (2022) and Cheverall et
-            #           al. (2023; 2026).
+            #           al. (2023, 2026).
             # ------------------------------------------------------------------
 
             _n_used = _n_sysrem
@@ -545,9 +542,8 @@ def preparing_pipeline(
                 # ----------------------------------------------------------
                 # Global fixed-N mode: a single PCA/SYSREM component count
                 # common to all orders (the per-species convention of
-                # Cheverall et al. 2026, e.g. Table 3), rather than a per-order
-                # optimum.  With no injected track there is nothing to
-                # optimise: run steps 1-3 then exactly _n_sysrem SYSREM passes
+                # Cheverall et al. 2026, e.g. Table 3). Run steps 1-3,
+                # followed by exactly _n_sysrem SYSREM passes
                 # on the data and keep the final residual, returning the
                 # standard (n_spectra, n_pixels) matrix so the non-optimisation
                 # CCF path consumes it (as for ASL19).  cor/U are accumulated
@@ -607,7 +603,7 @@ def preparing_pipeline(
                 elif _detrend == 'pca':
                     # Unweighted PCA: remove the top _n_sysrem common modes in
                     # one SVD (Cheverall et al. 2023). Component count is the
-                    # same knob (sysrem_iterations); cor/U mirror the SYSREM
+                    # same knob (sysrem_iterations). cor/U mirror the SYSREM
                     # outputs for downstream model reprocessing.
                     _d_clean, _pca_cors, _pca_U = _apply_pca(
                         data_prepared, _n_sysrem, useful_spectral_points)
@@ -633,7 +629,7 @@ def preparing_pipeline(
                 # ----------------------------------------------------------
                 # Order-by-order ΔCCF / Max_Diff optimisation: build both the
                 # uninjected (track 0) and injected (track 1) time-series and
-                # all SYSREM iterations; the per-order optimum N is selected
+                # all SYSREM iterations. The per-order optimum N is selected
                 # downstream at CCF time.  data_inj carries the model injected
                 # at inp_dat['kp_vrest_injection'].
                 # ----------------------------------------------------------
@@ -772,14 +768,14 @@ def preparing_pipeline(
         elif _pipeline == 'Nortmann26':
             # -----------------------------------------------------------------
             # Nortmann et al. (2026) CRIRES+ pipeline, per wavelength segment:
-            #   1. two step common blaze normalisation (Sec 3.1);
+            #   1. two step common blaze normalisation (Sec 3.1).
             #   2. deepest telluric line mask, below 20% of the continuum
-            #      (Sec 3.1), on top of the NaN / column scatter mask;
+            #      (Sec 3.1), on top of the NaN / column scatter mask.
             #   3. SYSREM correcting by DIVISION (Sec 3.2), keeping the per
             #      iteration time basis U for the Gibson 2022 model filter.
             # The theoretical telluric transmittance from molecfit is used for
             # the fit masks and the deep mask when the engine supplies it
-            # (inp_dat['nortmann_telluric_order']); otherwise the deep mask is
+            # (inp_dat['nortmann_telluric_order']). Otherwise the deep mask is
             # taken from the out of transit master flux, the data driven
             # equivalent of the below 20% continuum rule.
             # -----------------------------------------------------------------
@@ -802,7 +798,7 @@ def preparing_pipeline(
             )
             di, colmask = nortmann_column_mask(flagged, dn)
             # SYSREM inverse variance weighting needs strictly positive, finite
-            # uncertainties; reduction masked / edge pixels can carry zero or non
+            # uncertainties. reduction masked / edge pixels can carry zero or non
             # finite noise.  Give them a very large uncertainty so they take
             # effectively zero weight (equivalent to masking them).
             _npos = nn[np.isfinite(nn) & (nn > 0)]
@@ -850,8 +846,8 @@ def preparing_pipeline(
             )
 
         # n_passes_used: actual SYSREM iterations consumed (slot 4).
-        # DeltaSigma / Gibson22-DeltaSigma set _n_used during the loop;
-        # injection-based paths use the full _n_sysrem; non-opt paths use 0.
+        # DeltaSigma / Gibson22-DeltaSigma set _n_used during the loop.
+        # injection-based paths use the full _n_sysrem. non-opt paths use 0.
         _n_passes_used = locals().get('_n_used', 0)
 
         if masks and correct_uncertainties:
@@ -1006,11 +1002,11 @@ def remove_throughput_fit_og(spectrum, reduction_matrix, wavelengths, mask,
         Spectral data to correct, shape ``(n_spectra, n_pixels)``.
     reduction_matrix : numpy.ndarray
         Matrix storing all operations applied to reduce the data.
-    wavelengths : array_like, shape (n_pixels,)
+    Wavelengths : array_like, shape (n_pixels,)
         Wavelengths of the data.
-    mask : numpy.ndarray of int
+    Mask : numpy.ndarray of int
         Indices of masked (bad) pixels.
-    uncertainties : numpy.ndarray or None, optional
+    Uncertainties : numpy.ndarray or None, optional
         Uncertainties on *spectrum*.  Default ``None``.
     mask_threshold : float, optional
         Mask wavelengths where the throughput fit falls below this value.
@@ -1020,7 +1016,7 @@ def remove_throughput_fit_og(spectrum, reduction_matrix, wavelengths, mask,
     correct_uncertainties : bool, optional
         Apply the fitting-bias correction to uncertainties.  Default ``True``.
     uncertainties_as_weights : bool, optional
-        (Reserved for future use; kept for API parity.)  Default ``True``.
+        (Reserved for future use, kept for API parity.)  Default ``True``.
 
     Returns
     -------
@@ -1146,9 +1142,9 @@ def remove_telluric_lines_fit_og(spectrum, reduction_matrix, airmass, mask,
         Matrix storing all operations made to reduce the data.
     airmass : ndarray, shape (n_spectra,)
         Airmass of the data.
-    mask : ndarray of int
+    Mask : ndarray of int
         Indices of masked (bad) pixels.
-    uncertainties : ndarray or None
+    Uncertainties : ndarray or None
         Uncertainties on *spectrum*.
     mask_threshold : float
         Mask wavelengths where the Earth atmospheric transmittance
@@ -1158,7 +1154,7 @@ def remove_telluric_lines_fit_og(spectrum, reduction_matrix, airmass, mask,
     correct_uncertainties : bool
         Apply the fitting-bias correction to uncertainties.
     uncertainties_as_weights : bool
-        (Reserved for future use; kept for API parity.)
+        (Reserved for future use, kept for API parity.)
 
     Returns
     -------

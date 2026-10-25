@@ -5,11 +5,10 @@ exposure selections. Normalization and averaging are implemented separately
 from the Czesla et al. (2024) CRIRES+ recipe.
 """
 
-# Reading this file
-# These settings describe the CARMENES direct-helium preparation branch.
-# They reuse shared geometry/selection fields while keeping that branch's
-# normalization and averaging choices separate from the CRIRES recipe. The
-# configuration states the choices; pipelines/carmenes_helium.py applies them.
+# Role in the calculation
+# Define the normalization, reference selection and averaging settings for CARMENES
+# direct-helium preparation. pipelines/carmenes_helium.py applies these settings to the
+# spectra.
 
 from dataclasses import dataclass
 from exoplore.config.czesla2024 import Czesla2024Config
@@ -17,7 +16,7 @@ from exoplore.config.czesla2024 import Czesla2024Config
 
 @dataclass(frozen=True)
 class CarmenesHeliumConfig(Czesla2024Config):
-    """One synthetic night; OH emission is explicitly absent in this version."""
+    """One synthetic night. OH emission is explicitly absent in this version."""
 
     def __post_init__(self) -> None:
         super().__post_init__()

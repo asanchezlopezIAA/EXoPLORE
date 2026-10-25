@@ -18,7 +18,7 @@ position.  This script assembles those products, computes the barycentric
 correction and barycentric Julian date per exposure, and writes the standard
 reference night files consumed by the simulator.
 
-Flux is kept in native pixel space and never resampled here; the per exposure
+Flux is kept in native pixel space and never resampled here. The per exposure
 wavelength solution is stored in ``wave_perframe`` so the analysis pipeline can
 align the nodding positions and shift to the stellar rest frame itself.
 
@@ -40,10 +40,9 @@ Nortmann et al. 2026, A&A (arXiv:2604.15292v1).
 Wright & Eastman 2014, PASP 126, 838 (barycentric correction).
 """
 
-# Where this script fits
-# This ingests externally extracted CRIRES+ exposures into EXoPLORE inputs,
-# with the configured wavelength/telluric preparation. It belongs after raw
-# reduction and before the reference-night simulation or observed-data analysis.
+# Role in the calculation
+# Read extracted CRIRES+ exposures and prepare the wavelength, telluric and reference-
+# night inputs used by EXoPLORE.
 
 import argparse
 import glob
@@ -119,7 +118,7 @@ def ensure_molecfit(reduction_dir, run_missing=True, molecules=None):
 
     If ``molecfit/molecfit_nod<AB>.npz`` is absent and ``run_missing`` is set,
     run the molecfit wrapper (this needs the ESO esorex/molecfit tools on the
-    PATH; see exoplore.instruments.crires_molecfit).  The npz caches the result
+    PATH, see exoplore.instruments.crires_molecfit).  The npz caches the result
     so this slow step runs only once.  ``molecules`` is an optional (names,
     flags) override of the per band telluric species."""
     reduced = os.path.join(reduction_dir, "reduced")
@@ -173,7 +172,7 @@ def main():
 
     # Frame quality cut: drop adaptive optics glitch frames whose spatial PSF
     # FWHM or S/N is a strong outlier for this night (the papers observed clean
-    # nights; such frames have a very different, degraded resolution).
+    # nights. such frames have a very different, degraded resolution).
     _paths = [p for _, p in rows]
     _keep, _fw, _sn = crires_molecfit.quality_keep(_paths)
     if not _keep.all():
@@ -215,7 +214,7 @@ def main():
             all_sig[i, h] = err
             # Refined wavelength solution for this exposure's nodding position.
             # The wrapper already gated it and applied the intra order / Fabry
-            # Perot fallback, so it is used as is; if no molecfit product exists
+            # Perot fallback, so it is used as is. If no molecfit product exists
             # the native reduction grid is kept.
             wr = molecfit.get(nod, {}).get(name)
             use = np.asarray(wr[0], float) if wr is not None else wl_nm
@@ -223,7 +222,7 @@ def main():
 
     # Theoretical telluric transmittance per segment for the normalisation
     # masks (median of the two nodding positions where both fit).  Fine for
-    # masking; note the two positions carry different per beam wavelength
+    # masking. note the two positions carry different per beam wavelength
     # solutions, so this blend must not be used as a line position reference.
     trans = np.ones((n_orders, n_pixels))
     for h, name in enumerate(seg_names):
@@ -278,8 +277,8 @@ def main():
 
     # Effective spectral resolution per segment from the cr2res slit function
     # (Nortmann A.1 super-resolution check).  Saved so the analysis convolves
-    # the H2S template to the night's measured resolution rather than the
-    # nominal value: our star can underfill the 0.2" slit and be super-resolved.
+    # the H2S template to the night's measured resolution. The star can
+    # underfill the 0.2" slit and produce narrower instrumental profiles.
     try:
         reso = crires_molecfit.measure_resolution(
             os.path.join(args.reduction_dir, "reduced"), slit_arcsec=0.2)

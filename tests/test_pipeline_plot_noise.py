@@ -98,7 +98,7 @@ def test_noise_illustration_omits_excluded_channels(monkeypatch, tmp_path):
     wave = np.linspace(0.953, 0.9545, 20)
     baseline = np.full((5, 20), 0.8)
     noisy = baseline + 0.001
-    noisy[:, 4] = 1.0  # A mask-fill value, not a usable noise measurement.
+    noisy[:, 4] = 1.0  # Fill value for a masked pixel.
     good = np.delete(np.arange(20), 4)
     curves = {}
     handles = {}

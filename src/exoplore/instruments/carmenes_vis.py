@@ -34,11 +34,9 @@ Reiners et al. 2018, A&A, CARMENES instrument paper
 
 from __future__ import annotations
 
-# Reading this file
-# This loader does the VIS-channel input selection, using its own bundled
-# wavelength grid when a user grid is absent. Shared CARMENES reading logic in
-# wavegrid.py consumes the resulting locations. NIR and VIS do not share one
-# interchangeable order/pixel layout.
+# Role in the calculation
+# Resolve CARMENES VIS input locations and its reference wavelength grid. wavegrid.py
+# reads these inputs using the VIS order and pixel layout.
 
 
 import os as _os

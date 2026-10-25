@@ -22,11 +22,10 @@ Three observing patterns are supported:
 
 from __future__ import annotations
 
-# Reading this file
-# Airmass and water-vapour inputs describe how observing conditions vary
-# through the exposure sequence. Some functions construct synthetic curves;
-# others write SkyCalc inputs or PWV products. Check which one is called before
-# expecting a returned array versus files or an external-tool launcher.
+# Role in the calculation
+# Construct airmass and water-vapour sequences and prepare the corresponding SkyCalc
+# inputs. The selected function returns arrays or writes the input files used by the
+# observing calculation.
 
 
 import random
@@ -175,7 +174,7 @@ def skycalc_model(path, julian_date, airmass_og, airmass_limits,
     julian_date : array
         Julian dates of the exposures.
     airmass_og : array or None
-        Pre-computed airmass values; if None, computed from
+        Pre-computed airmass values. If None, computed from
         ``airmass_evol`` / ``airmass_limits``.
     airmass_limits : tuple [amin, amax]
         Min/max airmass (used when ``airmass_og`` is None).

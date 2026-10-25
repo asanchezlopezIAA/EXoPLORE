@@ -1,9 +1,8 @@
 """Explicit settings for the Sunbather physical spectrum provider."""
 
-# Reading this file
-# This records installation and physical-solver choices for the optional
-# Sunbather backend. The selected backend consumes it through helium_provider;
-# ordinary molecular runs do not need a Sunbather calculation.
+# Role in the calculation
+# Define the installation paths and physical settings consumed by the optional
+# Sunbather atmosphere solver.
 
 from dataclasses import dataclass
 import math
@@ -16,7 +15,7 @@ SUNBATHER_METAL_ELEMENTS = (
 
 @dataclass(frozen=True)
 class SunbatherConfig:
-    """Cloudy installation and energy-balance choices; T0 remains temperature_K."""
+    """Cloudy installation and energy-balance choices. T0 remains temperature_K."""
     cloudy_path: str
     project_path: str
     heating_cooling_factor: float
@@ -33,7 +32,7 @@ class SunbatherConfig:
 
     @property
     def metals_enabled(self) -> bool:
-        """Read the explicit switch, retaining older metal_scale-only files."""
+        """Use include_metals when set. Otherwise enable metals for metal_scale > 0."""
         return self.metal_scale>0 if self.include_metals is None else self.include_metals
 
     @property

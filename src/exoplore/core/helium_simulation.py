@@ -7,11 +7,10 @@ from real ESO calibration products. Files are written only to a new directory.
 """
 from __future__ import annotations
 
-# Reading this file
-# Read this as the helium counterpart of the molecular run coordinator:
-# validate inputs, obtain an atmosphere/control, simulate detector exposures,
-# prepare the transmission spectrum, then save diagnostics. The physical
-# spectrum provider and the observing adapter have different responsibilities.
+# Role in the calculation
+# Run a helium experiment: validate inputs, calculate the atmosphere or control
+# spectrum, generate detector exposures, prepare the transmission spectrum and save
+# diagnostics.
 
 
 from dataclasses import asdict
@@ -101,9 +100,9 @@ def observing_arrays(settings, science, planet, model, exposure_seconds: float,
 
     Atmospheric overlap is evaluated at each quadrature sample, including
     before first and after fourth optical contact, before exposure integration.
-    BERV is held at the supplied exposure midpoint; the planet velocity varies
-    within the exposure. A known telluric model is an ideal simulation input,
-    not a molecfit result. Sky emission is absent in this first experiment.
+    BERV is held at the supplied exposure midpoint. The planet velocity varies
+    within the exposure. The telluric input is a known transmission model.
+    This experiment omits sky emission.
     """
     h = settings
     n_fine = h.observing_pixels*h.instrumental_oversampling
@@ -164,7 +163,7 @@ def load_observing_order(config) -> dict:
     """Use EXoPLORE's CRIRES+ loader and select one native ETC segment.
 
     ETC S/N is already per spectral pixel. TARGET and VARFIXED preserve the
-    electron-count noise budget; readout and sky noise are not added twice.
+    electron-count noise budget. readout and sky noise are not added twice.
     """
     from astropy.io import fits
     instrument = load_instrument_v2(config)
@@ -390,7 +389,7 @@ def run_helium_simulation(config) -> Path:
         draws.append(trial["planet_coadd"]); curves.append(trial["planet_lightcurve"])
     draws = np.asarray(draws) if draws else np.empty((0, expected.shape[1]))
     curves = np.asarray(curves) if curves else np.empty((0, len(phases)))
-    # Incomplete edge coverage remains NaN; standard deviations exclude only absent coverage.
+    # Incomplete edge coverage remains NaN. standard deviations exclude only absent coverage.
     coadd_error = np.full(draws.shape[1], np.nan)
     good = np.isfinite(draws).all(axis=0)
     if len(draws):

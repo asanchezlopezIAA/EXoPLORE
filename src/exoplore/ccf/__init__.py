@@ -1,10 +1,9 @@
 """exoplore.ccf, cross-correlation function analysis."""
 
-# Reading these imports
-# These imports expose kernels, wrappers and statistics in one place.
-# They have different jobs: wrappers prepare arguments, kernels evaluate
-# correlations, and statistics combine/interpret the resulting CCF values.
-# Importing all names does not mean a run uses every available statistic.
+# Public imports
+# Export CCF kernels, calculation functions and statistics. compute.py prepares
+# the arrays, kernels.py evaluates correlations, and statistics.py combines and
+# analyses the resulting CCFs.
 
 
 from exoplore.ccf.kernels import (

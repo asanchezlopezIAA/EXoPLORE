@@ -1,9 +1,7 @@
-"""Notebook presentation and provenance helpers; no scientific algorithms.
+"""Notebook utilities for input paths, displays and run records.
 
-EXoPLORE remains responsible for timing, atmosphere, preparation, CCFs and maps.
-These helpers resolve files, capture text, display existing results and record
-provenance. They never run the simulator or modify the canonical JSON config.
-"""
+These functions find local files, prepare a resolved configuration, display
+saved products and record the settings and software used by an experiment."""
 from __future__ import annotations
 
 import contextlib
@@ -23,7 +21,7 @@ from types import SimpleNamespace
 
 
 def show_details(title, text):
-    """Keep complete diagnostic text available without filling the main lesson."""
+    """Display the complete diagnostic text in a collapsible section."""
     from IPython.display import HTML, display
     display(HTML(f"<details><summary>{html.escape(title)}</summary>"
                  f"<pre>{html.escape(text)}</pre></details>"))
@@ -38,7 +36,7 @@ def show_table(headers, rows):
 
 
 def resolve_inputs(repo, source_config, local_paths):
-    """Copy the reference and resolve locations, borrowing no science settings."""
+    """Copy the reference settings and resolve their local input-file paths."""
     required = ['numpy', 'scipy', 'astropy', 'matplotlib', 'petitRADTRANS', 'easychem', 'batman']
     missing = [name for name in required if importlib.util.find_spec(name) is None]
     if missing:
@@ -84,7 +82,7 @@ def resolve_inputs(repo, source_config, local_paths):
 
 
 def differences(before, after, prefix=''):
-    """Describe explicit JSON differences without mutating either input."""
+    """Return the differences between two JSON configuration dictionaries."""
     result = {}
     for key in sorted(before.keys() | after.keys()):
         name = f'{prefix}.{key}' if prefix else key
@@ -97,7 +95,7 @@ def differences(before, after, prefix=''):
 
 
 def configure_outputs(resolved, save_matrices, noise_seed_override=None):
-    """Pure notebook-only override operation: outputs and optional seed only."""
+    """Set notebook output flags and the optional noise-seed override."""
     from dataclasses import fields
     from exoplore.config.models import OutputConfig
     result = copy.deepcopy(resolved)
@@ -111,7 +109,7 @@ def configure_outputs(resolved, save_matrices, noise_seed_override=None):
 
 
 def create_run(repo, reference, resolved, save_matrices, noise_seed_override=None):
-    """Write a resolved copy into a new, exclusive directory; preserve source."""
+    """Create a run directory and write its resolved configuration copy."""
     result = configure_outputs(resolved, save_matrices, noise_seed_override)
     stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S_%fZ')
     run_root = repo / 'outputs/notebooks/01_first_ANDES_simulation' / stamp
@@ -125,7 +123,7 @@ def create_run(repo, reference, resolved, save_matrices, noise_seed_override=Non
 
 
 def show_atmosphere(reference):
-    """Present configured scientific values; the formatting is only a helper."""
+    """Display the configured atmospheric regions and search template in a table."""
     atmosphere = reference['atmosphere']
     print('Injected species:', ', '.join(atmosphere['planet_model']['species']))
     print('Search species:', ', '.join(atmosphere['ccf_template']['species']))
@@ -140,11 +138,9 @@ def show_atmosphere(reference):
 
 
 def preview_simulation(simulator, config):
-    """Call genuine EXoPLORE summary/grid/timing APIs; collapse verbose output.
+    """Display the simulator summary, wavelength grid and exposure sequence.
 
-    Timing preview is deterministic and uses the same public timing function as
-    the simulator. It does not set/draw random numbers or replace simulation.
-    """
+The exposure preview uses the public timing function called by the simulator."""
     from exoplore.instruments import load_instrument_v2, get_WaveGrid_v2
     from exoplore.planets import load_planet
     from exoplore.observation import get_event_v2
@@ -172,7 +168,7 @@ def preview_simulation(simulator, config):
 
 @contextlib.contextmanager
 def capture_run_log(log_path):
-    """Capture Python text/warnings; the notebook itself still calls run()."""
+    """Write Python stdout, stderr and warnings to the run log."""
     with Path(log_path).open('w') as log:
         with contextlib.redirect_stdout(log), contextlib.redirect_stderr(log):
             yield
@@ -197,7 +193,7 @@ def load_product(matrix_dir, run_name, prefix):
 
 
 def show_saved_pdf(path, notebook_dir):
-    """Preview an existing PDF at the original 1.2 scale, without altering it."""
+    """Render a saved PDF inline at scale 1.2."""
     from IPython.display import Image, Markdown, display
     path = Path(path)
     if not path.is_file():
@@ -213,7 +209,7 @@ def show_saved_pdf(path, notebook_dir):
 
 
 def load_detection_map(path):
-    """Read the simulator map/axes and validate layout; never renormalise it."""
+    """Read the saved map and velocity axes and check their dimensions."""
     import numpy as np
     with np.load(path, allow_pickle=False) as archive:
         snr_map = archive['ccf_tot_sn'].copy()
@@ -230,7 +226,7 @@ def load_detection_map(path):
 
 
 def plot_detection_map(result, injected_kp, orders=None):
-    """Same public plot call, data, limits and styling as the validated notebook."""
+    """Plot the saved detection map with its selected orders and orbital reference."""
     from exoplore.plotting.kpvsys import plot_kp_vsys_map
     fig = plot_kp_vsys_map(result.kp_grid, result.v_rest, result.snr_map.T,
                           kp_true=injected_kp, vsys_true=0.0,
@@ -248,7 +244,7 @@ def plot_detection_map(result, injected_kp, orders=None):
 
 
 def plot_velocity_slices(v_rest, peak_slice, nominal_slice, peak_kp):
-    """Same two saved-map curves, limits, colours and labels as before."""
+    """Plot velocity slices through the peak and configured Kp rows."""
     import matplotlib.pyplot as plt
     fig, ax = plt.subplots(figsize=(7, 3))
     ax.plot(v_rest, peak_slice, label=f'Peak Kp row ({peak_kp:.0f} km/s)')
@@ -263,9 +259,9 @@ def plot_velocity_slices(v_rest, peak_slice, nominal_slice, peak_kp):
 def write_reproducibility(repo, source_config, reference, config_path, resolved,
                           run_root, overrides, path_sources, seconds, orders,
                           save_matrices, result):
-    """Record parsed-JSON integrity, exact hashes and a concise readable summary."""
+    """Record the configuration, input hashes, software versions and run summary."""
     from exoplore import __version__
-    # This is JSON equality, not a before/after byte-hash comparison.
+    # Compare the parsed source configuration with the recorded reference.
     assert json.loads(Path(source_config).read_text()) == reference
     sha256 = lambda path: hashlib.sha256(Path(path).read_bytes()).hexdigest()
     versions = {'exoplore': __version__}
@@ -316,12 +312,10 @@ def write_reproducibility(repo, source_config, reference, config_path, resolved,
 
 
 def export_combined_ccf(simulator, path):
-    """Copy only compact real diagnostics immediately after the public run().
+    """Export the completed CCF, observing axes and map information for the animation.
 
-    EXoPLORE has no public CCF-result accessor yet. This is the single private
-    simulator-state adapter; the rest of the notebook reads the exported NPZ.
-    No spectra, preparation or correlations are recalculated here.
-    """
+This function reads the simulator state into a compact NPZ. Other animation
+utilities read that exported bundle."""
     import numpy as np
     state = simulator._state
     config = simulator.config
@@ -364,7 +358,7 @@ def load_ccf_bundle(path):
 
 
 def prepare_animation_data(diagnostics, result, nominal_kp):
-    """Sample real CCFs through EXoPLORE's own shift/normalisation functions."""
+    """Sample the CCF with EXoPLORE's velocity-shifting and map-normalization functions."""
     import numpy as np
     from exoplore.ccf.compute import get_shifted_ccf_matrix, get_max_CCF_peak
     from exoplore.observation.velocity import get_V
@@ -411,7 +405,7 @@ def animate_ccf_search(diagnostics, result, nominal_kp, directory):
     """Render a compact GIF from this run's CCF and saved normalised map.
 
     Partial sums use raw CCF units. A map S/N is displayed only after all
-    selected exposures have been combined; the complete map appears last.
+    selected exposures have been combined. The complete map appears last.
     """
     import numpy as np
     import matplotlib.pyplot as plt
@@ -502,12 +496,10 @@ def animate_ccf_search(diagnostics, result, nominal_kp, directory):
 
 def prepare_tutorial(repo, save_matrices=False,
                      source_config="configs/hd189733b_andes_transit_clean.json"):
-    """Resolve local inputs and reserve a fresh run, without running science.
+    """Resolve local scientific inputs and create a fresh output directory.
 
-    The reference configuration is read unchanged. Only machine-specific input
-    paths, the new output location and optional matrix saving are resolved here.
-    Missing external inputs raise the existing input-guide errors.
-    """
+The run configuration contains the resolved input paths, output location and
+optional saving settings. Missing inputs raise an error linking to the guide."""
     repo = Path(repo).resolve()
     os.chdir(repo)  # Reference input paths are relative to the repository root.
     sys.path.insert(0, str(repo / 'src'))
@@ -533,7 +525,7 @@ def show_animation(gif_path):
 
 
 def save_working_config(experiment):
-    """Record notebook edits to the run copy; never edit the source JSON."""
+    """Save the notebook settings to the run configuration copy."""
     from exoplore.config import SimulationConfig
     # Validate through EXoPLORE before writing the edited working configuration.
     SimulationConfig.from_dict(experiment.resolved)
@@ -544,12 +536,10 @@ def save_working_config(experiment):
 
 
 def prepare_injection_demo(repo, experiment, factor=10.0, order_index=0):
-    """Prepare a separate run using EXoPLORE's observation.scale_injection.
+    """Create settings for a separate observation.scale_injection illustration.
 
-    Copy the current resolved settings, select the displayed order and change
-    only the injection factor, output location and optional-array saving.
-    This helper never runs the simulator or changes the reference experiment.
-    """
+Copy the resolved experiment, select the displayed order and set its injection
+factor, output directory and optional-array saving flags."""
     from exoplore.config import SimulationConfig
     resolved = copy.deepcopy(experiment.resolved)
     resolved['instrument']['order_indices'] = [order_index]

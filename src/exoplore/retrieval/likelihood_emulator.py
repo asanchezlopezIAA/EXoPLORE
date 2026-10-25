@@ -11,8 +11,8 @@
    **neither performs acceptably**:
 
    Single-round emulator (3 000 uniform samples, 18 min training)
-       Val MSE = 1.93 logL²; log₁₀(X_H₂O) biased +1.45σ from pRT;
-       ln Z differs by ~10 units; total runtime 37 min vs 22 min for
+       Val MSE = 1.93 logL². log₁₀(X_H₂O) biased +1.45σ from pRT.
+       ln Z differs by ~10 units. total runtime 37 min vs 22 min for
        true pRT, slower AND less accurate.
 
    Sequential emulator (3 rounds × 1 000 to 2 000 samples)
@@ -65,11 +65,9 @@ Configuration
 
 from __future__ import annotations
 
-# Reading this file
-# This experimental surrogate predicts likelihood values rather than
-# running every atmospheric calculation. That can alter an inferred posterior
-# if approximation errors matter. Read its existing validation warning before
-# considering it as a substitute for the actual likelihood.
+# Role in the calculation
+# Train and evaluate an experimental approximation to the likelihood. Validate the
+# inferred posterior against the physical-model likelihood before scientific use.
 
 
 import os

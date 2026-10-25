@@ -5,11 +5,10 @@ exoplore.analysis.multi_night
 Multi-night / multi-instrument combination and comparison plots.
 """
 
-# Reading this file
-# This file combines/comparisons retrieval posteriors across nights or
-# instruments and makes plots. That is different from adding exposure CCFs in
-# the simulator. Check which posterior parameters/priors and input runs are
-# being combined before treating the resulting distribution as a joint inference.
+# Role in the calculation
+# Combine and compare retrieval posteriors from selected nights or instruments.
+# Parameter definitions, priors and source runs specify the distributions being
+# combined.
 
 
 import numpy as np
@@ -41,7 +40,7 @@ def combine_nights_and_plot_3params(base_dir_template,
         auto_adjust_axes=True,              # True | False | 'x' | 'y' | 'both'
         limit_percentiles=(0.5, 99.5),     # percentiles used to clip extremes before padding
         axis_pad_fraction=0.06,            # fractional padding added to (high-low)
-        # --- NEW: allow user to supply explicit per-parameter limits ---
+        # Per-parameter display limits
         user_param_limits=None             # e.g. [[z_lo,z_hi],[p_lo,p_hi],[beta_lo,beta_hi], ...] or None
     ):
     """
@@ -96,7 +95,7 @@ def combine_nights_and_plot_3params(base_dir_template,
         base_dir : str
             Directory containing the MultiNest output files for this night.
         night : int
-            Night index (used for logging; the basename currently hardcodes 0).
+            Night index (used for logging, the basename currently hardcodes 0).
         n_params_hint : int or None
             Number of free parameters, inferred from the stats JSON when
             available.  Passed directly to ``Analyzer(n_params=...)``.
@@ -443,7 +442,7 @@ def combine_nights_and_plot_3params(base_dir_template,
             idx = np.random.choice(np.arange(pool.shape[0]), size=n_data, replace=True)
         candidates_list.append(pool[idx, :])
 
-    # 4) fill remainder with pooled samples (keeps backward compatibility)
+    # 4) Fill the remaining sample slots from the pooled posterior.
     if n_remain > 0:
         if pool.shape[0] > n_remain:
             idx = np.random.choice(np.arange(pool.shape[0]), size=n_remain, replace=False)
@@ -496,7 +495,7 @@ def combine_nights_and_plot_3params(base_dir_template,
         theta : array-like, length n_params
             Physical parameter values.
         priors_per_param : list of dict
-            One entry per parameter; each dict must have keys ``'min'`` and
+            One entry per parameter. Each dict must have keys ``'min'`` and
             ``'max'`` (float), or ``None`` to skip that parameter.
 
         Returns
@@ -876,7 +875,7 @@ def combine_nights_and_plot_3params(base_dir_template,
                         Xc, Yc = np.meshgrid(xs, ys)
 
                         # evaluate coarse grid, then upsample for smoothness
-                        upsample_factor = max(1, int(np.clip(4, 1, 12)))  # conservative default; adjust if needed
+                        upsample_factor = max(1, int(np.clip(4, 1, 12)))  # conservative default. adjust if needed
                         X_up, Y_up, pdf_up, levels = kde_2d_levels_on_grid_up(kde2d, Xc, Yc, per_night_levels, upsample=upsample_factor)
 
                         levels_plot = [l for l in levels if l > 0]
@@ -1017,7 +1016,7 @@ def combine_nights_and_make_ZPc_and_beta_panels(base_dir_template,
     beta_night_xlims=None,   # NEW: explicit per-night xlims (list-of-tuples or dict{night: (lo,hi)})
     # NEW customization kwargs
     beta_titles=None,        # list or dict mapping night -> title (falls back to "Night {idx}")
-    beta_night_colors=None,  # list or dict mapping night -> color; default: corner_color except last uses alt color
+    beta_night_colors=None,  # list or dict mapping night -> color. Default: corner_color except last uses alt color
     alt_last_color='tab:orange',  # default color used for the last night if beta_night_colors not provided
     h2o_path5='/Users/alexsl/Downloads/contour_h2o_5sn.npz',
     corner_color='darkslateblue',
@@ -1058,7 +1057,7 @@ def combine_nights_and_make_ZPc_and_beta_panels(base_dir_template,
     if not isinstance(night_indices, (list, tuple, np.ndarray)) or len(night_indices) < 1:
         raise ValueError("Provide night_indices as a list/tuple/ndarray with at least one entry")
 
-    # Primary nights = all but last; last = special single night
+    # Primary nights = all but last. last = special single night
     if len(night_indices) >= 2:
         primary_nights = list(night_indices)[:-1]
         last_night = int(list(night_indices)[-1])
@@ -1422,13 +1421,13 @@ def combine_nights_and_make_ZPc_and_beta_panels(base_dir_template,
         ----------
         ax : matplotlib.axes.Axes
             Target subplot axis.
-        data : array-like
+        Data : array-like
             1D array of beta posterior samples for this night.
         xlim : tuple of float or None
             Explicit x-axis range ``(lo, hi)``.  If ``None`` the axis limits are
             left to matplotlib.
         truth_val : float or None
-            Injected true value of beta; drawn as a solid vertical line in
+            Injected true value of beta. drawn as a solid vertical line in
             ``truth_color`` when provided.
         title_name : str
             Title string displayed above the subplot.
@@ -1568,17 +1567,16 @@ def combine_nights_and_plot_3params_2ins(base_dir_template,
         auto_adjust_axes=True,              # True | False | 'x' | 'y' | 'both'
         limit_percentiles=(0.5, 99.5),     # percentiles used to clip extremes before padding
         axis_pad_fraction=0.06,            # fractional padding added to (high-low)
-        # --- NEW: allow user to supply explicit per-parameter limits ---
+        # Per-parameter display limits
         user_param_limits=None             # e.g. [[z_lo,z_hi],[p_lo,p_hi],[beta_top_lo,beta_top_hi],[beta_bot_lo,beta_bot_hi]] or None
     ):
     """
     Combine per-night posteriors, create combined samples, and plot a corner figure.
 
-    Same behaviour as before, but:
-     - corner plot restricted to first two params (Z and p_cloud)
-     - additional figure fig_betas: two stacked *square* panels with beta PDFs
-       top: pooled CARMENES (nights 0..4), bottom: the "other" night (last non-CARMENES)
-     - user_param_limits: if len >= 4, entries [2] and [3] set x-limits for top and bottom beta panels.
+    The corner plot shows Z and p_cloud. The fig_betas figure has two square
+    panels: pooled CARMENES beta samples (nights 0..4) above and the last
+    non-CARMENES night below. Entries [2] and [3] of user_param_limits set
+    the x-limits of those panels when supplied.
     Returns (combined_samples, fig, fig_betas)
     """
     import os
@@ -1610,7 +1608,7 @@ def combine_nights_and_plot_3params_2ins(base_dir_template,
         base_dir : str
             Directory containing the MultiNest output files for this night.
         night : int
-            Night index (used for logging; the basename currently hardcodes 0).
+            Night index (used for logging, the basename currently hardcodes 0).
         n_params_hint : int or None
             Number of free parameters, inferred from the stats JSON when
             available.  Passed directly to ``Analyzer(n_params=...)``.
@@ -1957,7 +1955,7 @@ def combine_nights_and_plot_3params_2ins(base_dir_template,
             idx = np.random.choice(np.arange(pool.shape[0]), size=n_data, replace=True)
         candidates_list.append(pool[idx, :])
 
-    # 4) fill remainder with pooled samples (keeps backward compatibility)
+    # 4) Fill the remaining sample slots from the pooled posterior.
     if n_remain > 0:
         if pool.shape[0] > n_remain:
             idx = np.random.choice(np.arange(pool.shape[0]), size=n_remain, replace=False)
@@ -2010,7 +2008,7 @@ def combine_nights_and_plot_3params_2ins(base_dir_template,
         theta : array-like, length n_params
             Physical parameter values.
         priors_per_param : list of dict
-            One entry per parameter; each dict must have keys ``'min'`` and
+            One entry per parameter. Each dict must have keys ``'min'`` and
             ``'max'`` (float), or ``None`` to skip that parameter.
 
         Returns
@@ -2459,7 +2457,7 @@ def combine_nights_and_plot_3params_2ins(base_dir_template,
         values : array-like
             1D array of sample values (e.g., beta draws).
         weights : array-like
-            Non-negative importance weights; need not be normalised.
+            Non-negative importance weights. need not be normalised.
         quantiles : array-like
             Target quantile fractions in [0, 1], e.g. ``[0.16, 0.5, 0.84]``.
 
@@ -2516,7 +2514,7 @@ def combine_nights_and_plot_3params_2ins(base_dir_template,
         # Use the same candidate pool and per-night KDE log_ps already computed earlier.
         # `log_ps` was computed as shape (len(kdes), ncand)
         if 'log_ps' not in locals():
-            # if your function did not compute log_ps earlier (should have), recompute for kdes/candidates
+            # Compute missing log densities for the KDEs and candidate points.
             tiny = 1e-300
             ncand = candidates.shape[0]
             log_ps = np.zeros((len(kdes), ncand))
@@ -2567,7 +2565,7 @@ def combine_nights_and_plot_3params_2ins(base_dir_template,
             try:
                 beta_top_xlim = (float(user_param_limits[2][0]), float(user_param_limits[2][1]))
                 beta_bot_xlim = (float(user_param_limits[3][0]), float(user_param_limits[3][1]))
-                # make them canonical order
+                # Arrange samples in the parameter order used by the combined posterior.
                 if beta_top_xlim[1] <= beta_top_xlim[0]:
                     beta_top_xlim = (min(beta_top_xlim), max(beta_top_xlim))
                 if beta_bot_xlim[1] <= beta_bot_xlim[0]:

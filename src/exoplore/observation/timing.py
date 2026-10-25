@@ -10,12 +10,9 @@ in days.
 
 from __future__ import annotations
 
-# Reading this file
-# Choose the exposure times and identify which exposures contain the
-# planetary event before constructing spectra or combining CCFs. The selected
-# indices refer to exposures, not wavelengths. This file also retains light-curve
-# helpers used by the current runner; a timing selection and an absorption weight
-# are related inputs, not interchangeable arrays.
+# Role in the calculation
+# Calculate exposure times, event membership and light-curve weights. Exposure-index
+# arrays select the spectra used to construct and combine the planetary signal.
 
 
 from typing import Optional, Tuple
@@ -90,7 +87,7 @@ def observation_julian_dates(
     Parameters
     ----------
     transit_epoch_bjd:
-        Mid-transit time in BJD (used as reference; the grid starts at
+        Mid-transit time in BJD (used as reference, the grid starts at
         ``transit_epoch_bjd - start_offset_hours / 24``).
     exposure_time_seconds:
         Duration of each exposure in seconds.
@@ -161,7 +158,7 @@ def transit_contact_times(
 def get_event_v2(cfg, planet, JD_og):
     """Compute event timing directly from a config.
 
-    Takes SimulationConfig + PlanetData instead of an inp_dat dict.
+    Uses SimulationConfig and PlanetData to calculate the observing sequence.
     """
     _pre = (cfg.observation.pre_event_hours
             if cfg.observation.pre_event_hours > 0
@@ -237,7 +234,7 @@ def get_event(inp_dat, JD_og):
         in_transit = []
         out_transit = []
         transit_mid_JD = []
-        # Use specific_T_0 when available (specific_event=True); fall back
+        # Use specific_T_0 when available (specific_event=True). fall back
         # to T_0 (the reference epoch) for fully synthetic nights so that
         # the nearest transit to each night's JD array can still be found.
         _t0_ref = (inp_dat["specific_T_0"]
@@ -417,7 +414,7 @@ def dayside_fraction(syn_jd, without_signal):
     Parameters
     ----------
     syn_jd : numpy.ndarray
-        Synthetic Julian dates; only ``len(syn_jd)`` is used to size the output.
+        Synthetic Julian dates. Only ``len(syn_jd)`` is used to size the output.
     without_signal : numpy.ndarray of int
         Indices of the out-of-transit frames.
 

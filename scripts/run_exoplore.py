@@ -11,10 +11,9 @@ The first form validates the config and prints a simulation summary.
 Pass ``--run`` to execute the full simulation (requires all dependencies).
 """
 
-# Where this script fits
-# This source-checkout launcher delegates to the shared command-line
-# interface. Without --run it previews the configuration; with --run it starts
-# the same simulator used by the notebook. Keep scientific logic in the package.
+# Role in the calculation
+# Load a simulation JSON through the shared command-line interface. The default action
+# prints a preview. --run executes the configured experiment.
 
 import sys
 import warnings
@@ -33,7 +32,7 @@ warnings.filterwarnings("ignore", message="Polyfit may be poorly conditioned")
 # RuntimeWarning from the rotation-broadening kernel:
 # np.sqrt is evaluated at argument values that are slightly negative at the edges
 # of the integration domain (floating-point rounding).  The kernel clips these
-# gracefully; the sqrt(negative) → nan is never used in the final convolution.
+# gracefully. The sqrt(negative) → nan is never used in the final convolution.
 warnings.filterwarnings(
     "ignore",
     message="invalid value encountered in sqrt",

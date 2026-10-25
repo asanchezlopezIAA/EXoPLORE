@@ -72,7 +72,7 @@ def test_from_orders_to_detectors_shape():
 
 
 def test_from_orders_to_detectors_values():
-    """Left half of order 0 goes to row 0; right half goes to row 1."""
+    """Left half of order 0 goes to row 0. Right half goes to row 1."""
     arr = np.ones((2, 3, 4))  # n_spec=2, n_orders=3, n_pixels=4
     arr[:, 0, :2] = 7.0   # left half of order 0
     arr[:, 0, 2:] = 9.0   # right half of order 0
@@ -157,7 +157,7 @@ class TestPixelSnrOneOrder:
 
         The function normalises relative to T at the blaze peak, so the
         absorption must be placed away from that peak to show a reduction.
-        With 100 pixels the sinc^2 blaze peaks near the centre; pixel 10 is
+        With 100 pixels the sinc^2 blaze peaks near the centre. pixel 10 is
         safely off-centre.
         """
         n_times, n_pix = 3, 100

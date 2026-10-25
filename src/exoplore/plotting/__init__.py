@@ -16,11 +16,9 @@ calibration
     per-order effective (super-)resolution measurement.
 """
 
-# Reading these imports
-# These are convenient names for several figure families. Find the
-# individual function to check expected axes, units and whether it loads or
-# reconstructs data before drawing. The public import list is not a recipe
-# for deciding which scientific analysis to perform.
+# Public imports
+# Export the map, spectral-matrix and calibration plotting functions. Their
+# arguments specify the arrays, units, masks and display options used in a figure.
 
 
 from exoplore.plotting.kpvsys import (

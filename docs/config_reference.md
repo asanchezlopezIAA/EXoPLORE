@@ -157,12 +157,12 @@ Stored in `planet_params/<PlanetName>.json`. All values use natural astronomical
 | `exposure_time_seconds` | float > 0 | Individual exposure time in seconds. |
 | `readout_time_seconds` | float ≥ 0 | CCD/detector readout time per exposure (added to exposure time to get cadence). |
 | `overhead_time_seconds` | float ≥ 0 | Additional per-exposure overhead (guiding, nodding, etc.). |
-| `specific_event` | `true`, `false` | If `true`, use `specific_T0_bjd` as the transit mid-time instead of computing it from the ephemeris. Use this when simulating a specific observed transit with a known epoch. |
+| `specific_event` | `true`, `false` | If `true`, set the transit mid-time to `specific_T0_bjd`. Use this when simulating a specific observed transit with a known epoch. |
 | `specific_T0_bjd` | BJD float or `null` | Required if `specific_event: true`. The exact BJD of the transit centre. |
-| `use_real_data` | `true`, `false` | If `true`, load real observed spectra and run the analysis pipeline on them directly, rather than generating the stellar continuum synthetically. Requires per-order observation files `observations_night_{b}_order_{K}.fits` (shape: `n_spectra × n_pixels`) and BERV files `observations_berv_{b}.fits` in the `reference_night/` directory. For `different_nights: false`, the suffix `_{b}` is omitted. Setting `use_real_data: false` (the default) uses only the noise/SNR reference files and generates all spectra synthetically. |
+| `use_real_data` | `true`, `false` | If `true`, load observed spectra and run their preparation and analysis. Requires per-order observation files `observations_night_{b}_order_{K}.fits` (shape: `n_spectra × n_pixels`) and BERV files `observations_berv_{b}.fits` in the `reference_night/` directory. For `different_nights: false`, the suffix `_{b}` is omitted. Setting `use_real_data: false` (the default) uses only the noise/SNR reference files and generates all spectra synthetically. |
 | `noise_scaling_factor` | float > 0 | Global multiplicative scaling applied to the noise. 1.0 = nominal. 0.5 = half the noise (2× SNR). 2.0 = double the noise. |
 | `simulate_planet` | `true`, `false` | If `true`, inject the atmospheric signal into the simulated spectra. If `false`, simulate a star-only (null test). |
-| `external_planet_model` | `true`, `false` | If `true`, load the planet atmosphere spectrum from an external file rather than computing it with petitRADTRANS. |
+| `external_planet_model` | `true`, `false` | If `true`, read the planet atmosphere spectrum from an external file. |
 | `external_planet_model_file` | path string | Path to the external planet model file. Only used if `external_planet_model: true`. |
 | `signal_uses_light_curve` | `true`, `false` | If `true`, modulate the planet signal with the BATMAN transit light curve (depth varies during ingress/egress). If `false`, use a constant depth. |
 | `scale_injection` | float > 0 | Multiplicative scale factor applied to the injected planet signal. 1.0 = true amplitude. 0.5 = half the signal. |
@@ -275,7 +275,7 @@ All six atmosphere sub-blocks share the same structure:
 | `equilibrium_temperature_K` | K | Planet equilibrium temperature used in the Guillot temperature profile. Also used when `two_point: false` and `isothermal: false`. |
 | `kappa_ir` | cm²/g | Infrared opacity parameter for the Guillot profile. Typical value: 0.01. |
 | `gamma_guillot` |, | Ratio of optical to infrared opacity for Guillot profile. Typical range: 0.1 to 1.0. |
-| `two_point` | `true`, `false` | If `true`, use a two-point interpolated temperature profile anchored at two (pressure, temperature) pairs instead of the Guillot analytic profile. |
+| `two_point` | `true`, `false` | If `true`, interpolate the temperature profile between two (pressure, temperature) pairs. |
 | `two_point_pressures_bar` | bar | Two pressure anchor points for the `two_point` profile, as `[P_deep, P_high]`. |
 | `two_point_temperatures_K` | K | Temperatures at the two anchor points, as `[T_deep, T_high]`. |
 | `wind_velocity_kms` | km/s | Atmospheric wind velocity. Positive = tailwind (redshift), negative = headwind (blueshift). Shifts the planetary spectral lines by a constant offset. 0.0 = no wind. Typical values for hot Jupiters: -5 to +5 km/s. |
@@ -323,14 +323,13 @@ All six atmosphere sub-blocks share the same structure:
 
 `tellurics.skycalc_wavelength_limits_um` sets the **SkyCalc download range**
 in microns, inside this same simulation JSON. It is unrelated to instrument
-convolution and does not change the instrument wavelength grid. Use a finite
+convolution. Instrument input files define the wavelength grid. Use a finite
 positive pair `[minimum, maximum]` covering all selected orders with margin.
 The full YJHK example uses `[0.9, 2.5]`; the UBV example uses `[0.34, 0.65]`.
 Missing or `null` uses `[0.95, 2.45]`, which may be too narrow for your
 instrument. The field survives configuration
-loading/saving. The downloader reads it explicitly rather than inferring it
-from the ETC file. EXoPLORE rejects a telluric file that does not cover the
-selected wavelengths. See the {ref}`input guide <skycalc-reference-download>`.
+loading/saving. The downloader uses this interval for its SkyCalc query.
+EXoPLORE checks that the returned file covers the selected wavelengths. See the {ref}`input guide <skycalc-reference-download>`.
 
 ### Three telluric modes
 
@@ -344,7 +343,7 @@ T(X) = T_ref ^ (X / X_ref)
 
 where `T_ref` is the reference transmission at airmass `X_ref` and `X` is the airmass at each exposure. This captures the dominant effect, telluric lines deepening as the target moves towards the horizon. PWV is implicitly fixed at the value used when generating the reference file. Requires only one FITS file per instrument/target, and is consequently the appropriate choice for most simulations.
 
-**Mode 2, Full per-exposure telluric evolution** (`include_tellurics: true`, `use_full_skycalc: true`): loads a separate telluric transmission spectrum for each exposure (`tell_spec_{n}.fits`), each computed at its individual airmass **and** PWV. Both quantities vary per exposure, making this the most physically accurate treatment. In particular, this mode is recommended when the telluric evolution during the night is consequential, long transits, high-airmass targets, variable atmospheric conditions. We note that the per-exposure spectra can be generated with `scripts/generate_skycalc_inputs.py` (see [docs/input_files.md](input_files.md#4-telluric-reference-spectra)), or supplied from any other source, provided they are named `tell_spec_{n}.fits` and placed in the correct directory, the simulator reads whatever FITS files it finds there.
+**Mode 2, Full per-exposure telluric evolution** (`include_tellurics: true`, `use_full_skycalc: true`): loads a separate telluric transmission spectrum for each exposure (`tell_spec_{n}.fits`), each computed at its individual airmass **and** PWV. Both quantities vary per exposure, making this the most physically accurate treatment. In particular, this mode is recommended when the telluric evolution during the night is consequential, long transits, high-airmass targets, variable atmospheric conditions. Generate the per-exposure spectra with `scripts/generate_skycalc_inputs.py` (see [docs/input_files.md](input_files.md#4-telluric-reference-spectra)), or supply them from another source, provided they are named `tell_spec_{n}.fits` and placed in the correct directory, the simulator reads whatever FITS files it finds there.
 
 **Mode 3, No tellurics** (`include_tellurics: false`): telluric multiplication is skipped entirely, producing a clean absence of atmospheric contamination. The masking and SNR columns are still computed from the noise model, but far fewer pixels are flagged. This allows us to isolate the pure planetary signal, test the pipeline with no atmospheric baseline, or verify the CCF template matching under ideal conditions.
 
@@ -357,7 +356,7 @@ where `T_ref` is the reference transmission at airmass `X_ref` and `X` is the ai
 | `use_accurate_airmass` | `true`, `false` | If `true`, compute the airmass from the observation time, target coordinates, and observatory location. If `false`, use the values in `airmass_limits` directly. |
 | `airmass_evolution` | `"up_and_down"`, `"up"`, `"down"`, `"constant"` | Shape of the airmass time series when `use_accurate_airmass: false`. `"up_and_down"`: airmass decreases to a minimum at transit midpoint then increases (target transits the meridian). `"up"`: monotonically increasing. `"down"`: monotonically decreasing. `"constant"`: flat at the mean of `airmass_limits`. |
 | `airmass_limits` | `[min, max]` | Minimum and maximum airmass during the observation. Used to construct the airmass time series when `use_accurate_airmass: false`. |
-| `constant_pwv` | `true`, `false` | Controls PWV handling for both Mode 2 and Mode 3. `true`: all exposures use the same `pwv_mm` value (saved to `Fixed_PWV/pwv_values.fits`). `false`: PWV varies randomly around `pwv_mm` within the [SkyCalc](https://skycalc-ipy.readthedocs.io) grid (saved to `Variable_PWV/pwv_values.fits`). **In Mode 1 (airmass scaling), PWV does not affect the computed telluric spectra**, it is only stored in the FITS file for bookkeeping and used when generating per-exposure files for Mode 2. |
+| `constant_pwv` | `true`, `false` | Controls PWV handling for both Mode 2 and Mode 3. `true`: all exposures use the same `pwv_mm` value (saved to `Fixed_PWV/pwv_values.fits`). `false`: PWV varies randomly around `pwv_mm` within the [SkyCalc](https://skycalc-ipy.readthedocs.io) grid (saved to `Variable_PWV/pwv_values.fits`). **In Mode 1 (airmass scaling), PWV does not affect the computed telluric spectra**, its value is recorded in the FITS file and used when generating per-exposure files for Mode 2. |
 | `pwv_mm` | mm | Precipitable water vapour in mm. Reference value used when `constant_pwv: true` (all exposures), or as the centre of the random draw when `constant_pwv: false`. Typical range: 1 to 30 mm. Dry site (Paranal): 2 to 10 mm. Must be a value on the SkyCalc PWV grid: `[0.05, 0.1, 0.25, 0.5, 1.0, 1.5, 2.5, 3.5, 5.0, 7.5, 10.0, 20.0, 30.0]`. |
 | `pwv_mm_per_night` | list of mm or `null` | Per-night PWV values for `different_nights: true` simulations. When set, night `n` uses `pwv_mm_per_night[n]` instead of `pwv_mm`. Length must equal `n_nights`. Used by the simulator when loading per-night SkyCalc files (Mode 2) and by `scripts/generate_skycalc_inputs.py --night N` when generating those files. Example: `[2.5, 3.5]` for a two-night run with different atmospheric conditions. `null` (default) uses `pwv_mm` for all nights. |
 | `reference_airmass` | float | The airmass at which `reference_telluric_file` was computed. Typically 1.0. Used in the Beer-Lambert scaling formula `T(X) = T_ref^(X / X_ref)` for Mode 1. |
@@ -405,7 +404,7 @@ Four pipeline recipes are available. They fall into two groups depending on whet
 
 ### Template preparation and SYSREM distortions
 
-When SYSREM is applied to the data it does not merely remove telluric and stellar systematics, it also distorts the underlying planetary signal in a time- and wavelength-dependent way. A CCF template that does not account for this distortion will be mismatched to the residual data, reducing detection significance and preventing accurate retrievals. Therefore, **`prepare_template: true` is strongly recommended for all pipelines.** The implementation differs by pipeline:
+SYSREM removes dominant telluric and stellar structure and also changes the underlying planetary signal as a function of time and wavelength. A CCF template that does not account for this distortion will be mismatched to the residual data, reducing detection significance and preventing accurate retrievals. Therefore, **`prepare_template: true` is strongly recommended for all pipelines.** The implementation differs by pipeline:
 
 - **`BL19` / `Blain24`**, the template is normalised and continuum-corrected in the same way as the data (polynomial fits, telluric correction). No SYSREM is involved, so the template retains full spectral line structure.
 
@@ -489,7 +488,7 @@ When SYSREM is applied to the data it does not merely remove telluric and stella
 
 | Field | Valid values | Description |
 |---|---|---|
-| `enabled` | `true`, `false` | Master switch. Set to `false` to skip retrieval entirely (default for exploration runs). When `true`, the retrieval runs at the **end of the same simulation** using the spectral matrices built in memory, it does not re-load previously saved files. To re-run the retrieval on old data you must re-run the full simulation. |
+| `enabled` | `true`, `false` | Master switch. Set to `false` to skip retrieval entirely (default for exploration runs). When `true`, the retrieval runs at the **end of the same simulation** using the spectral matrices held in memory. Repeating this retrieval starts with a new simulation run. |
 | `sampler` | `"nested_sampling"`, `"mcmc"` | Bayesian sampler. `"nested_sampling"`: [MultiNest](https://github.com/JohannesBuchner/PyMultiNest) via [PyMultiNest](https://github.com/JohannesBuchner/PyMultiNest) (faster, better for multimodal posteriors). `"mcmc"`: [emcee](https://emcee.readthedocs.io) ensemble sampler. |
 | `log_likelihood` | `"Blain24"`, `"BL19"`, `"Gibson22"` | Log-likelihood function. **Coupled to `dimensionality`, see below.** `"Blain24"`: Blain, Sánchez-López & Mollière (2024, AJ, 167, 179), per-order noise scaling; use with `"1D"`, `"1D_CtoO_met"`, or `"2D"`. `"BL19"`: Brogi & Line (2019), analytic marginalisation over signal scaling; use with `"1D"`, `"1D_CtoO_met"`, or `"2D"`. `"Gibson22"`: Gibson et al. (2022), chi-squared with free β noise-scaling; **must be used exclusively with `"1D_Gibson22"`**. Any invalid combination raises a `ValueError` at runtime. |
 | `dimensionality` | `"1D"`, `"1D_Gibson22"`, `"1D_CtoO_met"`, `"1D_extended"`, `"1D_extended_fast"`, `"2D"` | Retrieval parameter space. **Coupled to `log_likelihood`, see above.** `"1D"`: single VMR (H₂O), Kp, T_eq, wind velocity (4 params), use with BL19 or Blain24. `"1D_Gibson22"`: same plus β noise-scaling parameter (5 params), **use only with Gibson22 likelihood**. `"1D_CtoO_met"`: C/O ratio and metallicity via EasyChem (2 params, Kp and V_wind fixed to planet values), use with BL19 or Blain24. `"1D_extended"`: log₁₀(VMR) for H₂O, CH₄, NH₃, CO, CO₂, HCN plus Kp, T_eq, and wind velocity (9 params), multi-species retrieval; use with BL19 or Blain24. `"1D_extended_fast"`: same species plus T_eq only (Kp and wind velocity fixed; 7 params). `"2D"`: morning and evening limb VMR and T_eq independently (limb asymmetry retrieval), use with BL19 or Blain24. |
@@ -607,7 +606,7 @@ Controls diagnostic plots automatically generated at the end of every run.
 Every run automatically saves `<run_dir>/plots/pipeline_steps_<sim_name>.pdf`, a stacked grey-scale figure illustrating the data-simulation and preparation steps for the displayed order (set by `pipeline_steps_order`). The top panel is the 1-D in-silico flux at mid-transit, noiseless (black) and noisy (red), zoomed to `pipeline_steps_xlim_um` if set; below it are time-series matrices (wavelength on the horizontal axis, spectrum number on the vertical), with masked channels in the prepared panels shown as white and ingress/egress marked by red dashed lines. The number of matrix panels depends on the pipeline:
 
 - **Polynomial pipelines (BL19, Blain24)** have no iterations, so two matrix panels: the **raw** matrix (throughput + tellurics) and the **corrected (residual)** matrix after `preparing_pipeline`. Raw → corrected.
-- **SYSREM pipelines (ASL19, Gibson22)** show the systematics peeling away iteration by iteration: the **raw** matrix, then one panel per iteration listed in `pipeline_steps_sysrem_iterations` (for example after iteration 1 and after iteration 5). The intermediate residuals are reconstructed with `apply_sysrem` on the displayed order, so the production preparation is unchanged.
+- **SYSREM pipelines (ASL19, Gibson22)** show the systematics peeling away iteration by iteration: the **raw** matrix, then one panel per iteration listed in `pipeline_steps_sysrem_iterations` (for example after iteration 1 and after iteration 5). The intermediate residuals are reconstructed with `apply_sysrem` on the displayed order, using the components saved by the preparation calculation.
 
 This plot follows the style of the ANDES paper and is the standard way to verify that the pipeline correctly removes systematics while preserving the planetary signal trail.
 
@@ -615,7 +614,7 @@ This plot follows the style of the ANDES paper and is the standard way to verify
 
 ## 15. `output`
 
-Selects which per-order spectral matrices are written to disk. Almost all of a run's disk footprint is these matrices; the global masks, velocity grids, Kp-Vsys map, phase, and Julian dates are always written. These flags do not affect the run itself (the matrices are used in memory), only what is left on disk for later re-analysis. If the block is omitted, the defaults below apply.
+Selects which per-order spectral matrices are written to disk. Almost all of a run's disk footprint is these matrices; the global masks, velocity grids, Kp-Vsys map, phase, and Julian dates are always written. The calculation uses these matrices in memory; the flags select which arrays are available on disk afterward. If the block is omitted, the defaults below apply.
 
 ```json
 "output": {
@@ -641,7 +640,7 @@ Selects which per-order spectral matrices are written to disk. Almost all of a r
 | `save_mat_noise` | `false` | diagnostic only | ~411 MB |
 | `save_std_noise` | `false` | diagnostic only | ~419 MB |
 
-With the defaults a 76-order run writes ~1.2 GB instead of ~2.2 GB and still supports re-running CCFs, retrievals, and the Gibson22 likelihood. Set every flag to `false` for a minimal ~few-MB result (the Kp-Vsys map plus metadata). See [outputs.md](outputs.md) for the full matrix descriptions.
+The default saving flags write ~1.2 GB for a 76-order run, including spectral inputs and uncertainty products used by the CCF and retrieval calculations. Saving every optional matrix uses ~2.2 GB. Set every flag to `false` for a minimal ~few-MB result (the Kp-Vsys map plus metadata). See [outputs.md](outputs.md) for the full matrix descriptions.
 
 ---
 
@@ -676,7 +675,7 @@ The YJHK ETC file must have named extensions: `YJH_WAVE_STARTS`, `YJH_WAVE_MIDS`
 
 Use `"name": "CARMENES_NIR"`. Coverage 0.96 to 1.71 µm, 28 orders, 4080 pixels/order, R ≈ 80,400.
 
-The wavelength grid is bundled with EXoPLORE (`src/exoplore/instruments/data/wave_CARMENES_NIR.fits`, shape 28 × 4080 µm) and is found automatically, you do not need to copy it.
+The wavelength grid is bundled with EXoPLORE (`src/exoplore/instruments/data/wave_CARMENES_NIR.fits`, shape 28 × 4080 µm) and is found automatically by the instrument reader.
 
 **Recommended order selection:** the bundled config `configs/hd189733b_carmenes_transit.json` excludes orders 9, 10, 18, 19, and 20, following the selection of [Alonso-Floriano et al. (2019)](https://doi.org/10.1051/0004-6361/201834339) for this specific dataset. Orders 18 to 20 lie in the ~1.9 µm water band and are consistently opaque from Calar Alto under typical conditions. Orders 9 and 10 (~1.4 µm water band) are more variable: under low-PWV conditions they can retain usable signal, and users working on real observations should inspect their own telluric transmission before discarding them. In general, the optimal order selection is target- and night-dependent and should be determined from the actual data. The 23-order list used here is a conservative starting point.
 ```json

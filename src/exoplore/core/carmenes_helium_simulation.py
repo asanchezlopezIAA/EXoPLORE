@@ -5,11 +5,10 @@ This route consumes full-channel per-pixel ETC arrays before order selection.
 """
 from __future__ import annotations
 
-# Reading this file
-# This runner connects the helium atmosphere to CARMENES detector inputs
-# and direct-transmission preparation. Full-channel ETC information is consumed
-# before selecting an order, so order selection must not relabel detector/noise
-# arrays. The ordinary molecular simulator remains a separate route.
+# Role in the calculation
+# Generate CARMENES helium observations from the selected atmosphere, detector inputs
+# and direct-transmission preparation. Read full-channel ETC information before
+# selecting the order so its noise arrays keep their detector indices.
 
 from dataclasses import asdict
 import hashlib
@@ -101,8 +100,8 @@ def observing_carmenes_arrays(settings, science, planet, model, duration, wave):
 def run_carmenes_helium(config, *, expectation_source: Path | None = None):
     """Run selected helium nights, preserving independent correction references.
 
-    expectation_source reuses only noiseless physical arrays for a new night;
-    that night gets one fresh observation-noise draw from its recorded seed.
+    expectation_source reuses only noiseless physical arrays for a new night.
+    That night gets one fresh observation-noise draw from its recorded seed.
     """
     validate_carmenes_helium(config)
     if config.observation.n_nights > 1:
@@ -150,7 +149,7 @@ def run_carmenes_helium(config, *, expectation_source: Path | None = None):
             if item['atmosphere']['helium'].get('completed_night_paths') is None:
                 item['atmosphere']['helium'].pop('completed_night_paths', None)
             item['atmosphere']['helium']['resume_simulation_path'] = ''
-            # Correction settings do not change an already saved observation.
+            # The saved observation supplies the input arrays for this correction.
             item['atmosphere']['helium']['molecfit_config_path'] = ''
             item['atmosphere']['helium'].pop('sysrem_iterations',None)
             item['atmosphere']['helium']['telluric_correction'] = ''
@@ -193,7 +192,7 @@ def run_carmenes_helium(config, *, expectation_source: Path | None = None):
         arrays = observing_carmenes_arrays(h,science,planet,model,config.observation.exposure_time_seconds,order['wave_nm'])
         expected,control,tell = (arrays[k] for k in ('expected_flux','no_helium_flux','telluric_transmission'))
         # Impose the ETC uncertainty in continuum-normalized flux units.
-        # Resolved synthetic absorption does not rescale this prescription.
+        # Apply the configured uncertainty prescription to the synthetic spectrum.
         raw_error = np.broadcast_to(1/order['snr'][None, :], expected.shape).copy()
         rng = np.random.default_rng(h.noise_seed)
         raw = expected+photon_noise(1/raw_error,rng=rng) if h.noise_mode=='gaussian' else expected.copy()

@@ -6,12 +6,10 @@ reference noise and interpolation correlations are retained in linear operators.
 """
 from __future__ import annotations
 
-# Reading this file
-# Preparation reuses a reference spectrum and interpolates pixels, so
-# errors become correlated. These routines propagate the supplied variances
-# through those operations without drawing new noise. They hold fitted continuum
-# and telluric parameters fixed; the covariance does not include all possible
-# calibration-parameter uncertainties.
+# Role in the calculation
+# Propagate spectral variances through normalization, reference division and
+# interpolation to calculate their covariance. Fitted continuum and telluric parameters
+# are held fixed in this calculation.
 
 import numpy as np
 from scipy.sparse import csr_matrix, diags, vstack
@@ -33,7 +31,7 @@ def carmenes_coadd_covariance(waves_nm, flux, error, berv_kms, rv_kms, config, r
 
     This differentiates the arithmetic-reference division and both wavelength
     interpolations. Out-of-transit noise enters once, shared by every transit
-    spectrum; it is not divided by the number of transit exposures again.
+    spectrum. It is not divided by the number of transit exposures again.
     The continuum means are fixed at their fitted values in this calculation.
     Invalid coadd pixels must remain masked when using the covariance.
     """

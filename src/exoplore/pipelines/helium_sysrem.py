@@ -2,16 +2,14 @@
 
 Normalize native spectra, divide by an Earth-frame out-of-transit reference,
 then subtract weighted SYSREM components from the resulting residual matrix.
-The output is differential transmission, not a fitted telluric transmittance.
+The output contains differential transmission residuals.
 Wavelengths are vacuum nm. No wavelength refinement is performed.
 """
 from __future__ import annotations
 
-# Reading this file
-# This is an optional alternative preparation for synthetic helium data.
-# It removes components in the Earth frame before later transmission analysis.
-# Its differential residuals are not a theoretical telluric transmittance, so
-# read which product a caller consumes before using it as a correction.
+# Role in the calculation
+# Remove Earth-frame components from synthetic helium spectra with SYSREM. The
+# resulting differential residuals enter the subsequent transmission analysis.
 
 import numpy as np
 from exoplore.pipelines.helium_math import window_mask, resample
@@ -56,7 +54,7 @@ def correct_helium_sysrem(waves_nm, flux, error, science, n_iterations):
     residual=rows[:,good]/reference[good]-1
     sigma=np.sqrt(variances[:,good])/reference[good]
     # Existing SYSREM initializes from one column. An exactly zero residual
-    # contains no component to fit, and must not produce a 0/0 iteration.
+    # has zero residual structure, so return before the component fit.
     cleaned=residual.copy();components=[]
     for _ in range(n_iterations):
         if not np.any(cleaned):break

@@ -28,11 +28,9 @@ Examples
 
 from __future__ import annotations
 
-# Reading this file
-# The atmosphere solver needs one temperature for each pressure level.
-# This file supplies the selected temperature profile; chemistry and radiative
-# transfer consume it afterward. Several older entry points remain, so follow
-# the actual caller rather than substituting a similarly named profile helper.
+# Role in the calculation
+# Calculate the configured temperature at each atmospheric pressure level. Chemistry
+# and radiative transfer use the resulting profile.
 
 
 import numpy as np
@@ -117,7 +115,7 @@ def guillot_profile(
     """Return a Guillot (2010) temperature-pressure profile.
 
     This is the same analytic profile used by petitRADTRANS.  It requires
-    petitRADTRANS to be installed; if not available, a fallback isothermal
+    petitRADTRANS to be installed. If not available, a fallback isothermal
     profile at ``equilibrium_temperature_K`` is returned with a warning.
 
     Parameters
@@ -228,7 +226,7 @@ def create_temperature_profile(
     isothermal_value : float or None
         Fixed temperature (K).  If None and isothermal is True, *T_equ* is used.
     T_equ : float   Equilibrium temperature (K).
-    two_point_T : bool  Use two-point approximation instead of Guillot.
+    two_point_T : bool  Interpolate between the two pressure-temperature anchors.
     p_points : list[float, float]  [p_bottom_bar, p_top_bar].
     t_points : list[float, float]  [T_bottom_K, T_top_K].
     kappa : float  Guillot kappa_IR.
@@ -289,7 +287,7 @@ def calculate_temperature_structure(
         fallback and as the irradiation temperature in the Guillot profile.
     two_point_T : bool
         If True and ``isothermal=False``, use the two-point log-pressure
-        interpolation instead of Guillot.
+        interpolation between the supplied anchors.
     p_points : list of float
         [p_bottom_bar, p_top_bar] anchor pressures for the two-point profile
         (bar).
@@ -363,8 +361,8 @@ def calculate_temperature_structure_limbs(
         Which limb(s) to compute:
 
         * ``'full'``, compute both morning and evening.
-        * ``'morning'``, compute morning only; evening arrays are None.
-        * ``'evening'``, compute evening only; morning arrays are None.
+        * ``'morning'``, compute morning only. evening arrays are None.
+        * ``'evening'``, compute evening only. morning arrays are None.
 
     Returns
     -------

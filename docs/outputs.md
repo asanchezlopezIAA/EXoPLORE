@@ -96,7 +96,7 @@ For each order with absolute index `K` (from the instrument's `order_selection` 
 | `mat_cc_order_{K}_{run_name}.npz` | `(n_spectra, n_pixels)` | CCF-ready matrix (BL19/Blain24 pipelines only). The matrix as passed to the CCF kernel. |
 | `ccf_store_order_{K}_{run_name}.npz` | `(n_nights, n_vel, n_spectra)` | Per-order CCF: CCF value at each velocity lag and each exposure, for all nights. |
 
-**Controlling which matrices are written.** Almost all of a run's disk footprint is these per-order matrices, so the `output` block in the config selects which ones to write. The global masks, velocity grids, Kp-Vsys map, phase, and Julian dates are always written. These choices do not affect the run itself (which uses the matrices in memory); they only change what is left on disk for later re-analysis.
+**Controlling which matrices are written.** Almost all of a run's disk footprint is these per-order matrices, so the `output` block in the config selects which ones to write. The global masks, velocity grids, Kp-Vsys map, phase, and Julian dates are always written. The calculation uses the matrices in memory; these flags select the arrays saved for later analysis.
 
 | `output` flag | Default | Needed for | Size (76-order run) |
 |---|---|---|---|

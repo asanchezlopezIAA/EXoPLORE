@@ -1,40 +1,32 @@
 # Reading the code: what calls what, and why
 
-Use this guide alongside your editor. Read one stage, follow its named call,
-then return to the simulator. You do not need to read the entire simulator in
-one sitting. The [architecture overview](architecture.md) gives the folder map
-and complete workflow diagram.
+Start with the JSON file you use to run EXoPLORE. We will follow one spectral
+order through the code, connecting your settings to the functions that use
+them and the results they produce.
 
-For a file-by-file lookup, use [which file should I open?](module_guide.md).
-It covers the maintained package and scripts, including the instrument and
-helium branches outside the main Tutorial 1 path.
+The [architecture guide](architecture.md) shows the full calculation in a diagram.
+The [file index](module_guide.md) explains what each module does. Paths below
+are relative to `src/exoplore/`.
 
-The paths below are relative to `src/exoplore/`. This describes the current
-implementation, including older interfaces that remain in use.
+## Read the experiment settings
 
-## Start with the experiment
+Open `configs/hd189733b_andes_transit_clean.json`, then read
+`SimulationConfig.from_json()` in `config/models.py`.
 
-Open the Tutorial 1 JSON at `configs/hd189733b_andes_transit_clean.json`, then
-read `SimulationConfig.from_json()` in `config/models.py`.
+The JSON specifies the planet, instrument, atmosphere, observing sequence and
+analysis. The loader constructs configuration objects with named fields:
+`cfg.observation.exposure_time_seconds`, for example, supplies the exposure
+time. Species abundances and the instrument registry use dictionaries because
+their keys depend on the selected species or instrument.
 
-The file contains choices: the planet, instrument, atmosphere, observation and
-analysis. The loader turns its nested JSON dictionaries into named objects.
-That is why the runner can write `cfg.observation.exposure_time_seconds`
-instead of repeatedly looking up strings in nested dictionaries.
+The loader ignores unknown keys. `from_json()` includes checks in addition to
+those in `from_dict()`. Read the method used by your calling code when tracing
+validation. The [configuration reference](config_reference.md) describes the
+individual settings.
 
-Some dictionaries should remain dictionaries. Species names form a variable
-collection of abundances, and instrument names select registered loader
-functions. Those are different from a fixed configuration section with known
-fields. See the [configuration reference](config_reference.md) for the meaning
-of individual settings.
+## Start the simulator
 
-The current loader ignores unknown keys and has some checks in `from_json()`
-that are absent from `from_dict()`. Comments now identify those boundaries;
-this documentation pass does not change which configurations are accepted.
-
-## Enter through the same interface as a notebook
-
-Read `core/cli.py:main()` and then `core/simulator.py:ExoploreSimulator`.
+Read `core/cli.py:main()` and `core/simulator.py:ExoploreSimulator`.
 
 ```text
 Command line                         Notebook / Python script
@@ -43,104 +35,89 @@ Command line                         Notebook / Python script
                        |
                ExoploreSimulator
                        |
-                  summary()       inspect the selected experiment
+                  summary()       print the experiment settings
                        |
-                    run()         perform the calculation
+                    run()         execute the experiment
 ```
 
-The command line requires `--run` before executing. A notebook calls `run()`
-explicitly. Keeping both on the same interface avoids implementing scientific
-setup twice.
+The command line runs the calculation with `--run`. A notebook or Python
+script calls `simulator.run()` directly. Both use the configuration loader
+and simulator shown above.
 
-## Choose the workflow before calculating spectra
+## Select the workflow
 
-Read `core/spectroscopy_mode.py:spectroscopy_route()`.
-
-It decides which runner should handle the experiment: the standard molecular
-workflow, a helium simulation, an observed-helium recipe or a helium grid.
-These are different routes, not successive stages of one run. `use_real_data`
-selects an input source within the applicable route.
-
-The explicit helium switch and older helium settings are both recognized for
-compatibility. A selected route returns control to its own runner rather than
-continuing into the molecular simulation afterward.
+`core/spectroscopy_mode.py:spectroscopy_route()` selects the runner for
+molecular spectroscopy, helium simulation, observed helium or helium grid
+fitting. The selected runner executes that experiment. `use_real_data`
+specifies the source of spectra within the applicable workflow. The selector
+accepts the explicit helium mode and the supported helium configuration fields.
 
 ## Load the system and instrument
 
-Return to Blocks 1–2 of `ExoploreSimulator.run()`.
+Blocks 1–2 of `ExoploreSimulator.run()` load the inputs and construct the
+observing sequence.
 
-| Call or module | Why it is needed |
+| Call or module | Result used by the simulation |
 |---|---|
-| `io.paths.build_output_tree()` | Keeps products for an experiment under its output root. Directory creation is explicit. |
-| `planets.load_planet()` | Supplies the planetary/system parameters used by geometry and atmosphere calculations. |
-| `instruments.Load_Instrumental_Info()` | Resolves instrument information and input locations. |
-| `instruments.wavegrid.get_WaveGrid()` | Reads or constructs the wavelength grid and associated observing inputs. |
+| `io.paths.build_output_tree()` | Creates the configured output directories. |
+| `planets.load_planet()` | Loads system parameters for geometry and atmospheric calculations. |
+| `instruments.Load_Instrumental_Info()` | Supplies the instrument resolution and input locations. |
+| `instruments.wavegrid.get_WaveGrid()` | Supplies wavelength arrays and associated observing inputs. |
 | `io.stellar.LoadPhoenix()` | Reads, broadens and interpolates the stellar model onto the instrument grid. |
-| `observation.timing` and `observation.airmass` | Supply event/exposure geometry and observing conditions needed downstream. |
+| `observation.timing`, `observation.airmass` | Supply exposure times, event membership and observing conditions. |
 
-Instrument metadata and actual arrays have different jobs. Knowing an
-instrument's resolution or a file location does not yet construct an observed
-time series. Follow the reader after the metadata loader to find the arrays.
+Instrument readers first identify files and metadata. The wavelength-grid
+reader loads the corresponding arrays. PHOENIX wavelengths are converted from
+Angstrom to microns in the stellar reader. Planetary calculations also use
+cgs quantities, as documented in their parameter definitions.
 
-PHOENIX wavelengths are converted from Angstrom to microns in the stellar
-reader. More generally, check units at the function boundary; planetary
-calculations also use cgs quantities internally. Do not infer a unit from a
-short legacy variable name.
-
-## Follow one order through the calculation
+## Follow one spectral order
 
 Find `for h in range(n_orders)` in `core/simulator.py`.
 
-An order is one wavelength segment. The runner takes one selected segment
-through atmosphere generation, observation, preparation and cross-correlation
-before moving to the next. These are Blocks 3–6.
+The loop selects a wavelength segment and processes it through the atmospheric
+model, observing sequence, preparation and cross-correlation. These are
+Blocks 3–6.
 
-### Atmospheric model
+### Calculate the atmospheric spectrum
 
 Follow `call_pRT()` or `call_pRT_limbs()` into `atmosphere/prt.py`.
 
-The petitRADTRANS object contains the loaded opacity information. The wrapper
-supplies the temperature/chemistry and requests the spectrum. It is called for
-different purposes: injected atmospheric truth, a search template, or proposed
-retrieval models. Identify which settings were passed before interpreting the
-returned spectrum.
+A petitRADTRANS object holds the opacity tables. The calling function supplies
+temperature and chemistry settings and requests the spectrum. Calls produce
+the injected planet, the cross-correlation template or a trial retrieval model,
+according to the supplied configuration. The injected atmosphere and search
+template have their own species lists and physical parameters.
 
-The injected atmosphere and H₂O search template can have different species and
-parameters. The template is a hypothesis being compared with the data; it is
-not automatically a copy of everything injected.
+### Construct the spectral time series
 
-### Observed spectral time series
+Follow `spec_to_mat_fraction()` into `core/observation.py`.
+`core/simulator.py` and `pipelines/prepare.py` import it directly.
 
-Follow `spec_to_mat_fraction()` into `core/observation.py`. The similarly named
-function imported from `io/stellar.py` is a forwarding shim to that implementation.
+The function places spectra onto the exposure/wavelength grid using the
+configured velocities and event geometry. The runner combines the stellar,
+planetary and telluric contributions and applies throughput and noise. For
+observed-data analysis, the selected reader supplies the measured spectra.
 
-This step places the model on exposure/wavelength coordinates using the
-configured motion and event geometry. Later steps combine the stellar,
-planetary and telluric contributions and apply the configured throughput/noise.
-The exact branches depend on whether data are synthetic or observed.
+`observation/randomness.py` chooses the configured seeds, and
+`observation/noise.py:add_throughput()` generates throughput variations. The
+runner draws Gaussian noise and applies the configured uncertainty scaling.
+Multi-night runs draw separate noise realizations for their nights.
 
-`observation/randomness.py` chooses the existing seeds;
-`observation/noise.py:add_throughput()` makes the throughput draw. Gaussian
-draws remain in the runner. Different nights retain their existing different
-noise realizations. The helpers' location has changed without changing those
-draw choices or their amplitudes.
-
-### Preparation
+### Prepare the spectra
 
 Follow `preparing_pipeline()` into `pipelines/prepare.py`.
 
-One call handles an order/night matrix. Rows are exposures; columns are
-wavelength channels. The dispatcher selects the configured preparation method
-and passes back prepared data, uncertainties and column selections, together
-with detrending information used by later stages.
+Each call processes an order/night matrix whose rows are exposures and columns
+are wavelength channels. The selected method returns prepared spectra,
+uncertainties, column selections and the detrending information needed by later
+steps. Read the corresponding assignment in the caller to identify each
+returned array.
 
-Read the chosen branch, not every pipeline branch at once. The current return
-signatures can vary, so also read how the caller unpacks that branch's result.
-
-For a concrete example, trace the Blain24 setting in Tutorial 1:
+For Tutorial 1, the call sequence is:
 
 ```text
-JSON: pipeline.name = "Blain24"
+pipeline.name = "Blain24"
             |
 cfg.pipeline.name
             |
@@ -152,127 +129,91 @@ remove_throughput_fit(data, ..., uncertainties=noise)
             |
 remove_telluric_lines_fit(data_prepared, ..., uncertainties=propag_noise)
             |
-prepared matrix + propagated uncertainties + updated column selections
-            |
-runner stores the products for CCFs and later analysis
+prepared spectra + propagated uncertainties + column selections
 ```
 
-The order of those two corrections matters: the second receives the output
-and propagated uncertainties of the first. In the configured data branch,
-masking and uncertainty correction are enabled. Model-reprocessing branches
-can pass different flags, so follow the arguments as well as the function name.
+The telluric fit receives the throughput-corrected spectra and their propagated
+uncertainties. In the data branch, masking and uncertainty correction are
+enabled. Model-processing flags specify the corrections applied to templates.
+Excluded columns receive a placeholder flux value. The returned masks and
+retained-column arrays identify which channels enter the analysis.
 
-The Blain24 branch writes a placeholder value into excluded columns. A flux
-value alone therefore does not establish whether a channel is valid: the
-mask/retained-column selections carry that information.
+### Calculate the CCFs
 
-### Cross-correlation
+Follow the selected `call_ccf_*()` function in `ccf/compute.py` into its kernel
+in `ccf/kernels.py`. The instrument and configuration select the weighting
+and normalization used by that kernel.
 
-Follow the selected `call_ccf_*()` wrapper in `ccf/compute.py` to its numerical
-kernel in `ccf/kernels.py`. Configuration and instrument branches determine
-which wrapper is called; similarly named kernels can implement different
-weighting/normalization choices.
+The inputs are prepared residual spectra and their uncertainty estimates.
+The ordinary result has axes `(velocity, exposure)`. Some optimization modes
+include extra injection or detrending-iteration axes.
 
-The data passed onward are prepared residuals, not the original raw spectra.
-Uncertainty estimates enter the configured correlation calculation. The
-result retains one CCF per exposure, with axes `(velocity, exposure)` on the
-ordinary path. Extra injection/iteration axes exist for some optimization modes.
-
-## Understand the bookkeeping without confusing it with physics
+## Read the loop variables and selections
 
 | Name in the runner | Meaning |
 |---|---|
 | `h` | Position in the selected-order list. |
-| `order_selection[h]` | Actual instrument order ID at that position. |
-| `b` | Night index in the per-night loop. |
-| `_nn` | Number of nights used by the standard runner. |
+| `order_selection[h]` | Instrument order ID at that position. |
+| `b` | Night index. |
+| `_nn` | Number of nights. |
 | `_dn` | Whether nights have different observing sequences. |
-| `_nl` | The run's noiseless flag. |
-| `_urd` | Whether existing observed data are used. |
-| `pm` / `cc` | Planet-model / CCF-template configuration objects. |
-| `_mini_*` | Dictionaries translating typed settings into older function argument names. |
-| `_b5`, `_b7`, `_b9` suffixes | Variables associated with the numbered workflow blocks. |
-| `per_order_results` | Working products accumulated for later combination. |
+| `_nl` | Whether the run is noiseless. |
+| `_urd` | Whether observed spectra are used. |
+| `pm` / `cc` | Planet-model / CCF-template settings. |
+| `_mini_*` | Dictionaries mapping configuration fields to function arguments. |
+| `_b5`, `_b7`, `_b9` suffixes | The workflow block associated with a variable. |
+| `per_order_results` | Dictionaries holding the products for each order. |
 
-The per-order list contains dictionaries that are updated as an order moves
-through the stages. Appending the dictionary does not make a copy; later
-updates intentionally remain visible to the combination stage.
+`per_order_results` stores references to the order dictionaries. Updates made
+during preparation and correlation remain visible when the runner combines
+those products.
 
-Two selections also need distinguishing:
+`with_signal` and `without_signal` select exposures. Masks and retained-pixel
+lists select wavelength columns. Function documentation identifies whether a
+particular selection uses integer indices or a boolean array.
 
-- `with_signal` / `without_signal` select **exposures**.
-- Masks and useful-pixel lists select **wavelength columns**. Many interfaces
-  use integer indices; temporary boolean selections also exist. Check the
-  producer/consumer rather than assuming one universal mask representation.
+## Align and combine the CCFs
 
-## Combine information after preserving the motion
+In Block 7, follow `get_shifted_ccf_matrix()` into `ccf/compute.py`.
 
-Return to Block 7 and follow `get_shifted_ccf_matrix()` in `ccf/compute.py`.
+For each trial orbital velocity amplitude, this function samples the selected
+exposure CCFs along the predicted planetary velocity track. The caller sums
+the aligned exposures to make a detection map. The shifted array has axes
+`(Vrest, selected exposure, Kp)`. The sum has axes `(Vrest, Kp)`.
 
-The CCFs still contain the exposure-dependent velocity pattern. For each trial
-orbital amplitude, the function samples each selected exposure along its
-predicted velocity track. The caller then sums the aligned exposures. Summing
-before alignment would discard the changing planetary velocity.
+`get_max_CCF_peak()` normalizes the map using its configured noise region and
+locates the maximum. Interpreting its S/N as a false-alarm probability requires
+calibration against an appropriate null distribution.
 
-The ordinary shifted array has axes `(Vrest, selected exposure, Kp)`. Summing
-over its exposure axis produces a `(Vrest, Kp)` map.
+The same module also defines `compute_kp_vsys_map()`, which takes exposures,
+phases and velocity grids for a smaller map calculation. Its arguments and
+normalization are documented separately. The standard runner uses
+`get_shifted_ccf_matrix()` and its BERV convention.
 
-`get_max_CCF_peak()` applies the configured map-S/N normalization and locates
-a maximum. Read its noise-region options when inspecting that statistic. It
-does not establish a calibrated false-alarm probability merely by returning
-a numerical S/N.
-
-The smaller helper `compute_kp_vsys_map()` near the top of the same file is a
-different interface. It processes the supplied exposures and lacks the full
-runner's BERV argument and map-S/N normalization. Its similar name is not a
-reason to substitute it into Tutorial 1.
-
-## Saving and plotting
+## Save and plot the products
 
 Read Block 8, `io/paths.py`, `plotting/matrices.py` and `plotting/kpvsys.py`.
 
-Saving flags decide which numerical products remain on disk. The calculation
-can still run when large intermediate arrays are not saved. Many diagnostics
-are plotted from in-memory products during the run; a saved figure alone does
-not imply that its complete numerical input was also persisted.
+Output flags select which numerical arrays are saved. Diagnostic figures use
+in-memory arrays during the calculation. To inspect a figure numerically after
+the run, enable saving of its underlying arrays.
 
-For ordinary completed CCF/map products, use the public accessors described in
-the [architecture guide](architecture.md#inspect-completed-products-through-public-accessors).
-`results.py` defines their named containers; `io/results.py` reads/writes them.
-They expose calculated values without repeating the scientific pipeline.
+The [result methods](architecture.md#read-completed-results) return completed
+CCFs and detection maps. `results.py` defines their fields and axes.
+`io/results.py` reads and writes these products.
 
-## Why retrieval can prepare a model again
+## Follow the retrieval
 
-Read Block 9 only when `retrieval.enabled` is relevant to your experiment.
+Read Block 9 when `retrieval.enabled` is true.
 
-A retrieval proposes parameters, constructs the corresponding model and
-evaluates it against the prepared data. Depending on the selected route, model
-reprocessing accounts for the data preparation. A repeated preparation-related
-call can therefore concern the model rather than accidentally process the
-observations twice. Check the passed flags and the selected likelihood path.
+The sampler proposes parameters, the atmospheric model calculates a spectrum,
+and the likelihood compares it with the prepared data. Model reprocessing
+accounts for the preparation applied to the observations. Its flags and the
+selected likelihood determine which operations are applied to each trial.
 
-Likelihood definitions, priors and sampler adapters live in `retrieval/`.
-Several model/likelihood closures still live inside the simulator; their
-location is a remaining architecture task, not an invitation to change their
-mathematics while moving them.
-
-Block 9 also still calls MultiNest/emcee through inline setup. The public
-adapters in `retrieval/samplers.py` do not yet replace all of those calls.
-MultiNest takes a likelihood and separate prior transform; emcee takes a
-log-posterior containing both prior and likelihood. Check which interface you
-are reading before deciding where the prior is evaluated.
-
-## A practical way to read a function
-
-For each unfamiliar call, establish five things:
-
-1. Which configuration choice selected this branch?
-2. Which earlier step produced each input?
-3. What are the units, array axes and selection conventions?
-4. Does the function calculate, transform, display or save something?
-5. Which next step consumes its return values?
-
-If the code does not establish an answer, flag the uncertainty rather than add
-an assumed explanation. The comments and diagrams must describe the current
-calculation, including compatibility paths, so readers can follow its
-scientific intent.
+`retrieval/` contains likelihood functions, priors and sampler interfaces.
+Several model and likelihood functions are defined inside `core/simulator.py`,
+where Block 9 also sets up MultiNest or emcee. The functions in
+`retrieval/samplers.py` provide callable interfaces for those samplers.
+MultiNest receives a likelihood and a separate prior transform. Emcee receives
+a log-posterior that includes the prior and likelihood.

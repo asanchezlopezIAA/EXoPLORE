@@ -19,11 +19,10 @@ stellar spectrum is assumed to be unity at the continuum).
 
 from __future__ import annotations
 
-# Reading this file
-# This file contains numerical noise/amplitude helpers and the actual
-# multiplicative throughput draw. randomness.py separately chooses the existing
-# seeds. The standard runner also has its own Gaussian draw/scaling branches;
-# these convenience helpers do not silently replace every one of those calls.
+# Role in the calculation
+# Generate Gaussian noise and multiplicative throughput variations. randomness.py
+# selects their configured seeds. The simulator applies its observation-specific noise
+# scaling.
 
 
 from typing import Optional, Tuple
@@ -234,7 +233,7 @@ def add_throughput(
     jitter_frac : float, optional
         1-sigma fractional jitter (e.g. 0.02 for 2 %).  Default 0.02.
     mode : str, optional
-        ``'white'`` for uncorrelated draws each exposure;
+        ``'white'`` for uncorrelated draws each exposure.
         ``'red'`` for a temporally correlated (smoothed) sequence.
         Default ``'white'``.
     red_smooth_sigma : float, optional

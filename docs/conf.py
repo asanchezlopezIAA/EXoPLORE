@@ -41,7 +41,7 @@ exclude_patterns.append("czesla2024_pipeline.md")
 
 
 def _validate_notebook_download(path):
-    """Refuse to publish broken saved outputs; do not execute notebook code."""
+    """Validate the saved notebook outputs before Sphinx copies the download."""
     import base64
     import json
 
@@ -91,6 +91,6 @@ def _check_notebook_download(app):
 
 
 def setup(app):
-    # The ordinary MyST download role copies the canonical file after this check.
+    # The ordinary MyST download role copies the notebook after this check.
     app.connect("builder-inited", _check_notebook_download)
     return {"parallel_read_safe": True, "parallel_write_safe": True}

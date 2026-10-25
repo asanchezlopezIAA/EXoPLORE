@@ -2,12 +2,11 @@
 exoplore.atmosphere.chemistry
 =============================
 
-Clean interface to equilibrium atmospheric chemistry via EasyChem.
+Calculate equilibrium atmospheric chemistry with EasyChem.
 
-This module wraps the EasyChem ``ExoAtmos`` object so that callers work
-with clearly named parameters (``metallicity_wrt_solar``,
-``carbon_to_oxygen_ratio``) rather than with the ``inp_dat``
-dictionary.
+Functions configure EasyChem's ``ExoAtmos`` object using
+``metallicity_wrt_solar`` and ``carbon_to_oxygen_ratio``, then return
+mass fractions and mean molecular weight profiles.
 
 Two computation modes are supported:
 
@@ -43,11 +42,10 @@ Examples
 
 from __future__ import annotations
 
-# Reading this file
-# Temperature and pressure alone do not specify a spectrum: the opacity
-# calculation also needs abundances at every atmospheric layer. These helpers
-# produce those abundance arrays. Keep volume and mass fractions distinct, and
-# check the selected chemistry path before interpreting an abundance parameter.
+# Role in the calculation
+# Calculate abundance arrays at the atmospheric pressure and temperature levels. The
+# radiative-transfer calculation uses these abundances to weight each species' opacity.
+# Mass fractions and volume mixing ratios have separate conversion functions.
 
 
 from typing import Dict, List, Optional, Tuple
@@ -180,9 +178,8 @@ def manual_mass_fractions(
         raise ValueError(
             f"len(vmr)={len(vmr)} must equal len(species)={len(species)}."
         )
-    # This manual helper broadcasts the supplied numerical values unchanged
-    # across layers; it performs no species-mass conversion here. Check what
-    # the caller supplies rather than inferring a conversion from the name.
+    # Broadcast the supplied abundance values at every pressure level.
+    # These values enter the returned mass_fracs dictionary directly.
     mass_fracs = {
         sp: float(vmr[i]) * np.ones(n_layers)
         for i, sp in enumerate(species)
@@ -290,7 +287,7 @@ def mass_frac_to_vmr(
     mmw_atmosphere : float
         Mean molecular weight of the bulk atmosphere in AMU.
     mode : {'direct', 'inverse'}
-        ``'direct'`` converts mass fraction → VMR;
+        ``'direct'`` converts mass fraction → VMR.
         ``'inverse'`` converts VMR → mass fraction.
 
     Returns
@@ -309,9 +306,9 @@ def mass_frac_to_vmr(
         # mass m_atm, then the number ratio (VMR) is
         #   VMR = (f / m_s) / (1 / m_atm) = f × m_atm / m_s
         # Mass fractions are the internal representation used by petitRADTRANS
-        # when computing radiative transfer; VMR is what observers report
+        # when computing radiative transfer. VMR is what observers report
         # and what EasyChem returns from equilibrium chemistry solves.
-        # For a solar H/He dominated atmosphere MMW_atm ≈ 2.33 amu;
+        # For a solar H/He dominated atmosphere MMW_atm ≈ 2.33 amu.
         # deviations (e.g., heavy-metal-enriched or CO2-dominated atmospheres)
         # must be accounted for by passing the correct mmw_atmosphere.
         result = mass_frac * mmw_atmosphere / mmw_species
@@ -320,7 +317,7 @@ def mass_frac_to_vmr(
             print("vmr to mass_frac conversion failure")
             sys.exit()
         # Inverse: mass_frac = VMR × MMW_species / MMW_atm
-        # Rearrangement of the same formula above; used when converting
+        # Rearrangement of the same formula above. used when converting
         # observer-quoted VMRs back to pRT input mass fractions.
         result = vmr * mmw_species / mmw_atmosphere
     return result

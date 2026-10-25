@@ -21,15 +21,14 @@ blain24
 tellurics
     Telluric transmittance loading and fixed-telluric pipeline.
 prepare
-    Main pipeline orchestrator (``preparing_pipeline``) and injection
+    Preparation selection (``preparing_pipeline``) and injection
     utilities.
 """
 
-# Reading these imports
-# These imports expose preparation building blocks. Selecting a pipeline
-# happens in prepare.py or a direct-helium runner, rather than by applying every
-# exported function. Keep masks, propagated uncertainties and any model-filtering
-# information connected to the selected preparation.
+# Public imports
+# Export preparation functions for spectra, uncertainties and masks. prepare.py
+# selects the molecular preparation method. The direct-helium runners select
+# their instrument-specific recipes.
 
 
 from exoplore.pipelines.masking import (

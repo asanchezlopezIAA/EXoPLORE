@@ -6,7 +6,7 @@ Kp-Vsys (planet semi-amplitude vs. systemic velocity) detection maps.
 
 These maps are the standard visualisation for high-resolution
 cross-correlation detections.  The co-added CCF signal is evaluated
-on a grid of (Kp, Vsys) values; the planet atmosphere is detected at
+on a grid of (Kp, Vsys) values. The planet atmosphere is detected at
 the expected (Kp_true, Vsys_true) coordinate.
 
 This module provides:
@@ -15,17 +15,16 @@ This module provides:
 - :func:`plot_1d_ccf`, collapsed 1-D CCF at the peak Kp.
 
 The descriptive helpers return Matplotlib figures. Older runner-facing
-functions also manage plotting/saving themselves; inspect the selected
+functions also manage plotting/saving themselves. inspect the selected
 function's return behavior before trying to customize its result.
 """
 
 from __future__ import annotations
 
-# Reading this file
-# This file contains both descriptive plot helpers and older runner-facing
-# plot functions. Check each function's expected map orientation and its supplied
-# velocity convention: a systemic velocity and a residual Vrest offset are not
-# interchangeable labels. The map statistic is calculated upstream.
+# Role in the calculation
+# Plot detection maps and velocity profiles using the map orientation and velocity
+# convention supplied to each function. Labels distinguish systemic velocity from the
+# residual Vrest offset.
 
 
 from typing import Optional, Sequence, Tuple
@@ -352,7 +351,7 @@ def plot_multi_night_1D_CCF(
     combined_slice : (ndarray, float)
         ``(snr_1d, peak_snr)`` for the combined (all-night) stack.
     xlims : list [vmin, vmax], optional
-        x-axis limits; defaults to [-100, 100].
+        x-axis limits. defaults to [-100, 100].
     show_plot, save_plot : bool
     """
     import matplotlib.pyplot as plt
@@ -556,7 +555,7 @@ def plot_Kp_Vrest(
     sysrem_opt : bool
         If ``True``, produces a multi-panel figure for all SYSREM iterations.
     cc_values : bool
-        If ``True``, uses ``"CCVal"`` in the filename (instead of ``"SNR"``).
+        If ``True``, use ``"CCVal"`` as the filename statistic label.
     """
     import matplotlib
     import matplotlib.pyplot as plt
@@ -574,7 +573,7 @@ def plot_Kp_Vrest(
         levels = np.arange(np.floor(ccf_tot_sn.min()),
                            np.ceil(ccf_tot_sn.max()) - 0.7, 1)
         # x-axis ticks: keep the configured PLOT_CCF_XSTEP when it yields a
-        # readable number of labels; otherwise widen to the smallest "nice"
+        # readable number of labels. Otherwise widen to the smallest "nice"
         # step giving <= ~12 ticks over the displayed velocity range, so a
         # small step over a wide v_rest range does not cram the axis.
         _vspan = 2.0 * inp_dat['MAX_CCF_V_STD']
@@ -583,12 +582,12 @@ def plot_Kp_Vrest(
             _xstep = next((s for s in (10, 20, 25, 50, 100, 200, 500)
                            if _vspan / s <= 12), 500)
         # x-axis (v_rest) ticks anchored on 0 (so 0 is always labelled even when
-        # the step does not divide the velocity range evenly); ticks beyond the
+        # the step does not divide the velocity range evenly). ticks beyond the
         # range are clipped by the axis limits.
         _vmax_tick = int(np.ceil(inp_dat['MAX_CCF_V_STD'] / _xstep) * _xstep)
         xlabels = np.arange(-_vmax_tick, _vmax_tick + _xstep, _xstep)
         # y-axis (Kp) ticks: a clean 50 km/s grid anchored on 0 (so 0 is always
-        # labelled), spanning at least -200 to 200 km/s inclusive; ticks beyond
+        # labelled), spanning at least -200 to 200 km/s inclusive. ticks beyond
         # the Kp range are clipped by the axis limits.
         _kstep = 50
         _kmax = max(200, int(np.ceil(inp_dat['kp_max'] / _kstep) * _kstep))

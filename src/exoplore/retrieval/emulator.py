@@ -31,8 +31,9 @@ Technical details
 PrtEmulator is a drop-in replacement for :func:`exoplore.atmosphere.prt.call_pRT`
 inside Block 9 of the simulator.  It uses a PCA basis fitted on a library of
 pRT spectra and a small MLP trained to predict PCA coefficients from atmospheric
-parameters.  Inference takes ~1 ms instead of ~500 ms per call (the speedup
-is limited by the PCA reconstruction, not the MLP).
+parameters. The reported evaluation times are approximately 1 ms per
+emulator call and 500 ms per pRT call. PCA reconstruction accounts for most
+of the emulator evaluation time.
 
 The emulator is instrument- and order-specific.  Each emulator directory
 (produced by ``scripts/emulator/train_emulator.py``) contains:
@@ -51,11 +52,10 @@ Usage
     wave, spec = emulator.predict(T_eq=1200.0, log10_x_h2o=-3.0)
 """
 
-# Reading this file
-# This is an explicitly experimental spectrum surrogate, not the default
-# physical solver. Training/prediction accuracy and retrieval accuracy are
-# different checks. The warning above remains applicable; moving or documenting
-# this file does not validate it for scientific retrievals.
+# Role in the calculation
+# Train and evaluate an experimental emulator of atmospheric spectra. Its validation
+# requirements are documented above. compare both spectra and retrieval posteriors with
+# the physical model before scientific use.
 
 
 import os

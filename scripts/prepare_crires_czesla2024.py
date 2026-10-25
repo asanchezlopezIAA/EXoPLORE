@@ -6,10 +6,9 @@ The optional pilot uses one manifest exposure and never changes the manifest.
 """
 from __future__ import annotations
 
-# Where this script fits
-# This connects command-line choices to the selected-segment helium
-# molecfit adapter. Extracted spectra and a manifest are inputs; raw cr2res
-# reduction is a separate earlier stage. The pilot concerns a selected exposure.
+# Role in the calculation
+# Prepare telluric corrections for the selected CRIRES+ helium segment from extracted
+# spectra and an exposure manifest. The pilot option fits one selected exposure.
 
 import argparse
 import json

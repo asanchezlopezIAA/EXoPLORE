@@ -3,16 +3,14 @@
 The pipeline-steps figure calls EXoPLORE's existing plotting routine. The
 transmission-map layout follows Fig. 4 of Czesla et al. (2024),
 https://doi.org/10.1051/0004-6361/202451003, with residuals explicitly measured
-against the prepared injected model, not a fitted empirical slab. Plotting
-does not smooth, detrend, fit or change the saved scientific arrays.
+against the prepared injected model. Functions read the saved arrays and
+apply the display settings specified by their arguments.
 """
 from __future__ import annotations
 
-# Reading this file
-# These functions show prepared helium observations and their model
-# comparisons with consistent axes. Identify the wavelength frame and the
-# prepared model used for residuals. The figure renderer is separate from
-# physical atmosphere generation and direct-transmission preparation.
+# Role in the calculation
+# Plot prepared helium spectra and their model comparisons. Function arguments specify
+# the wavelength frame and the model used to calculate residuals.
 
 
 import json
@@ -33,8 +31,8 @@ def plot_transmission_maps(
     """Save observed/model-residual maps with common scales and frame markers.
 
 Both inputs are dimensionless reference-divided transmission on the supplied
-grid. No smoothing is applied. OH markers indicate configured wavelengths;
-they do not imply simulated emission or a correction for airglow.
+grid. No smoothing is applied. OH markers indicate configured wavelengths.
+They do not imply simulated emission or a correction for airglow.
     """
     import matplotlib.pyplot as plt
     frame = 'planetary' if planetary else 'stellar'
@@ -82,7 +80,7 @@ def write_helium_run_plots(output: Path, arrays: dict, recovered: dict,
 
 The steps residual is transformed back to the Earth-frame display grid so
 that every panel has the same wavelength coordinate. Master-out division was
-performed in the stellar frame; this display interpolation does not replace
+performed in the stellar frame. This display interpolation does not replace
 the saved stellar or planetary arrays. Existing files are never overwritten.
     """
     from exoplore.plotting.steps import plot_pipeline_steps

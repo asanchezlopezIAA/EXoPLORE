@@ -1,281 +1,183 @@
 # Architecture and code flow
 
-This guide is for researchers reading or contributing to EXoPLORE. It explains
-where calculations live, how a run connects them, and which interfaces must stay
-compatible when the implementation is reorganized.
+Use this guide to understand what EXoPLORE does when you run a simulation
+or analyse observations. It follows your configuration through the calculation
+to the resulting spectra, figures and detection maps, showing which files
+perform each step.
 
-The [tutorials](tutorial.md) explain how to run experiments. The
-[configuration reference](config_reference.md) explains their settings. Start
-here when you want to find the code behind a step in an experiment.
+The [code reading guide](code_reading_guide.md) walks through the function calls.
+The [file index](module_guide.md) explains what each module does.
 
-## Follow a run
-
-The public entry point stays small:
+## Run an experiment
 
 ```python
 from exoplore.config import SimulationConfig
 from exoplore.core import ExoploreSimulator
 
-# Parse the experiment into named configuration sections.
+# Read the planet, instrument, atmosphere, observation and analysis settings.
 config = SimulationConfig.from_json("configs/hd189733b_andes_transit_clean.json")
 
-# Validate the selected route, then execute its configured workflow.
+# Select and execute the workflow specified by those settings.
 simulator = ExoploreSimulator(config)
 simulator.run()
 ```
 
-The simulator coordinates the calculation. Its `run()` method returns `None`;
-products are written to the configured output directory. The private `_state`
-dictionary is working storage and is not a stable public result interface.
+`ExoploreSimulator.run()` coordinates the calculation and returns `None`.
+The selected output products are written under `config.paths.output_root`.
+The command-line entry point in `core/cli.py` uses these same classes: it
+prints a preview by default and executes the experiment when given `--run`.
 
-### Inspect completed products through public accessors
+```text
+SimulationConfig
+      |
+      v
+ExoploreSimulator.run()
+      |
+      +--- Molecular spectroscopy: core/simulator.py
+      |       |
+      |       +--- Read system, instrument and observing inputs       1–2
+      |       |
+      |       +--- For each selected spectral order:
+      |       |       atmospheric spectrum                            3
+      |       |           v
+      |       |       stellar/planetary time series                   4
+      |       |           v
+      |       |       tellurics, throughput, noise and preparation     5
+      |       |           v
+      |       |       cross-correlation                               6
+      |       |
+      |       +--- Combine CCFs and calculate velocity maps            7
+      |       +--- Save selected numerical products                    8
+      |       +--- Run retrieval when enabled                          9
+      |
+      +--- Helium simulation: core/helium_simulation.py
+      |                       core/carmenes_helium_simulation.py
+      |
+      +--- Observed helium: pipelines/palle2020.py
+      |                     pipelines/czesla2024.py
+      |
+      +--- Helium grid fitting: retrieval/helium_grid.py
+```
 
-After a successful standard molecular run:
+`core/spectroscopy_mode.py` selects the workflow. The block numbers in the
+molecular path label sections of `core/simulator.py`. Blocks 3–6 process one
+spectral order before advancing to the next. The helium runners each manage
+their own observing, preparation and analysis sequence.
+
+## Where to find a calculation
+
+Paths in this table are relative to `src/exoplore/`.
+
+| Package | Contents | Starting points |
+|---|---|---|
+| `config/` | Simulation settings and JSON loading | `models.py`, instrument and helium configuration modules |
+| `core/` | Experiment execution and workflow selection | `simulator.py`, `spectroscopy_mode.py`, `cli.py` |
+| `planets/` | Planetary-system parameters and derived quantities | `models.py`, `catalog.py` |
+| `instruments/` | Instrument information, wavelength grids and observing inputs | `base.py`, `wavegrid.py`, instrument readers |
+| `atmosphere/` | Radiative transfer, chemistry, temperature and broadening | `prt.py`, `chemistry.py`, `temperature.py`, `winds.py`, helium solvers |
+| `observation/` | Exposure times, velocities, airmass and noise | `timing.py`, `velocity.py`, `airmass.py`, `noise.py`, `randomness.py` |
+| `pipelines/` | Spectral masks, preparation and model filtering | `prepare.py`, `masking.py`, preparation-method modules |
+| `ccf/` | Cross-correlation and velocity-map calculations | `kernels.py`, `compute.py`, `statistics.py` |
+| `retrieval/` | Likelihoods, priors, sampling interfaces and helium grid fitting | `likelihood.py`, `priors.py`, `samplers.py`, `helium_grid.py` |
+| `analysis/` | Statistical summaries and comparisons of calculated products | `stats.py`, `multi_night.py`, `diagnostics.py` |
+| `plotting/` | Spectral, CCF, detection-map and retrieval figures | `matrices.py`, `kpvsys.py`, instrument and helium plotting modules |
+| `io/` | File readers, output paths and saved products | `paths.py`, `stellar.py`, `utils.py`, `results.py` |
+
+The observing loop and several retrieval-model and likelihood functions are
+inside `core/simulator.py`. The runner imports `spec_to_mat_fraction()` from
+`core/observation.py` to build spectral matrices.
+
+At the repository root, `configs/` holds example experiments, `scripts/` holds
+command-line tools, `notebooks/` holds executable tutorials and `docs/` holds
+the documentation. The [input guide](input_files.md) describes the external
+scientific datasets. Runs write their products to the configured output root.
+
+## Read completed results
+
+After a successful molecular run:
 
 ```python
-# These methods expose existing products; they do not run the analysis again.
+# Read the combined time–velocity CCF and the saved S/N map.
 ccf = simulator.get_combined_ccf()
 detection = simulator.get_detection_map(metric="snr")
 
-# Axis order is explicit: CCF (velocity, exposure), map (Vrest, Kp).
+# CCF axes: velocity, exposure. Map axes: Vrest, Kp.
 print(ccf.ccf.shape, detection.values.shape)
 print(detection.peak_value, detection.peak_kp_kms, detection.peak_v_rest_kms)
 ```
 
-`CCFResult` and `DetectionMapResult` live in `exoplore.results`, independent of
-the simulator, IO and plotting modules. They name already computed arrays and
-their conventions; neither class performs preparation, coaddition or map
-normalization. The map's peak is a maximum pixel, not an uncertainty estimate.
+`CCFResult` and `DetectionMapResult`, defined in `results.py`, hold the arrays,
+axes, units and run metadata. The peak properties locate the strongest map
+pixel. Statistical uncertainties require a separate inference calculation.
 
-The CCF accessor returns detached arrays by default. Use `copy=False` to obtain
-read-only views when avoiding a copy matters; those views still reflect later
-changes to the underlying arrays. The container's frozen fields do not deeply
-freeze NumPy arrays or metadata. Result arrays read from disk are detached.
+`get_combined_ccf()` returns copies by default. With `copy=False`, it returns
+read-only views that follow changes to the underlying arrays. The result
+objects have fixed field assignments. Their NumPy arrays and metadata retain
+their own mutability rules.
 
-The map accessor reads the explicitly named S/N or Welch archive. In an
-all-metrics run the old `ccf_tot_sig` working variable can contain the last Welch
-result, so using it as an S/N map would be ambiguous. Missing files produce an
-error; the accessor does not substitute another metric or recalculate a map.
+For different observing sequences, specify a zero-based `night_index`. The
+CCF reader selects that night's valid exposures. Nights sharing one geometry
+are coadded in the combined CCF. `get_detection_map(night_index=0)` reads the
+corresponding per-night map when that product was saved. `metric="snr"` and
+`metric="welch"` select their respective archives.
 
-For nights with different observing sequences, request the CCF with
-`night_index=0` (zero-based); the accessor trims documented exposure padding.
-Nights sharing one geometry have already been coadded in that CCF. Saved
-per-night maps can be requested with `get_detection_map(night_index=0)` when
-the run produced them. Injection/iteration cubes are rejected rather than
-silently selecting an extra axis. Helium workflows do not yet expose these
-accessors. Access before success, or after a failed new attempt, raises an error.
+These methods support the ordinary two-dimensional molecular CCFs and maps.
+Requests for products with extra injection or iteration axes raise an error.
+Results become available after a successful run. An unsuccessful new attempt
+clears that availability. Missing map files also raise an error.
 
-Read or export compact products without a live simulator:
+The private `_state` dictionary holds intermediate arrays for the running
+calculation. The public result methods capture the completed experiment's
+metadata, including its order selection and velocity conventions.
+
+To save or read the compact CCF:
 
 ```python
 from exoplore.io.results import load_ccf_result, load_detection_map, save_ccf_result
 
-# Export the CCF, phase, selected exposures, BERV and velocity/provenance metadata.
-# Existing files are protected unless overwrite=True is explicitly requested.
+# Save the CCF, its axes, selected exposures and observing metadata.
 save_ccf_result(ccf, "combined_ccf.npz")
 ccf_from_disk = load_ccf_result("combined_ccf.npz")
 
-# Use the exact S/N archive path from the run's matrices directory.
+# Read the map archive written in the run's matrices directory.
 map_from_disk = load_detection_map("path/to/ccf_tot_sn_map_RUN_NAME.npz")
 ```
 
-The CCF reader also accepts existing compact notebook exports. The new compact
-export stores the CCF itself; map grids remain in the separate map archive.
-It does not replace the notebook animation bundle, which includes additional
-map grids.
+The save function requires `overwrite=True` to replace an existing file.
+The CCF reader also accepts compact notebook exports. Map grids are stored in
+the map archive and in the notebook animation bundle.
 
-Provenance is captured when a standard run succeeds, so changing the config
-for a subsequent experiment does not relabel the completed CCF. The existing
-`run()` return value, files, calculation order and scientific defaults are
-preserved.
+## Import the calculation you need
 
-```text
-JSON experiment
-      |
-      v
-SimulationConfig -> ExoploreSimulator -> select spectroscopy route
-                                         |
-             +---------------------------+--------------------------+
-             |                           |                          |
-             v                           v                          v
-    Standard molecular run       Helium simulation          Observed helium
-    core/simulator.py            core/helium_simulation.py  pipeline recipe
-             |
-             |                     Helium grid is a separate route:
-             |                     retrieval/helium_grid.py
-             v
-    Inputs + instrument + planet + observing sequence       Blocks 1–2
-             |
-             v
-    +------ for each selected spectral order --------------------+
-    | Atmospheric forward model                              3  |
-    |         v                                                 |
-    | Project star/planet through the observing sequence      4  |
-    |         v                                                 |
-    | Tellurics, throughput, noise and spectral preparation   5  |
-    |         v                                                 |
-    | Cross-correlate prepared spectra and template           6  |
-    +-----------------------------------------------------------+
-             |
-             v
-    Combine CCFs; search trial orbital motions                  7
-             |
-             v
-    Save configured matrices and detection products            8
-             |
-             v
-    Atmospheric retrieval, when enabled                        9
+```python
+from exoplore.core.simulator import ExoploreSimulator
+from exoplore.observation.timing import orbital_phase
+from exoplore.observation.velocity import planet_radial_velocity
+from exoplore.retrieval.priors import PriorSet
+from exoplore.retrieval.samplers import run_multinest
+from exoplore.plotting.kpvsys import plot_Kp_Vrest
 ```
 
-The numbered blocks are the labels currently used in `core/simulator.py`.
-Blocks 3–6 share an order loop: the code follows an order through those stages
-before advancing to the next. Enabled features and real-data inputs determine
-which operations actually run. Observed helium recipes currently live in
-`pipelines/palle2020.py` and `pipelines/czesla2024.py`; they are separate runners,
-not additional steps appended to the molecular route.
+## Settings, arrays and random draws
 
-Preparation changes the data searched by the CCF. Retrieval may also reprocess
-its model to account for that preparation. Moving these calls requires checking
-their dependencies and preserving their ordering; visual similarity between
-functions is insufficient evidence that they can be exchanged.
+Configuration dataclasses hold named groups of settings. Dictionaries hold
+collections with variable keys, such as chemical species and instrument names.
+`CCFResult` and `DetectionMapResult` give the completed arrays named fields and
+explicit axes. Calling `dataclasses.asdict()` recursively copies their values,
+including arrays.
 
-## Where to find a calculation
-
-All package paths below are relative to `src/exoplore/`.
-
-| Package | Responsibility | Useful starting points |
-|---|---|---|
-| `config/` | User settings and JSON conversion | `models.py`, route-specific configuration modules |
-| `core/` | Public simulator, route selection and workflow coordination | `simulator.py`, `spectroscopy_mode.py`, `cli.py` |
-| `planets/` | System parameters and their loading | `models.py` |
-| `instruments/` | Instrument registry, wavelength grids, ETC inputs and instrument-specific adapters | `base.py`, `wavegrid.py`, instrument modules |
-| `atmosphere/` | Atmospheric spectra, chemistry interfaces and broadening | `prt.py`, `winds.py`, helium providers |
-| `observation/` | Timing, velocities, airmass and noise | `timing.py`, `velocity.py`, `airmass.py`, `noise.py`, `randomness.py` |
-| `pipelines/` | Masking, preparation and model filtering | `prepare.py`, `masking.py`, `sysrem.py` |
-| `ccf/` | Correlation kernels, CCF assembly and velocity-space analysis | `kernels.py`, `compute.py`, `statistics.py` |
-| `retrieval/` | Likelihoods, priors and sampler adapters | `likelihood.py`, `priors.py`, `samplers.py` |
-| `analysis/` | Existing analysis and diagnostic routines | `stats.py`, `multi_night.py`, `diagnostics.py` |
-| `plotting/` | Scientific figure construction | `matrices.py`, `kpvsys.py`, route-specific figures |
-| `io/` | Input readers, serialization and output paths | `paths.py`, `stellar.py`, `utils.py` |
-
-`results.py` contains shared named products; `io/results.py` handles compact
-product serialization and the temporary adapter from the current runner's
-dictionary state. Keep new calculations out of both files.
-
-These are the current homes of the code, not a claim that every boundary has
-already been separated. Large workflow blocks and retrieval likelihoods still
-reside inside `core/simulator.py`. Some analysis routines also calculate, save
-and plot in one function. Extract those responsibilities incrementally while
-keeping the public entry point stable.
-
-Outside the package:
-
-- `configs/` contains reference experiments; check Git tracking when distinguishing
-  maintained examples from local research configurations.
-- `scripts/` contains command-line tools. New reusable calculations should live
-  in the package, with scripts responsible for arguments and execution.
-- `notebooks/` contains executable teaching material and presentation helpers.
-  Notebook 01 is a published artifact; preserve its approved saved outputs.
-- `tests/` contains automated checks. Scientific inputs that live outside the
-  checkout are described in the [input guide](input_files.md).
-- `outputs/` contains generated products, not package source. Do not move or
-  delete existing experiments as part of source reorganization.
-
-## Canonical modules and compatibility imports
-
-Older import paths remain available:
-
-| Existing import | Canonical implementation |
-|---|---|
-| `exoplore.simulator` | `exoplore.core.simulator` |
-| `exoplore.velocity` | `exoplore.observation.velocity` |
-| `exoplore.priors` | `exoplore.retrieval.priors` |
-| `exoplore.samplers` | `exoplore.retrieval.samplers` |
-
-The compatibility modules import the same functions/classes directly. They do
-not wrap or copy their calculations. Make changes in the canonical module and
-keep the exported names working. This also allows older serialized priors to
-resolve their original module paths. Newly serialized classes identify their
-canonical module, so byte-identical pickle files are not an API guarantee.
-
-The simulator's existing `_apply_throughput` helper also remains as a thin
-wrapper. `observation/randomness.py` now owns the choice of throughput and
-Gaussian seeds; `observation/noise.py` still implements the throughput draw and
-its unchanged 2% scale. Gaussian draws and uncertainty scaling remain at their
-original positions in the simulation.
-
-Different nights need different noise. The extraction preserves both existing
-ways of obtaining it: fresh unseeded Gaussian draws for ordinary multi-night
-runs, and separately seeded draws for Cheverall26. Throughput seeds retain
-physical order IDs; Cheverall26 Gaussian seeds retain selected-order loop
-positions. These choices are documented so moving code does not accidentally
-change a night's noise or which order receives it.
-
-Some similarly named functions are **not** interchangeable. For example,
-`planet_radial_velocity_eccentric` accepts its periastron argument in radians,
-whereas `get_V_eccentric` accepts degrees and has a different phase-anchor
-implementation. Both remain as implemented. Any scientific reconciliation
-requires its own review, separate from an architecture change.
-
-## Settings, results and dictionaries
-
-Configuration dataclasses describe fixed, named settings. They are appropriate
-for planet, atmosphere, observation and analysis options. Keep species-to-
-abundance mappings and instrument registries as dictionaries: their keys
-represent a variable collection of species or instruments.
-
-For new fixed-schema stage results, prefer a small named record over a large
-dictionary whose required keys are known only to its callers. Document:
-
-- units, including whether wavelength is in microns and velocity in km/s;
-- array axes and whether nights/orders can have different lengths;
-- whether a mask stores indices or booleans, and what `True` means;
-- whether arrays are shared references, views or copies.
-
-The CCF and detection-map records above implement this boundary for completed
-diagnostics. Prepared-order and other stage records remain future incremental
-work; current scientific array layouts are preserved. Avoid copying large
-arrays simply to put them in a dataclass. In particular, `dataclasses.asdict()`
-recursively copies values and should not be used casually on large results.
-
-Existing simulator variables such as `_mini_*` dictionaries translate typed
-settings into older function arguments. `_b5`/`_b7` suffixes refer to workflow
-blocks, and `h` is used as the selected-order loop position. Keep those names
-until a stage can be extracted and reviewed in isolation. Renaming everything
-at once would obscure the evidence that calculations remain unchanged.
-
-## Comments that help a scientific reviewer
-
-Explain why a call is needed, where its inputs came from and what conventions
-its outputs follow. Put a stage overview at its entry point, and document
-non-obvious transformations beside the code that performs them.
-
-For example, explain that BERV is subtracted under the existing velocity
-convention, or that a preparation operator is applied to a retrieval model to
-match processing of the data. Do not infer units or mask semantics from a
-variable name: verify the producer and consumer before documenting them.
-
-Use descriptive names for new interfaces. Preserve existing public names,
-keywords, serialized field names and configuration keys through compatibility
-adapters when internal names change. Comments must describe the calculation
-that exists, including limitations, rather than a planned implementation.
-
-## Preservation checks for refactoring
-
-Before moving a stage, capture its existing behavior. After the move, compare
-spectra, uncertainties, masks, grids, CCFs and maps as applicable. Keep equations,
-operation order, normalization, output conventions, defaults and random streams
-unchanged. Configuration validation changes need a separate review because
-they can alter which existing configurations are accepted.
+`observation/randomness.py` selects seeds and calls the throughput function in
+`observation/noise.py`. The throughput draw uses a fractional white-jitter
+scale of 0.02. Gaussian noise draws and their scaling are applied in the
+observing loop. Ordinary multi-night Gaussian draws use fresh random
+initialization. Cheverall26 assigns separate seeded draws. Throughput streams
+use physical order IDs, while Cheverall26 Gaussian streams use positions in
+the selected-order list.
 
 With both the Gaussian-noise and throughput seeds fixed, the stochastic
 realisation is reproducible. End-to-end floating-point results may still differ
 at machine-precision level, so bitwise-identical output is not guaranteed.
 
-Run the source checkout's automated tests with:
-
-```bash
-PYTHONPATH=src python -m pytest
-```
-
-Check both component tests and the documented tutorials when changing a stage.
+Velocity functions document their argument units individually.
+`planet_radial_velocity_eccentric()` takes its periastron argument in radians.
+`get_V_eccentric()` takes degrees and uses its documented phase convention.

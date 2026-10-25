@@ -3,18 +3,17 @@
 
 Numerical primitives for direct, vacuum He I transmission analysis.
 
-All wavelengths are nm; velocities are km/s, positive for recession. These
+All wavelengths are nm. Velocities are km/s, positive for recession. These
 functions implement the frame and multiplet conventions of the czesla2024 pipeline. Interpolation never bridges
-an invalid native pixel. Variance propagation below is marginal only; inference
+an invalid native pixel. Variance propagation below is marginal only. inference
 must also account for shared reference noise and interpolation covariance.
 """
 from __future__ import annotations
 
-# Reading this file
-# These small numerical helpers keep direct-helium wavelength-frame and
-# resampling conventions together. Wavelengths are vacuum nm and velocities
-# km/s here; molecular routines may use microns. Preserve valid-pixel/gap masks
-# when interpolating rather than inventing data across detector gaps.
+# Role in the calculation
+# Convert wavelength frames and resample direct-helium spectra. These functions use
+# vacuum wavelengths in nm and velocities in km/s, and carry valid-pixel and detector-
+# gap masks through interpolation.
 
 
 import numpy as np
@@ -24,7 +23,7 @@ C_KMS = 299792.458
 
 
 def air_to_vacuum_nm(wavelength: np.ndarray) -> np.ndarray:
-    """Standard dry-air Edlén conversion; never apply this to cr2res vacuum data."""
+    """Standard dry-air Edlén conversion. Never apply this to cr2res vacuum data."""
     w = np.asarray(wavelength, float)
     if np.any(~np.isfinite(w)) or np.any((w < 200) | (w > 2000)):
         raise ValueError("Edlen conversion here is restricted to 200–2000 nm")
@@ -64,7 +63,7 @@ def resample(wave: np.ndarray, flux: np.ndarray, variance: np.ndarray,
     index = np.searchsorted(wave, destination, side="right") - 1
     index = np.clip(index, 0, len(wave) - 2)
     # t gives the fractional position between two original pixels. The same
-    # endpoints interpolate the flux; their squared coefficients propagate the
+    # endpoints interpolate the flux. Their squared coefficients propagate the
     # diagonal variances. This helper does not return full pixel covariance.
     t = (destination - wave[index]) / (wave[index + 1] - wave[index])
     good = ((t >= 0) & (t <= 1) & np.isfinite(flux[index]) & np.isfinite(flux[index + 1])
@@ -77,7 +76,7 @@ def resample(wave: np.ndarray, flux: np.ndarray, variance: np.ndarray,
 
 
 def weighted_mean(flux: np.ndarray, variance: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """Inverse-variance mean of finite pixels; empty coverage remains NaN."""
+    """Inverse-variance mean of finite pixels. Empty coverage remains NaN."""
     good = np.isfinite(flux) & np.isfinite(variance) & (variance > 0)
     weight = np.divide(1, variance, out=np.zeros_like(variance), where=good)
     den = weight.sum(axis=0)
@@ -95,8 +94,8 @@ def multiplet(wave_nm: np.ndarray, column_cm2: float, shift_kms: float,
 
     tau_j=N*pi*e^2/(m_e*c)*f_j*lambda_j/(sqrt(2*pi)*sigma_v)*exp(-v_j^2/(2*sigma_v^2)).
     The integrated cross-section constant is 0.02654029 cm² Hz (Gaussian cgs).
-    As in Czesla Eq. 2, instrumental/smearing broadening enters optical depth;
-    this is an approximation appropriate to weak saturation, not a 3D model.
+    As in Czesla Eq. 2, instrumental/smearing broadening enters optical depth.
+    The slab approximation applies in the weak-saturation regime.
     """
     if column_cm2 < 0 or intrinsic_sigma_kms <= 0 or not 0 < filling_factor <= 1:
         raise ValueError("invalid physical multiplet parameters")

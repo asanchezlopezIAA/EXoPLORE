@@ -1,11 +1,7 @@
-"""Choose seeds for the existing throughput and Gaussian-noise calculations.
+"""Select the throughput and Gaussian-noise seeds used by the observing code.
 
-The simulator calls these helpers before its existing noise routines. They
-choose seeds; the draws and their amplitudes remain in observation.noise or
-the runner. Moving this code must preserve the resulting noise in every case.
-
-Different nights must retain their own noise draws. The existing throughput
-and Gaussian choices are preserved separately, exactly as implemented before.
+The seed identifies the order and night receiving a random draw. The simulator
+and observation.noise use these seeds when generating the noise arrays.
 """
 
 import numpy as np
@@ -16,12 +12,11 @@ __all__ = ["throughput_child_seed", "apply_configured_throughput", "gaussian_noi
 
 
 def throughput_child_seed(base_seed, order_index, night_index):
-    """Return the existing throughput child seed, or None for unseeded draws.
+    """Return a throughput seed for the physical order ID and night index.
 
-    order_index is the **physical instrument order ID**, not its position in a
-    selected subset. Thus selecting/reordering orders preserves their streams.
-    The final tag, 1, distinguishes this stream from direct use of the base seed
-    by the Gaussian component. Its value and coordinate order must stay stable.
+    None selects fresh random initialization. SeedSequence combines the base
+    seed, physical order ID, night index and the throughput tag 1. Selecting or
+    reordering a subset gives each physical order the same seeded stream.
     """
     if base_seed is None:
         return None
@@ -33,15 +28,14 @@ def throughput_child_seed(base_seed, order_index, night_index):
 def apply_configured_throughput(
     flux, observation, order_index, night_index, *, throughput_function=None,
 ):
-    """Apply the existing 2% multiplicative jitter to (exposure, pixel) flux.
+    """Apply 2% multiplicative jitter to an (exposure, pixel) flux matrix.
 
     observation supplies noiseless, add_throughput_variations and throughput_seed
-    from ObservationConfig. Disabled/noiseless runs return a copy without draws.
-    The actual routine and its defaults (including white jitter) are unchanged.
+    from ObservationConfig. A noiseless run or disabled throughput returns a
+    copy of the input. An enabled draw uses the order/night seed.
 
-    throughput_function lets the old simulator wrapper pass its original draw
-    routine. Tests/tools that replace that routine therefore keep working.
-    Ordinary callers should leave this argument unset.
+    throughput_function supplies the draw function. Its default is
+    observation.noise.add_throughput.
     """
     if observation.noiseless or not observation.add_throughput_variations:
         return np.copy(flux)
@@ -55,16 +49,12 @@ def apply_configured_throughput(
 def gaussian_noise_seed(
     base_seed, *, n_nights, pipeline_name, selected_order_position, night_index,
 ):
-    """Select the seed used by the runner's existing Gaussian noise draw.
+    """Return the Gaussian-noise seed for an order/night calculation.
 
-    Single-night runs pass the configured base seed directly. Ordinary
-    multi-night runs retain None, even when a base seed is configured.
-    Cheverall26 alone derives a multi-night seed from the base, the selected-
-    order **loop position** and night index, exactly as before extraction.
-
-    Do not substitute a physical order ID for selected_order_position: unlike
-    throughput, this existing policy is not invariant to subset reordering.
-    This function selects a seed; it does not generate or scale noise.
+    A single night uses base_seed. Ordinary multi-night runs use None for
+    fresh draws. Cheverall26 multi-night runs combine the base seed, selected-
+    order loop position and night index. Reordering that list changes its
+    Gaussian streams because selected_order_position identifies the draw.
     """
     seed = base_seed if n_nights == 1 else None
     if pipeline_name == "Cheverall26" and n_nights != 1 and base_seed is not None:

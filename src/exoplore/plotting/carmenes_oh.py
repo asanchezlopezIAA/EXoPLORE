@@ -5,10 +5,8 @@ Input correction products are read-only and the figure output must be new.
 """
 from __future__ import annotations
 
-# Reading this file
-# These plots explain the saved sky correction and its A/B calibration.
-# They consume correction products rather than refitting the atmosphere or
-# re-estimating a sky transfer factor as part of displaying a figure.
+# Role in the calculation
+# Plot saved OH-subtraction products and the calibration between fibres A and B.
 
 
 import json
@@ -57,7 +55,7 @@ def plot_oh_correction(directory: Path, output: Path, science, number: int) -> N
             axes[0,j].plot(sw[b]/1000,sky[b],'k.-',label=sky_label)
             axes[0,j].plot(sw[b]/1000,sky_model[b],color='tab:orange',lw=2,label='OH model')
             # Isolated sky-detector spikes remain in the data. Limit the view
-            # to the resolved fitted line rather than autoscaling to spikes.
+            # to the amplitude of the resolved fitted line.
             axes[0,j].set_ylim(min(0,float(np.min(sky[b]))),1.5*float(np.max(sky_model[b])))
             a=(w>=lo)&(w<=hi)
             axes[1,j].plot(w[a]/1000,obs['raw_flux'][i,a]/continuum,'k.-',label='Fibre A before OH correction')

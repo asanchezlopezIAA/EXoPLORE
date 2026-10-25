@@ -17,9 +17,8 @@ supported:
 For each molecule and each (x, y) grid point this script writes a temporary
 config that (a) sets a single-species template for that molecule, (b) sets the
 two swept atmosphere variables, and (c) writes minimal output to a per-point
-directory, then runs the engine as a **separate subprocess** (memory-isolated,
-cluster/job-array friendly, exactly as the legacy code ran recursively from the
-terminal).  It then reads the run's Kp-Vsys significance map and records the
+directory, then runs the engine as a **separate subprocess** with its own
+memory and output files. It reads the run's Kp-Vsys significance map and records the
 significance at the injected planet position.
 
 Output (under ``<output_root>/detectability/<molecule>/``):
@@ -36,10 +35,9 @@ Usage::
 ``exoplore.plotting.plot_detectability_map``.
 """
 
-# Where this script fits
-# This drives repeated simulations over atmospheric grid points. It can
-# therefore be substantially more expensive than one run. The plotted grid is a
-# sweep of recovered statistics, not an atmosphere posterior from one sampler.
+# Role in the calculation
+# Run a simulation at each atmospheric grid point, collect its detection statistic and
+# plot the detectability map.
 
 import argparse
 import copy
@@ -128,16 +126,11 @@ def _run_grid_point(molecule, xv, yv, base, det, kp_planet, runner,
     tag = f"x{_tag(xv)}_y{_tag(yv)}"
     point = copy.deepcopy(base)
     atm = point.setdefault("atmosphere", {})
-    # Injected atmosphere: push ONLY the swept metallicity / C-O onto every
-    # region that builds the injected model, and change nothing else, exactly
-    # as the legacy sweep did (it set Metallicity_wrt_solar and C_to_O on both
-    # limbs at each grid point and left species, chemistry mode, mass fractions
-    # and the per-region temperature untouched).  Each limb keeps its own
-    # temperature, so equilibrium chemistry gives a different abundance per limb
-    # and the combined transit spectrum stays asymmetric.  When the base config
-    # simulates limb asymmetries the injected model is built from the four
-    # terminator regions (not planet_model), so all of them must follow the
-    # grid; otherwise the injected atmosphere stays fixed and the map is flat.
+    # Set the swept metallicity and C/O in the planet model and limb regions.
+    # Each region retains its configured temperature, species and chemistry
+    # mode. Equilibrium chemistry therefore responds to both the grid point
+    # and the local limb temperature. Updating every region lets the selected
+    # limb-asymmetry mode use the composition of this grid point.
     inject_regions = ["planet_model"]
     for limb in ("morning_day", "morning_night", "evening_day", "evening_night"):
         if limb in atm:
@@ -146,9 +139,8 @@ def _run_grid_point(molecule, xv, yv, base, det, kp_planet, runner,
         r = atm.setdefault(region, {})
         r[det.x_variable] = xv
         r[det.y_variable] = yv
-    # Cross-correlation template: a single-species template for this molecule at
-    # the same swept composition (legacy species_cc = ['H2','He',<molecule>]
-    # with use_easyCHEM_cc = True).
+    # Search for this molecule with an H2/He template at the grid composition.
+    # EasyChem supplies the template abundances.
     tpl = atm.setdefault("ccf_template", {})
     tpl["species"] = ["H2", "He", molecule]
     tpl["use_easychem"] = True
@@ -158,7 +150,7 @@ def _run_grid_point(molecule, xv, yv, base, det, kp_planet, runner,
     run_out = os.path.join(runs_dir, tag) + os.sep
     point.setdefault("paths", {})["output_root"] = run_out
     # keep only what we need to read the peak (small on disk): switch off every
-    # per-order matrix product; the Kp-Vsys S/N map is written regardless.
+    # per-order matrix product. The Kp-Vsys S/N map is written regardless.
     out = point.setdefault("output", {})
     for _flag in ("save_mat_res", "save_mat_back", "save_ccf_store",
                   "save_propag_noise", "save_U_sysrem", "save_mat_cc",

@@ -5,11 +5,10 @@ No nod subtraction, airglow emission, or wavelength error is fabricated.
 """
 from __future__ import annotations
 
-# Reading this file
-# This adapter packages synthetic extracted spectra for the existing
-# observed-spectrum molecfit path. It connects simulated exposure times/flux to
-# external telluric fitting. These are extracted spectral inputs, not fabricated
-# raw detector frames or a replacement for upstream raw-data reduction.
+# Role in the calculation
+# Write synthetic extracted spectra for the observed-spectrum molecfit interface.
+# Exposure times, wavelengths and flux arrays provide the inputs to the external
+# telluric fit.
 
 
 from dataclasses import replace
@@ -51,7 +50,7 @@ def fit_synthetic_night(output: Path, arrays: dict, raw: np.ndarray,
     """Save the entire synthetic matrix, then fit every exposure with molecfit.
 
     ABBA is an observing schedule label here. Synthetic one-dimensional fluxes
-    already represent extracted spectra; this function does not simulate the
+    already represent extracted spectra. This function does not simulate the
     detector-level extraction or subtract an invented sky image.
     """
     directory = output/'synthetic_spectra'
@@ -116,7 +115,7 @@ def fit_synthetic_night(output: Path, arrays: dict, raw: np.ndarray,
         stop = Event()
 
         def fit_one(index: int) -> dict:
-            """Fit one exposure with the unchanged ESO wrapper in its own directory."""
+            """Fit one exposure with molecfit in its own directory."""
             if stop.is_set():
                 raise RuntimeError('Another exposure failed; pending fits cancelled')
             number, nod = index+1, 'ABBA'[index % 4]

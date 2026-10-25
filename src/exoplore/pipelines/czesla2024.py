@@ -10,11 +10,10 @@ choices. This module neither detrends with SYSREM nor declares a detection.
 """
 from __future__ import annotations
 
-# Reading this file
-# This file contains the direct-helium recipe and its observed-data runner.
-# Exposure selections, reference division and frame changes precede the final
-# combined spectrum. Fit/plot helpers here are downstream diagnostics; inspect
-# their inputs rather than assuming every call repeats preparation.
+# Role in the calculation
+# Run the CRIRES+ direct-helium analysis: select exposures, divide by the reference
+# spectrum, transform wavelength frames and combine the planetary spectra. Fit and
+# plotting helpers inspect the resulting products.
 
 
 from dataclasses import asdict, replace
@@ -39,7 +38,7 @@ from exoplore.pipelines.helium_math import (
 
 
 def exposure_indices(numbers: list[int], n_exposures: int) -> np.ndarray:
-    """Convert explicit one-based running numbers; never assume a 40-frame night."""
+    """Convert explicit one-based running numbers. Never assume a 40-frame night."""
     if not numbers or len(set(numbers))!=len(numbers) or any(type(i) is not int or i<1 or i>n_exposures for i in numbers):
         raise ValueError('Invalid chronological exposure selection')
     return np.asarray(numbers,dtype=int)-1
@@ -81,7 +80,7 @@ def exposure_metadata(raw: Path, config: Czesla2024Config) -> tuple[float,float,
     location=EarthLocation.from_geodetic(*config.observatory_lon_lat_height[:2],height=config.observatory_lon_lat_height[2]*u.m)
     target=SkyCoord(config.target_ra_deg*u.deg,config.target_dec_deg*u.deg)
     time=Time(header['MJD-OBS']+duration/2/86400,format='mjd',scale='utc',location=location)
-    # Deterministic offline timing; restore global Astropy settings afterward.
+    # Deterministic offline timing. Restore global Astropy settings afterward.
     with iers.conf.set_temp('auto_download',False),iers.conf.set_temp('auto_max_age',None):
         bjd=float((time.tdb+time.light_travel_time(target)).jd)
         berv=float(target.radial_velocity_correction(obstime=time).to_value(u.km/u.s))
@@ -148,7 +147,7 @@ def prepare_transmission(waves_nm: np.ndarray, flux: np.ndarray, error: np.ndarr
 
     Inputs are already telluric-corrected native flux/error arrays. Invalid
     pixels remain NaN. Native OH masking is performed by the reader before
-    interpolation; callers of this array API must supply the same native mask.
+    interpolation. callers of this array API must supply the same native mask.
     Returned variances are conditional marginal weights, not full covariance.
     """
     waves=np.asarray(waves_nm,float);data=np.asarray(flux,float);errors=np.asarray(error,float)
@@ -181,7 +180,7 @@ def prepare_transmission(waves_nm: np.ndarray, flux: np.ndarray, error: np.ndarr
     coadd,conditional=weighted_mean(planet[inside],planet_variance[inside])
     def curve(array: np.ndarray,window: list[float]) -> np.ndarray:
         selected=window_mask(grid,[window]);values=array[:,selected]
-        # Fixed-band integrated curves require complete coverage; no masked-gap bridge.
+        # Fixed-band integrated curves require complete coverage. No masked-gap bridge.
         return np.asarray([np.mean(row) if row.size and np.isfinite(row).all() else np.nan for row in values])
     return {'stellar_wave_nm':grid,'stellar_transmission':ratio,'planet_wave_nm':grid,
             'planet_transmission':planet,'planet_coadd':coadd,'conditional_coadd_variance':conditional,
@@ -196,7 +195,7 @@ def fit_helium_multiplet(wave_nm: np.ndarray,transmission: np.ndarray,error: np.
     """Fit the Czesla slab's log-column, shift and sigma with baseline fixed at one.
 
     Filling factor and effective (already smear-broadened) resolution must be
-    supplied. Marginal error weights yield only a diagnostic point fit; no
+    supplied. Marginal error weights yield only a diagnostic point fit. No
     detection significance or posterior intervals are returned.
     """
     if effective_resolution<=0:raise ValueError('Resolution must be positive')
@@ -230,7 +229,7 @@ def run_czesla2024(simulation_config) -> Path:
     observed=prepare_transmission(night['wave_nm'],night['flux'],night['error'],night['berv_kms'],rv,config)
     output=Path(simulation_config.paths.output_root)/simulation_config.planet.name/'czesla2024'
     output.mkdir(parents=True,exist_ok=False)
-    # Propagate supplied extraction errors; never create perturbed observations.
+    # Propagate supplied extraction errors. Never create perturbed observations.
     from exoplore.pipelines.helium_noise_propagation import weighted_crires_uncertainties
     errors=weighted_crires_uncertainties(night['wave_nm'],night['flux'],night['error'],
                                         night['berv_kms'],rv,config,observed)
@@ -300,7 +299,7 @@ def preparing_pipeline_adapter(inp_dat: dict,data: np.ndarray,noise: np.ndarray,
     Requires ``czesla2024_config``, ``berv_kms``, ``planet_rv_kms`` and an
     explicit ``telluric_corrected=True`` statement in ``inp_dat``. Per-frame
     native wavelengths and masked errors are required for an OH-mask run.
-    Output noise is propagated analytically; no perturbed spectra are generated.
+    Output noise is propagated analytically. No perturbed spectra are generated.
     """
     if retrieval:raise ValueError('czesla2024 dispatcher does not implement molecular retrieval filtering')
     if inp_dat.get('telluric_corrected') is not True:

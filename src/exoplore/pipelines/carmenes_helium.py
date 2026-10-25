@@ -2,16 +2,15 @@
 
 Normalize before stellar alignment, divide by the arithmetic-mean reference,
 then take the arithmetic mean of planet-aligned T2--T3 spectra. The synthetic
-adapter excludes OH emission; this is not a complete CARACAL/sky reduction.
+adapter uses synthetic extracted spectra with OH emission omitted.
 Reference: https://doi.org/10.1051/0004-6361/202037719
 """
 from __future__ import annotations
 
-# Reading this file
-# This direct-transmission recipe normalizes spectra, forms the stellar
-# reference, then aligns/combines the selected planetary spectra. It is separate
-# from the molecular CCF pipeline. The reference membership and arithmetic
-# averaging choices are part of the calculation and must travel with its inputs.
+# Role in the calculation
+# Normalize direct-helium spectra, construct the stellar reference and align and
+# combine the selected planetary spectra. Configuration fields specify reference
+# membership and arithmetic averaging.
 
 import numpy as np
 from exoplore.pipelines.czesla2024 import exposure_indices
@@ -42,7 +41,7 @@ def prepare_carmenes_transmission(waves_nm, flux, error, berv_kms, planet_rv_kms
     """Prepare a corrected time series and propagate diagonal pixel weights.
 
     Include finite-reference variance in the ratio's marginal variance for
-    in-transit frames. Reference noise is shared between frames; consequently
+    in-transit frames. Reference noise is shared between frames. consequently
     the final conditional coadd variance excludes its cross-frame covariance.
     Continuum-estimation covariance is also excluded. No significance follows
     from these diagnostic weights alone.
@@ -70,8 +69,8 @@ def prepare_carmenes_transmission(waves_nm, flux, error, berv_kms, planet_rv_kms
         rows.append(y); variances.append(v)
     rows, variances = np.asarray(rows), np.asarray(variances)
     # Use the configured reference exposures to form one common stellar
-    # reference. Every division below reuses it, so its noise is shared across
-    # exposures rather than being a fresh independent error each time.
+    # reference. Every division below reuses it, so its noise is correlated
+    # across the exposures that share this reference.
     master, master_variance = arithmetic_mean(rows[refs], variances[refs])
     ratio = rows/master
     # Conditional reference-fixed errors retained separately for coaddition.

@@ -1,16 +1,14 @@
 """Standard viridis grid-fit and atmosphere-temperature figures for He I."""
 
-# Reading this file
-# The grid runner has already evaluated model points. This file displays
-# those fit results and temperature information; it does not infer a detection
-# from the colour scale or silently run an extra physical grid.
+# Role in the calculation
+# Plot the fit and temperature results saved by the helium grid calculation.
 
 from pathlib import Path
 import numpy as np
 
 
 def plot_helium_grid(output: Path, settings, results: list[dict]) -> None:
-    """Write new fit figures; preserve existing plots when a grid is resumed."""
+    """Write new fit figures. preserve existing plots when a grid is resumed."""
     import matplotlib.pyplot as plt
     from exoplore.config.helium_grid import axis_values
     successful=[r for r in results if r['status']=='complete']

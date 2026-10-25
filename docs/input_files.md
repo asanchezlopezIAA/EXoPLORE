@@ -89,7 +89,7 @@ Supply one file per night, with a zero-based night index suffix. When `use_real_
 | `observations_night_1_order_K.fits` | `(n_spectra_1, n_pixels)` | Real observed spectra for night 1, spectral order `K` |
 | … | … | One file per night per order |
 
-Here `K` is the **absolute spectral order number** from the instrument's `order_selection` array, not a sequential counter.
+Here `K` is the **instrument order ID** stored in `order_selection`.
 
 > **Note on `n_spectra`:** regardless of `use_real_data`, the number of exposures per night is always determined by `julian_date_{b}.fits`, specifically, `n_spectra_b = len(julian_date_b)`. The spectral and uncertainty arrays must have a matching first dimension; the simulator does not infer `n_spectra` from them. For `different_nights: false` with `use_real_data: true`, the night suffix is omitted: `observations_order_{K}.fits` and `observations_berv.fits`.
 
@@ -165,7 +165,7 @@ This matches the standard `tellurics/` convention, so you can simply place your 
 (skycalc-reference-download)=
 #### Generating the reference file
 
-Use the **same simulation JSON**, not a separate SkyCalc configuration. Set
+Use the simulation JSON to configure the download. Set
 `tellurics.skycalc_wavelength_limits_um` to cover all orders you will analyse, with
 some margin. For example, inside the existing `tellurics` block:
 
@@ -176,7 +176,7 @@ some margin. For example, inside the existing `tellurics` block:
 That interval is suitable for the full reference ANDES YJHK example. The
 existing ANDES UBV example instead uses `[0.34, 0.65]`. Values here are in
 **microns**; the generator converts them to SkyCalc's **nanometres**. This
-setting controls the download, not the instrument's wavelength grid.
+setting controls the downloaded spectrum. Instrument input files define the observing grid.
 
 Generate the reference with `scripts/generate_skycalc_inputs.py`
 (see [Mode 2, Per-exposure telluric evolution](#mode-2-per-exposure-telluric-evolution-use_full_skycalc-true)
@@ -196,11 +196,10 @@ a download using a different wavelength interval.
 
 For a single reference, point `tellurics.reference_telluric_file` at that file.
 For per-exposure tellurics, use the directory convention below and set
-`use_full_skycalc: true`. EXoPLORE raises a coverage error rather than silently
-interpolating missing wavelengths as zero transmission. The check concerns
-selected orders; unused instrument orders need not be covered. Existing
-observed-data runs do not load synthetic tellurics merely because the
-preparation handles terrestrial absorption.
+`use_full_skycalc: true`. EXoPLORE checks coverage of the selected orders and
+raises an error if the file is too narrow. Synthetic observations load these
+transmission files. Observed-data preparation uses the measured spectra;
+a telluric search template explicitly requests a transmission input.
 
 Alternatively use the
 [ESO SkyCalc web tool](https://www.eso.org/observing/etc/bin/gen/form?INS.MODE=swspectr+INS.NAME=SKYCALC)
@@ -230,7 +229,7 @@ One FITS file per synthetic exposure, named sequentially and placed in the corre
     ...
 ```
 
-Each `tell_spec_{n}.fits` must be a FITS file with at minimum two columns: `lam` (wavelength in nm) and `trans` (fractional transmission 0 to 1). The simulator reads whatever FITS files it finds at these paths, **you can supply spectra from any source**, not just SkyCalc. If you have telluric spectra from MOLECFIT, Tapas, or your own atmospheric model, place them here under the correct naming convention.
+Each `tell_spec_{n}.fits` must be a FITS file with at minimum two columns: `lam` (wavelength in nm) and `trans` (fractional transmission 0 to 1). The simulator reads whatever FITS files it finds at these paths, **you can supply spectra from any source** using this format. If you have telluric spectra from MOLECFIT, Tapas, or your own atmospheric model, place them here under the correct naming convention.
 
 #### Generating files with `scripts/generate_skycalc_inputs.py`
 
@@ -273,7 +272,7 @@ the planet's RA/Dec against the observatory site and the actual observation
 timestamps.  This approach mirrors the methodology of the Ratri simulator
 (Dash et al. (arXiv:2602.22830, 2026)), which uses [astroplan](https://astroplan.readthedocs.io)
 to plan and date synthetic observations from the ELT site and derives the
-per-exposure airmass from real sky coordinates rather than a parametric model.
+per-exposure airmass from the target coordinates and observing site.
 
 The behaviour differs depending on `observation.specific_event`:
 
@@ -311,7 +310,7 @@ python scripts/generate_skycalc_inputs.py configs/hd189733b_carmenes_transit.jso
 > This is analogous to how Dash et al. (arXiv:2602.22830, 2026) plan their ELT/ANDES
 > simulations: they select real future dates at which the target is observable
 > from Cerro Armazones and derive the airmass sequence from the actual sky
-> geometry, not a parametric model.
+> geometry.
 
 ```bash
 # Next observable transit from today:

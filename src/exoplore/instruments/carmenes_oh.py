@@ -2,16 +2,15 @@
 
 The master Voigt plus linked Gaussian pair follows Pallé et al. (2020),
 doi:10.1051/0004-6361/202037719. Unequal A/B extraction units require an
-explicit transfer calibration, not the paper's dimensionless factor 0.88.
+transfer calibration fitted to the supplied fibre spectra.
 All wavelengths are topocentric vacuum nm. Source arrays are never modified.
 """
 from __future__ import annotations
 
-# Reading this file
-# Fibre B measures the sky contribution; fibre A contains the science
-# spectrum. These routines fit/transfer that sky contribution with explicit
-# calibration. A sky amplitude and an inter-fibre flux conversion are different
-# quantities; inspect their units before applying a subtraction.
+# Role in the calculation
+# Fit the sky spectrum in fibre B and calibrate its contribution to the science
+# spectrum in fibre A. The fitted sky amplitude and inter-fibre flux factor determine
+# the subtraction.
 
 
 from dataclasses import dataclass
@@ -124,7 +123,7 @@ def fit_fibre_b(night: dict, order: int, settings: OHFitConfig) -> dict:
     """Fit a summed sky master, then one linked OH amplitude per exposure.
 
     A local linear background in each line group is fitted but not subtracted
-    from fibre A. Rejected sky pixels are saved; science pixels are retained.
+    from fibre A. Rejected sky pixels are saved. science pixels are retained.
     """
     waves = night['sky_wave_nm'][:, order]
     flux, errors = night['sky_flux'][:, order], night['sky_error'][:, order]
@@ -145,7 +144,7 @@ def fit_fibre_b(night: dict, order: int, settings: OHFitConfig) -> dict:
         mask = (wave >= window[0]) & (wave <= window[1])
         x, y, e = wave[mask], master[mask], master_error[mask]
         # Exclude unresolved positive spikes from the master fit only. Require
-        # a peak above both neighbours as well as the extraction-error gate;
+        # a peak above both neighbours as well as the extraction-error gate.
         # broad, resolved OH cores do not satisfy this isolation criterion.
         neighbour=np.maximum(np.r_[y[0],y[:-1]],np.r_[y[1:],y[-1]])
         isolated=(y>3*np.maximum(neighbour,0)) & (y-median_filter(y,size=3)>s.rejection_sigma*e)
@@ -209,7 +208,7 @@ def transfer_to_fibre_a(night: dict, order: int, sky: dict,
     Only the strong OH interval calibrates the transfer. In-transit spectra
     never set the scale. A linear stellar background is fitted independently
     per calibration exposure. The returned uncertainties hold this global
-    calibration and master profile fixed; their systematics remain explicit.
+    calibration and master profile fixed. Their systematics remain explicit.
     Matched extractions use ``fit_wavelength_shift=False`` to fit only the
     common throughput factor and per-exposure background at the fibre-B grid.
     """

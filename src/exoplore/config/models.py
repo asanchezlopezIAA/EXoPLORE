@@ -58,7 +58,7 @@ class InstrumentConfig:
         ``"CARMENES_NIR"``, ``"CARMENES_VIS"``, ``"CRIRES+"``.
     observatory:
         Site name understood by Astropy / EsoSkycalc, e.g. ``"paranal"``.
-        Usually set automatically by the instrument module; override only if
+        Usually set automatically by the instrument module. override only if
         you need to force a specific sky model.
     pixels_per_resolution_element:
         Number of detector pixels per resolution element (Nyquist = 2).
@@ -114,17 +114,16 @@ class ObservationConfig:
         Reference mid-transit BJD for a specific event (None = use T_0
         from planet JSON).
     use_real_data:
-        Analyse a real observed dataset instead of simulating one.
+        Load an observed dataset and run its preparation and analysis.
     helium_transmission_spectroscopy:
-        Select direct helium spectroscopy. ``use_real_data`` still selects
-        observed or synthetic spectra. Omission preserves older configurations.
+        Select direct helium spectroscopy. ``use_real_data`` selects observed or
+        synthetic spectra. None infers the route from atmosphere and pipeline.
     noise_scaling_factor:
         Multiplicative scaling applied to all noise levels (1.0 = nominal).
     simulate_planet:
         Inject a planet signal.  If False only noise is simulated.
     external_planet_model:
-        Use an externally provided planet model instead of generating one
-        with pRT.
+        Read the planet spectrum from an external model file.
     external_planet_model_file:
         Path to the external planet model file (ASCII, two-column,
         wavelength and flux/contrast).  Required when
@@ -142,7 +141,7 @@ class ObservationConfig:
         and the observatory location (Astropy barycentric correction).
         Applies to fully synthetic ``different_nights`` simulations,
         where each night is placed at its own observable transit epoch
-        and therefore carries its own BERV; stellar and planetary lines
+        and therefore carries its own BERV. stellar and planetary lines
         then shift relative to the telluric rest frame from night to
         night, as they do between real epochs.  Requires ``ra_deg`` and
         ``dec_deg`` in the planet parameter file (falls back to
@@ -196,7 +195,7 @@ class ObservationConfig:
     add_throughput_variations: bool = True
     mask_v_rotsini: bool = False
     exposure_time_seconds_per_night: Optional[List[float]] = None
-    # Append to preserve positional construction of older configurations.
+    # Optional spectroscopy and throughput controls.
     helium_transmission_spectroscopy: Optional[bool] = None
     throughput_seed: Optional[int] = None
 
@@ -229,10 +228,10 @@ class NoiseConfig:
         Replace a time-varying SNR with its mean over time.
     snr_correction:
         Additive correction factor to shift the SNR at all pixels and
-        frames (float; 0 = no correction).
+        frames (float, 0 = no correction).
     noise_seed:
         Integer seed for the Gaussian noise RNG.  Use the same value to
-        reproduce identical noise realisations; set ``null`` for a random
+        reproduce identical noise realisations. Set ``null`` for a random
         seed (different noise every run).  Default: 12345.
     """
     noise_choice: str = "SNR"
@@ -348,11 +347,11 @@ class AtmosphereConfig:
         equal mix at full transit, evening dominates egress (default, most
         realistic for typical hot Jupiters).
         ``"asymmetric"``: asymmetric, morning dominates the first quarter of
-        full transit, cubic handover completes at mid-transit; calibrated for
+        full transit, cubic handover completes at mid-transit. calibrated for
         an ultra-hot Jupiter like WASP-76 b with extreme day-night contrast
         and poor heat redistribution.
         ``"simplified_step"``: hard step-function, pure morning during ingress,
-        equal mix during full transit, pure evening during egress; use for
+        equal mix during full transit, pure evening during egress. Use for
         reference tests and simplified scenarios where clean physical
         interpretation of each limb's contribution is needed.
     cc_with_true_model:
@@ -411,7 +410,7 @@ class TelluricConfig:
         fully synthetic ``different_nights`` runs this also places each
         night at its own observable transit epoch (target above 30 deg at
         night, searched from the reference epoch), so successive nights
-        get genuinely different airmass curves and BERVs; with False the
+        get genuinely different airmass curves and BERVs. With False the
         nights fall on consecutive orbits at ``T0 + n * P`` and use the
         parabolic model with ``airmass_limits`` /
         ``airmass_limits_per_night``.  Single-night synthetic runs
@@ -435,9 +434,9 @@ class TelluricConfig:
         Path to the reference telluric FITS file (used when
         ``use_full_skycalc=False``).
     skycalc_wavelength_limits_um:
-        SkyCalc download interval [minimum, maximum], in microns. This does
-        not alter the instrument grid or resolving power. None preserves the
-        downloader's older fallback; the full example specifies its interval.
+        SkyCalc download interval [minimum, maximum], in microns. None uses
+        [0.95, 2.45]. Instrument input files define the observing grid
+        and resolving power.
     mask_threshold:
         Telluric flux below this fraction is masked (e.g. 0.2 = 20 %).
     safety_window_pixels:
@@ -515,11 +514,11 @@ class PipelineConfig:
         is set to an offset position away from the real planet velocity
         (e.g. [Kp, +19] as in Cheverall et al. 2026), these criteria
         resemble the ΔCCF framework (Holmberg & Madhusudhan
-        2022; Cheverall et al. 2023) and may present reduced biases,
+        2022, Cheverall et al. 2023) and may present reduced biases,
         though they remain model-dependent.  Bias is more severe when
         the injection is placed at the real planet velocity, which
         allows noise at that position to inflate the recovered
-        significance (Cabot et al. 2019; Cheverall et al. 2023).
+        significance (Cabot et al. 2019, Cheverall et al. 2023).
     sysrem_delta_sigma_threshold:
         Fractional σ-drop threshold for the ``"DeltaSigma"`` halting
         criterion.  SYSREM stops when
@@ -555,18 +554,18 @@ class PipelineConfig:
     continuum_method: str = "maxima"
 
     # detrend_method: detrending operator used to remove telluric/stellar
-    #   systematics, "sysrem" (inverse-variance-weighted, Tamuz et al. 2005;
-    #   default) or "pca" (unweighted principal-component subtraction; de Kok
-    #   et al. 2013; Cheverall et al. 2023, who report minimal difference
+    #   systematics, "sysrem" (inverse-variance-weighted, Tamuz et al. 2005,
+    #   default) or "pca" (unweighted principal-component subtraction, de Kok
+    #   et al. 2013. Cheverall et al. 2023, who report minimal difference
     #   between the two).  Pipeline-agnostic: any preparing pipeline that
     #   detrends honours this switch.  The component count is sysrem_iterations.
     detrend_method: str = "sysrem"
 
-    # Optional direct-transmission recipe; absent for every existing pipeline.
+    # Optional direct-transmission recipe. absent for every existing pipeline.
     czesla2024: Optional[Czesla2024Config] = None
     carmenes_helium: Optional[CarmenesHeliumConfig] = None
     palle2020: Optional[dict] = None
-    # Explicit OH treatment for direct helium routes; None reads archived modes.
+    # Explicit OH treatment for direct helium routes. None reads archived modes.
     oh_treatment: Optional[str] = None
 
     def __post_init__(self) -> None:
@@ -623,8 +622,8 @@ class CrossCorrelationConfig:
     snr_noise_source:
         Where the noise std of the Kp-Vsys S/N map is measured.
         ``"peak_row"`` (default): per Kp row, from the velocities more
-        than ``snr_exclude_kms`` away from that row's maximum (legacy
-        behaviour).  For strong detections this region contains the
+        than ``snr_exclude_kms`` away from that row's maximum. For strong
+        detections this region contains the
         signal's own correlation wings, which co-add coherently across
         nights and saturate the reported S/N.  ``"signal_free_rows"``:
         one global std from the rows more than
@@ -681,7 +680,7 @@ class CrossCorrelationConfig:
     study_velocity_ranges: bool = False
     plot_ccf_xstep: float = 50.0
     # Velocity zoom (km/s) for the CCF trail (Earth rest frame) plot:
-    # [-zoom, +zoom].  None keeps the full CCF range; set a small value to
+    # [-zoom, +zoom].  None keeps the full CCF range. Set a small value to
     # zoom in around the planet trail.
     plot_velocity_zoom_kms: "float | None" = None
     # CCF kernel form (weighted, large-instrument path):
@@ -691,7 +690,7 @@ class CrossCorrelationConfig:
     # Error E used in the CCF inverse-variance weighting (1/E^2):
     #   "propagated", per-pixel uncertainty propagated through the pipeline
     #   "mad_residual", per-wavelength-channel MAD of the time-series
-    #                    residuals (Gibson+20; Nortmann+24; Cheverall+26)
+    #                    residuals (Gibson+20, Nortmann+24, Cheverall+26)
     ccf_error_estimate: str = "propagated"
     # Spectrum used as the cross-correlation template:
     #   "planet", planetary atmospheric model (default)
@@ -699,8 +698,8 @@ class CrossCorrelationConfig:
     #               file, processed and Doppler-shifted exactly like a
     #               planetary template.  A contamination diagnostic: a CCF
     #               response at the planet velocity with a telluric template
-    #               indicates residual telluric structure rather than an
-    #               atmospheric signal.
+    #               identifies a line pattern compatible with residual
+    #               telluric structure.
     ccf_template_source: str = "planet"
 
 
@@ -721,7 +720,7 @@ class RetrievalConfig:
     log_likelihood:
         Log-likelihood formulation: ``"BL19"`` (matched filter, noise-free),
         ``"Blain24"`` (chi-squared with propagated uncertainties),
-        ``"Gibson22"`` (chi-squared with noise hyperparameter β; requires
+        ``"Gibson22"`` (chi-squared with noise hyperparameter β, requires
         ``dimensionality="1D_Gibson22"``).
     dimensionality:
         Retrieval parameter space.  Supported values and free parameters:
@@ -750,7 +749,7 @@ class RetrievalConfig:
     time_resolution_step:
         Number of exposures per time bin (``time_resolution=True``).
     live_points:
-        MultiNest live points.  200 is sufficient for quick tests; use
+        MultiNest live points.  200 is sufficient for quick tests. Use
         400 to 1000 for publication-quality results.
     constant_efficiency_mode:
         MultiNest constant-efficiency mode.  Keep False (recommended).
@@ -791,7 +790,7 @@ class RetrievalConfig:
     constant_efficiency_mode: bool = False
     # Likelihood error model (Cheverall26 pipeline): "propagated" (default, divide
     # by the pipeline-propagated σ) or "mad_residual" (σ_j = 1.4826·MAD of the
-    # detrended residuals per wavelength channel over time, time-independent;
+    # detrended residuals per wavelength channel over time, time-independent.
     # the Cheverall et al. 2026 / Gibson-style choice).  Only used by Cheverall26.
     error_model: str = "propagated"
     # How the model template is distorted by the detrending inside the
@@ -808,7 +807,7 @@ class RetrievalConfig:
     #               residuals in the likelihood.
     #   "projector" linear filter: project the data-derived temporal modes
     #               (U) out of the model only.  Exact for unweighted PCA
-    #               detrending of an additive signal; the template carries
+    #               detrending of an additive signal. The template carries
     #               no telluric/stellar structure.  Single-night retrievals
     #               only.
     model_reprocessing: str = "bare"
@@ -846,7 +845,7 @@ class RetrievalConfig:
     # Trains a MLP to map θ → logL(θ|data) directly from true pRT evaluations.
     # Benchmarked on the same setup: val MSE = 1.93 logL², log10X biased +1.45σ,
     # total runtime 37 min vs 22 min, slower AND less accurate.
-    # Root cause: posterior occupies ~0.002% of prior; sparse uniform sampling
+    # Root cause: posterior occupies ~0.002% of prior. sparse uniform sampling
     # cannot map the likelihood surface accurately. NOT recommended.
     use_likelihood_emulator: bool = False
     likelihood_emulator_n_samples: int = 3000
@@ -902,7 +901,7 @@ class PlottingConfig:
         processed order.
     pipeline_steps_xlim_um:
         Wavelength window [lo, hi] in µm to zoom into.  For the SYSREM
-        waterfall every panel uses this window; for the polynomial four-panel
+        waterfall every panel uses this window. For the polynomial four-panel
         it applies to the 1-D spectrum panel only (the 2-D panels show the
         full order).  If the window does not fall within the displayed order,
         the full order is shown instead.  Set to ``null`` for the full order.
@@ -912,7 +911,7 @@ class PlottingConfig:
         Which SYSREM iterations to show as intermediate panels in the
         pipeline-steps diagnostic plot.  Used ONLY for SYSREM-based
         pipelines (ASL19, Gibson22), where the cleaning proceeds iteration
-        by iteration; the panels let you watch the common-mode systematics
+        by iteration. The panels let you watch the common-mode systematics
         being removed.  Ignored by the polynomial pipelines (BL19, Blain24),
         which have no iterations and show a single residual panel instead.
         Each value is a 1-based iteration index (1 = after the first SYSREM
@@ -925,7 +924,7 @@ class PlottingConfig:
     pipeline_steps_sysrem_iterations: List[int] = field(
         default_factory=lambda: [1, 5]
     )
-    # Optional extra display curve; the actual noisy spectrum is always retained.
+    # Optional extra display curve. The actual noisy spectrum is always retained.
     pipeline_steps_noise_illustration_factor: Optional[float] = None
 
 
@@ -944,11 +943,10 @@ class OutputConfig:
     sizes quoted are for the 76-order Tutorial 1 run and scale with
     orders x exposures.
 
-    The defaults keep everything needed to re-run cross-correlations with other
-    templates, run retrievals, and use the Gibson22 log-likelihood, while
-    dropping the pure-diagnostic matrices (about 1.2 GB instead of 2.2 GB for
-    that run).  Set all to False for a minimal result (the Kp-Vsys map plus
-    metadata, a few MB).
+    The defaults save prepared spectra, templates, CCFs and uncertainties
+    used in the analysis (about 1.2 GB for that run). Saving all matrices
+    takes about 2.2 GB. Set all flags to False to save the detection map,
+    metadata and plots with a smaller disk footprint.
 
     Parameters
     ----------
@@ -1045,7 +1043,7 @@ class DetectabilityConfig:
         the two supported combinations above).
     x_values, y_values:
         Grid values for each axis.  Metallicity is ``metallicity_wrt_solar`` =
-        log10(Z/Zsun); cloud values are the cloud-top pressures in bar.
+        log10(Z/Zsun). cloud values are the cloud-top pressures in bar.
         **Leave a list empty to use the built-in default grid for the chosen
         pair**, or set it to tune the sampling.  Defaults:
 
@@ -1060,12 +1058,12 @@ class DetectabilityConfig:
           ``[1e-4, 2.78e-4, 7.74e-4, 2.15e-3, 6e-3, 1.67e-2, 4.64e-2, 0.129,
           0.359, 1.0]`` bar (a 10x10 grid).
     molecules:
-        Species to build a map for (one single-species template per map);
+        Species to build a map for (one single-species template per map).
         defaults to water only.
     significance:
         ``"cell_box"`` (default) reads the maximum significance in a small box
         around the injected planet position, robust to the Kp-Vrest
-        degeneracy; ``"injected_point"`` reads only the injected cell.
+        degeneracy. ``"injected_point"`` reads only the injected cell.
     box_half_vrest_kms, box_half_kp_kms:
         Half-widths of that box (used when ``significance='cell_box'``).
     """
@@ -1134,8 +1132,7 @@ class SimulationConfig:
 
     def to_dict(self) -> dict:
         """Return a plain-dict representation suitable for JSON."""
-        # Configuration is small and has named sections, so recursive dataclass
-        # conversion is appropriate here. Do not reuse this on large run arrays.
+        # Convert each named configuration section to a dictionary for JSON.
         return asdict(self)
 
     def to_json(self, path: str | Path) -> None:
@@ -1147,11 +1144,11 @@ class SimulationConfig:
     def from_dict(cls, d: dict) -> "SimulationConfig":
         """Reconstruct from a plain dict (as loaded from JSON)."""
 
-        # JSON supplies dictionaries; the rest of the code expects named config
+        # JSON supplies dictionaries. The rest of the code expects named config
         # objects such as cfg.observation and cfg.atmosphere.planet_model.
         # Convert known nested sections explicitly, including optional regions.
-        # Current compatibility behavior drops unknown keys: this is not strict
-        # typo validation. Preserve that behavior during structural refactoring.
+        # Each section accepts the field names defined in its dataclass.
+        # Unrecognized JSON keys are skipped.
 
         def _region(sub: dict) -> AtmosphereRegionConfig:
             return AtmosphereRegionConfig(**{
@@ -1200,7 +1197,7 @@ class SimulationConfig:
 
         def _safe(cls_, sub: dict):
             """Construct dataclass ignoring unknown keys (forward compat)."""
-            # This filters field names; it does not enforce every annotated type.
+            # Pass recognized field names to the dataclass constructor.
             return cls_(**{
                 k: v for k, v in sub.items()
                 if k in cls_.__dataclass_fields__
@@ -1231,7 +1228,7 @@ class SimulationConfig:
     def from_json(cls, path: str | Path) -> "SimulationConfig":
         """Load a :class:`SimulationConfig` from a JSON file."""
         # File loading delegates construction to from_dict, then applies the
-        # per-night cadence checks below. Those checks currently live only here;
+        # per-night cadence checks below. Those checks currently live only here.
         # keep that distinction visible until a separate validation review.
         with open(path) as fh:
             cfg = cls.from_dict(json.load(fh))

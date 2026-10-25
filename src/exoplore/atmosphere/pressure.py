@@ -22,10 +22,9 @@ Examples
 
 from __future__ import annotations
 
-# Reading this file
-# This is a small building block: choose the atmospheric pressure levels
-# before evaluating temperatures, chemistry and opacities on those same levels.
-# The returned values are pressures in bar, not altitude coordinates.
+# Role in the calculation
+# Choose the pressure levels, in bar, on which temperature, chemistry and radiative
+# transfer are evaluated.
 
 
 import numpy as np

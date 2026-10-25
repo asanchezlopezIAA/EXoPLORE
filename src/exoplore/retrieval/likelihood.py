@@ -27,9 +27,8 @@ Three log-likelihood formulations are implemented, selected by the
 All functions accept arrays of shape ``(n_in_transit, n_good_pixels)``
 and return a scalar log-likelihood value.
 
-These functions evaluate supplied arrays; they do not generate atmospheric
-models or run a sampler. Some runner-specific likelihood closures remain in
-core/simulator.py, so follow the actual caller when reviewing a retrieval.
+These functions evaluate supplied data and model arrays. core/simulator.py
+also defines likelihood functions inside its retrieval setup.
 
 References
 ----------
@@ -188,7 +187,7 @@ def log_likelihood_gibson22(
     N = data.size
     # The extra -N ln β term is a penalty that prevents β from collapsing to
     # zero.  Physically, β scales the estimated noise: β < 1 means the
-    # pipeline has over-estimated the uncertainties; β > 1 means they were
+    # pipeline has over-estimated the uncertainties. β > 1 means they were
     # under-estimated.  Without this penalty, maximising the likelihood would
     # always drive β → 0 (making σ → ∞ and the χ² trivially small).  The
     # -N ln β term arises from marginalising the Gaussian normalisation factor
@@ -228,8 +227,8 @@ def compute_log_likelihood(
         Residual data, shape ``(n_in_transit, n_good_pixels)``.
     model_matrix:
         Template model, same shape.
-    uncertainties:
-        Per-pixel σ.  Required for ``"Blain24"`` and ``"Gibson22"``; ignored for ``"BL19"``.
+    Uncertainties:
+        Per-pixel σ.  Required for ``"Blain24"`` and ``"Gibson22"``. ignored for ``"BL19"``.
     beta:
         Noise scaling.  Used only for ``"Gibson22"``.
 

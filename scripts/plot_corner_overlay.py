@@ -26,7 +26,7 @@ Arguments
                 Must match the number of shared parameters.
 --param-names   LaTeX or plain parameter names for axis labels.
 --output        Output PNG path.
---colors        Hex colours for each run (optional; defaults provided).
+--colors        Hex colours for each run (optional, defaults provided).
 --n-bins        Number of histogram/2D-density bins (default 50).
 --smooth-sigma  Gaussian smoothing sigma for 2D densities (default 1.2).
 --pad           Fractional padding on each axis range (default 0.18).
@@ -35,10 +35,9 @@ Arguments
 
 from __future__ import annotations
 
-# Where this script fits
-# This compares saved posterior samples from selected retrievals. Check
-# which parameters and source runs are overlaid; plotting a distribution does
-# not launch a sampler or make different priors equivalent.
+# Role in the calculation
+# Read posterior samples from the selected runs and overlay their marginal and joint
+# distributions. The labels identify each run's parameters and priors.
 
 
 import argparse
@@ -189,7 +188,7 @@ def make_corner(
             else:
                 ax.set_xticklabels([])
 
-            # y-axis: only show on leftmost column; suppress ticks everywhere else
+            # y-axis: only show on leftmost column. suppress ticks everywhere else
             if col == 0 and row > 0:
                 ax.set_ylabel(param_names[row], fontsize=13, labelpad=5)
                 if row == max_npar - 1:

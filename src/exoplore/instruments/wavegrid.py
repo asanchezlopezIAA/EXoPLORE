@@ -19,7 +19,7 @@ ANDES covers five photometric bands at R ≈ 100,000:
     +--------------+----------+---------+-------------------------------+
 
 All ANDES bands use **Mode A (ETC-based)**: the SNR per exposure and
-wavelength grid are derived from an ETC FITS file; no real reference night
+wavelength grid are derived from an ETC FITS file. No real reference night
 is needed.  Place your ETC file in ``inputs/`` (see ``docs/input_files.md``).
 
 Observing mode summary
@@ -29,7 +29,7 @@ Mode A (ETC-based, recommended for ANDES):
     Required: ETC FITS matrix in ``inputs_dir``.
 
 Mode A with fixed SNR:
-    ``fixed_snr = <value>``, bypasses the ETC file entirely;
+    ``fixed_snr = <value>``, bypasses the ETC file entirely.
     every pixel in every exposure receives the same constant SNR.
     Useful for quick sensitivity studies without an ETC file.
 
@@ -46,12 +46,10 @@ ESO ETC outputs for ANDES
 
 from __future__ import annotations
 
-# Reading this file
-# Metadata loaders identify files; get_WaveGrid turns those inputs into
-# arrays, and the ANDES helpers construct order grids from ETC information.
-# Pay attention to each instrument branch's axis order and unit conversions.
-# The runner has compatibility transposes, so changing an orientation here can
-# silently relabel pixels/orders even when array sizes look plausible.
+# Role in the calculation
+# Read wavelength grids and their associated noise, timing and airmass arrays. ANDES
+# branches construct order grids from ETC data. Instrument-specific branches define
+# their axis order and unit conversions.
 
 
 import glob as _glob
@@ -401,7 +399,7 @@ def Load_Instrumental_Info(inp_dat):
             observatory = "lasilla"
             if inp_dat['instrument'] == 'CARMENES_NIR':
                 import os as _os
-                # Prefer (n_orders, n_pixels) file; fall back to (n_spectra, n_pixels, n_orders)
+                # Prefer (n_orders, n_pixels) file. fall back to (n_spectra, n_pixels, n_orders)
                 _pkg_data = _os.path.join(
                     _os.path.dirname(__file__), "data", "wave_CARMENES_NIR.fits"
                 )
@@ -513,8 +511,8 @@ def make_wave_grid_ANDES_modes(
     """Build per-order wavelength grids for ANDES from ETC start/mid/end values.
 
     mode=1  Perfect Nyquist at lam_mid (dln = 1/(m*R)), fixed N_pixels,
-            grid centred on lam_mid; does NOT enforce lam_start/end.
-    mode=2  Fixed N_pixels; grid spans lam_start → lam_end (dln variable).
+            grid centred on lam_mid. does NOT enforce lam_start/end.
+    mode=2  Fixed N_pixels. grid spans lam_start → lam_end (dln variable).
 
     Parameters
     ----------
@@ -623,7 +621,7 @@ def get_WaveGrid(inp_dat, wave_file, sig_file, snr_file, JD_file,
             wvl_clean = raw  # (n_orders, n_pixels)
 
         n_pixels = wvl_clean.shape[1]
-        # wave_star is returned as (n_pixels, n_orders) here;
+        # wave_star is returned as (n_pixels, n_orders) here.
         # simulator Block 2e transposes it back to (n_orders, n_pixels)
         wave_star_out = wvl_clean.T
 
@@ -696,7 +694,7 @@ def get_WaveGrid(inp_dat, wave_file, sig_file, snr_file, JD_file,
     elif inp_dat['instrument'] in ('IGRINS', 'IGRINS2', 'CRIRES+'):
         # 'IGRINS' is the clean reference-night format written by
         # scripts/prepare_igrins_night.py (wave shape (n_orders, n_pixels),
-        # sig/snr cubes (n_spectra, n_orders, n_pixels)); 'IGRINS2' is the
+        # sig/snr cubes (n_spectra, n_orders, n_pixels)). 'IGRINS2' is the
         # single-target setup.  'CRIRES+' shares the identical layout from
         # scripts/prepare_crires_night.py.  All share the same read logic.
         wvl = fits.open(wave_file)[0].data
@@ -779,7 +777,7 @@ def From1OrderTo1Detector(variable, h):
     """Split a 2-D spectral-order array into the sub-array for one detector.
 
     Each ANDES order is read out by two detectors side by side.  Even-numbered
-    orders (h % 2 == 0) use the left half of the pixel array; odd-numbered
+    orders (h % 2 == 0) use the left half of the pixel array. odd-numbered
     orders use the right half.
 
     Parameters

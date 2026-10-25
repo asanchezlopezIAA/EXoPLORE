@@ -22,12 +22,10 @@ Blain, D., Sánchez-López, A. & Mollière, P. (2024), AJ.
 
 from __future__ import annotations
 
-# Reading this file
-# The preparation dispatcher calls these polynomial corrections in order:
-# throughput over wavelength, then telluric behaviour against airmass. The
-# corrected data and propagated uncertainties travel together. Model-processing
-# calls can use different flags, so inspect arguments before assuming data and
-# model are being treated identically in every branch.
+# Role in the calculation
+# Apply wavelength-dependent throughput corrections followed by the configured airmass
+# fit. Data and uncertainty arrays are propagated together. Model-processing flags
+# select the operations used for templates.
 
 
 import os
@@ -150,7 +148,7 @@ def remove_telluric_lines_fit(
         propag_uncertainties /= np.abs(telluric_lines_fits)
         # Multiply (not divide) by sqrt((N-d)/N): the fit reduces the residual
         # scatter, so the uncertainties are biased down to reflect it
-        # (Blain et al. 2024; matches petitRADTRANS retrieval.preparing).
+        # (Blain et al. 2024, matches petitRADTRANS retrieval.preparing).
         propag_uncertainties *= np.sqrt(variance_corr_fac)
 
     return data_prepared, propag_uncertainties, mask, useful_spectral_points
@@ -230,7 +228,7 @@ def remove_throughput_fit(
         propag_uncertainties /= np.abs(throughput_fits)
         # Multiply (not divide) by sqrt((N-d)/N): the fit reduces the residual
         # scatter, so the uncertainties are biased down to reflect it
-        # (Blain et al. 2024; matches petitRADTRANS retrieval.preparing).
+        # (Blain et al. 2024, matches petitRADTRANS retrieval.preparing).
         propag_uncertainties *= np.sqrt(variance_corr_fac)
 
     return data_prepared, propag_uncertainties
@@ -261,7 +259,7 @@ def compute_k_sigma(
         The ORIGINAL CARMENES order numbers you kept (e.g.
         ``np.delete(np.arange(28), [18,19,20])``).
     order_selection : list of np.ndarray
-        Length = n_nights; each entry is an array of ORIGINAL order
+        Length = n_nights. Each entry is an array of ORIGINAL order
         numbers to include that night.
     n_spectra_store : np.ndarray, shape (n_nights,)
         Number of valid exposures per night.

@@ -10,8 +10,9 @@ raw frames ──▶ reduce_crires_night.py ──▶ crires_molecfit ──▶ 
                                             telluric model)
 ```
 
-EXoPLORE only **wraps** the ESO tools for these steps; it does not replace them
-or their documentation. You must install the ESO pipelines yourself.
+EXoPLORE calls the ESO tools for extraction and telluric correction.
+Install the ESO pipelines before running these steps; their documentation
+is linked below.
 
 ## Prerequisites: install the ESO tools
 

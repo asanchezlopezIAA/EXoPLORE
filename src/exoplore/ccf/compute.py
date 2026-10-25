@@ -14,10 +14,9 @@ It handles:
 
 There are two interface families in this file. The descriptive helpers near
 the top accept explicit arrays/parameters. The standard simulator currently
-calls the older ``call_ccf_*``, ``get_shifted_ccf_matrix`` and
-``get_max_CCF_peak`` functions, using settings translated from typed config
-sections into small dictionaries. Similar names do not imply identical
-weighting, frame handling or normalization.
+calls ``call_ccf_*``, ``get_shifted_ccf_matrix`` and ``get_max_CCF_peak``
+with settings dictionaries. Each function documents its weighting, velocity
+frame and normalization.
 """
 
 from __future__ import annotations
@@ -134,7 +133,7 @@ def compute_kp_vsys_map(
     Returns
     -------
     numpy.ndarray, shape (n_kp, n_lags)
-        Kp-Vsys map; rows index Kp, columns index Vsys.
+        Kp-Vsys map. Rows index Kp, columns index Vsys.
     """
     n_lags = len(velocity_grid)
     n_kp = len(kp_grid)
@@ -435,8 +434,7 @@ def get_max_CCF_peak(inp_dat, ccf_tot, v_rest, kp_range,
     sysrem_opt : bool
         If True, treat extra SYSREM dimensions in ``ccf_tot``.
     CCF_Noise : bool
-        If True, report S/N at the position given by ``stats[b]``
-        rather than at the true maximum.
+        If True, report S/N at the position given by ``stats[b]``.
 
     Returns
     -------
@@ -473,7 +471,7 @@ def get_max_CCF_peak(inp_dat, ccf_tot, v_rest, kp_range,
         # from the detected peak's Kp and beyond CCF_SNR_exclude of the
         # peak velocity.  For strong detections the peak row's own noise
         # region contains the signal's correlation wings, which repeat
-        # identically in every night and saturate the reported S/N; the
+        # identically in every night and saturate the reported S/N. The
         # signal-free rows share the map's noise statistics without that
         # structure, so co-added significances recover the expected
         # sqrt(N) scaling when the per-night noise is uncorrelated.

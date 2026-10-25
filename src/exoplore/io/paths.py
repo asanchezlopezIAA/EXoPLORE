@@ -57,9 +57,8 @@ def simulation_output_dir(cfg: SimulationConfig, simulation_name: str) -> Path:
     pathlib.Path
         Path to ``output_root/<planet>/<instrument>/<event>/<simulation_name>/``.
     """
-    # One root per experiment keeps figures, numerical products and warnings
-    # together. Constructing a Path does not create anything or run science;
-    # build_output_tree(create=True) is the explicit directory-creation step.
+    # Group the experiment's products under one root. build_output_tree with
+    # create=True creates the directories represented by these paths.
     return (
         Path(cfg.paths.output_root)
         / cfg.planet.name
@@ -78,7 +77,7 @@ def matrices_dir(cfg: SimulationConfig, simulation_name: str) -> Path:
     each of shape ``(n_spectra, n_pixels)``.
 
     This function only constructs and returns the :class:`pathlib.Path`
-    object; it does **not** create the directory on disk.  To create all
+    object. It does **not** create the directory on disk.  To create all
     output directories call :func:`build_output_tree` with ``create=True``.
 
     Parameters
@@ -102,8 +101,7 @@ def plots_dir(cfg: SimulationConfig, simulation_name: str) -> Path:
     PDF (and PNG) diagnostic figures: corner plots, Kp-Vsys maps, spectral
     matrix images, and CCF time-series plots.
 
-    This function only constructs and returns the path; it does not create
-    the directory on disk.
+    Return a Path object. build_output_tree(create=True) creates directories.
 
     Parameters
     ----------
@@ -127,8 +125,7 @@ def correlations_dir(cfg: SimulationConfig, simulation_name: str) -> Path:
     (e.g., ``ccf_tot``, ``ccf_tot_sn``) produced during Block 7 of the
     simulator.
 
-    This function only constructs and returns the path; it does not create
-    the directory on disk.
+    Return a Path object. build_output_tree(create=True) creates directories.
 
     Parameters
     ----------
@@ -152,8 +149,7 @@ def inputs_dir(cfg: SimulationConfig, simulation_name: str) -> Path:
     dictionary and instrument configuration used for a specific run,
     enabling full reproducibility when re-analysing archived data.
 
-    This function only constructs and returns the path; it does not create
-    the directory on disk.
+    Return a Path object. build_output_tree(create=True) creates directories.
 
     Parameters
     ----------
@@ -178,8 +174,7 @@ def warnings_dir(cfg: SimulationConfig, simulation_name: str) -> Path:
     telluric corrections) so they can be reviewed and optionally excluded
     in post-processing.
 
-    This function only constructs and returns the path; it does not create
-    the directory on disk.
+    Return a Path object. build_output_tree(create=True) creates directories.
 
     Parameters
     ----------

@@ -6,7 +6,7 @@ Instrument model for CRIRES+ at the VLT.
 
 CRIRES+ is a cross-dispersed echelle spectrograph covering the near-infrared
 (0.9 to 5.3 µm) at R ≈ 100,000.  Because CRIRES+ is an echelle spectrograph,
-simulations are set up one wavelength setting at a time; each setting covers
+simulations are set up one wavelength setting at a time. Each setting covers
 a small number of spectral orders (typically 6 to 10).
 
 Observing mode
@@ -24,7 +24,7 @@ To obtain this file:
 3. Place the file in ``inputs_dir`` and set the path in your config.
 
 **Single-order note:** if your ETC file contains only one spectral order (e.g.
-a single CRIRES+ detector), set ``"order_indices": [0]`` in your config.  The
+A single CRIRES+ detector), set ``"order_indices": [0]`` in your config.  The
 wavelength grid will have shape ``(1, n_pixels)`` and the tensor throughout the
 simulator will be ``(n_spectra, 1, n_pixels)``.
 
@@ -49,11 +49,10 @@ ESO CRIRES+ ETC, https://etc.eso.org
 
 from __future__ import annotations
 
-# Reading this file
-# A CRIRES+ observation depends on its selected wavelength setting, not
-# one universal full-band grid. This loader resolves the corresponding inputs
-# and resolution/order information. Reduction and molecfit preparation live in
-# separate modules/scripts and are not performed merely by loading metadata.
+# Role in the calculation
+# Resolve CRIRES+ input files, spectral orders and resolution for the selected
+# wavelength setting. The reduction and preparation scripts produce the files read
+# here.
 
 
 import os as _os
@@ -68,7 +67,7 @@ def get_instrument_info(inp_dat: dict) -> InstrumentInfo:
 
     The number of spectral orders is read from the ETC wavelength FITS file
     at runtime.  If the file is not available at config-load time, a sentinel
-    value of -1 is returned for ``n_orders_total``; the simulator will then
+    value of -1 is returned for ``n_orders_total``. The simulator will then
     determine the true order count after loading the wavelength grid.
 
     Parameters
@@ -106,7 +105,7 @@ def get_instrument_info(inp_dat: dict) -> InstrumentInfo:
         airmass_file  = _os.path.join(ref, "airmass_0.fits")
         n_orders_total = _read_n_orders(wave_file)
         # Effective resolution measured from the slit function at prepare time
-        # (Nortmann A.1 super-resolution check); nominal 1e5 as a fallback.
+        # (Nortmann A.1 super-resolution check). nominal 1e5 as a fallback.
         res = _measured_resolution(_os.path.join(ref, "resolution_0.fits"))
         return InstrumentInfo(
             observatory=_OBS, wave_file=wave_file, sig_file=sig_file,
@@ -157,7 +156,7 @@ def _measured_resolution(path: str) -> float:
 def _read_n_orders(wave_file: str) -> int:
     """Return the number of orders from the ETC wavelength FITS file.
 
-    Reads only the FITS header; no data are loaded.  Returns -1 if the
+    Reads only the FITS header. No data are loaded.  Returns -1 if the
     file does not exist or cannot be parsed.
     """
     if not _os.path.exists(wave_file):

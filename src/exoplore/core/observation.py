@@ -2,38 +2,27 @@
 exoplore.core.observation
 =========================
 
-Spectral matrix builders and related in-transit/dayside helpers.
+Build planetary spectral matrices for the observing sequence.
 
 These functions take the atmospheric spectrum computed by pRT and
 Doppler-shift it to the planet's radial velocity at each exposure,
 building the time-series spectral matrix that is the primary input to
 the data-reduction pipeline.
 
-Functions
----------
+Function
+--------
 spec_to_mat_fraction
-    Full matrix builder with optional limb-asymmetry support.
-get_stellar_matrix
-    Build a matrix of Doppler-shifted stellar spectra.
-add_throughput
-    Multiply each exposure by a random throughput factor.
-block_parameter
-    Compute the BATMAN light-curve blocking factor.
-dayside_fraction
-    Fraction of the dayside visible at each orbital phase.
+    Build the spectral time series with optional limb asymmetries.
 """
 
 from __future__ import annotations
 
-# Reading this file
-# These are observation-building functions retained under core by older
-# interfaces. In particular, spec_to_mat_fraction is still reached through the
-# io.stellar forwarding function. Follow the supplied velocity, event fraction
-# and model flags to distinguish injected spectra from templates/retrieval models.
+# Role in the calculation
+# Construct spectral time-series matrices from velocity tracks, event fractions and
+# model spectra. The simulator and preparation pipeline call spec_to_mat_fraction here.
 
 
 import numpy as np
-import scipy.ndimage
 
 
 # ---------------------------------------------------------------------------
@@ -86,8 +75,8 @@ def spec_to_mat_fraction(inp_dat, syn_jd, T_0, v, wave, wave_prt,
     sf_morning_day, sf_morning_night : array or None
         Per-exposure limb scaling factors (from :func:`get_sflimbs`).
     injection_setup : bool
-        If True, use ``inp_dat["Inject_Scale_Factor"]`` instead of
-        ``inp_dat["Scale_inj"]``.
+        If True, read the injection amplitude from
+        ``inp_dat["Inject_Scale_Factor"]``.
     include_star : bool
         If True, multiply the planet model onto the stellar matrix.
     ccf_setup : bool
@@ -182,169 +171,3 @@ def spec_to_mat_fraction(inp_dat, syn_jd, T_0, v, wave, wave_prt,
                     mat[i, :] = 1.
 
     return mat, mat_shift
-
-
-# ---------------------------------------------------------------------------
-# get_stellar_matrix
-# ---------------------------------------------------------------------------
-
-def get_stellar_matrix(spec_star, v_star, wave):
-    """Build a matrix of Doppler-shifted stellar spectra.
-
-    Parameters
-    ----------
-    spec_star : array
-        Normalised stellar spectrum on ``wave``.
-    v_star : array
-        Stellar RV at each exposure in km/s, shape (n_exp,).
-    wave : array
-        Wavelength grid in µm, shape (n_pixels,).
-
-    Returns
-    -------
-    ndarray, shape (n_exp, n_pixels)
-    """
-    try:
-        from petitRADTRANS import physical_constants as cst
-        c_kms = cst.c / 1e5
-    except ImportError:
-        c_kms = 2.998e5
-
-    mat_star = np.zeros((len(v_star), len(wave)), dtype=float)
-    for i, v in enumerate(v_star):
-        wave_shift = wave * (1.0 + v / c_kms)
-        mat_star[i] = np.interp(wave, wave_shift, spec_star)
-    return mat_star
-
-
-# ---------------------------------------------------------------------------
-# add_throughput
-# ---------------------------------------------------------------------------
-
-def add_throughput(F, jitter_frac=0.02, mode="white",
-                   red_smooth_sigma=2.0, seed=None):
-    """Multiply each exposure by a random throughput factor.
-
-    Parameters
-    ----------
-    F : ndarray, shape (n_spectra, n_pixels)
-        Input flux matrix.
-    jitter_frac : float
-        1-sigma fractional jitter (e.g. 0.02 = 2 %).
-    mode : str
-        ``"white"`` for uncorrelated draws; ``"red"`` for temporally
-        correlated (Gaussian-smoothed) draws.
-    red_smooth_sigma : float
-        Gaussian sigma in exposures for ``mode="red"``.
-    seed : int or None
-        Random seed for reproducibility.
-
-    Returns
-    -------
-    ndarray, shape (n_spectra, n_pixels)
-        Throughput-modulated flux.
-    """
-    rng = np.random.default_rng(seed)
-    n_spectra = F.shape[0]
-    raw = rng.normal(loc=1.0, scale=jitter_frac, size=n_spectra)
-    if mode == "white":
-        T = raw
-    elif mode == "red":
-        T = scipy.ndimage.gaussian_filter1d(raw, sigma=red_smooth_sigma)
-    else:
-        raise ValueError("mode must be 'white' or 'red'")
-    return F * T[:, None]
-
-
-# ---------------------------------------------------------------------------
-# block_parameter, BATMAN transit light curve blocking factor
-# ---------------------------------------------------------------------------
-
-def block_parameter(JD, T_0, P, R_P, a, R_s, i, uu,
-                    e=0, omega=90, limb_dark_mode='quadratic'):
-    """Compute the per-exposure transit blocking factor via BATMAN.
-
-    Parameters
-    ----------
-    JD : array
-        Julian dates.
-    T_0 : float
-        Time of inferior conjunction.
-    P : float
-        Orbital period (days).
-    R_P : float
-        Planet radius (same units as R_s).
-    a : float
-        Semi-major axis (same units as R_s).
-    R_s : float
-        Stellar radius.
-    i : float
-        Inclination (degrees).
-    uu : tuple
-        Limb-darkening coefficients.
-    e : float
-        Eccentricity (default 0).
-    omega : float
-        Longitude of periastron in degrees (default 90).
-    limb_dark_mode : str
-        BATMAN limb-darkening model (default ``"quadratic"``).
-
-    Returns
-    -------
-    ndarray
-        Normalised blocking factor per exposure (0 outside transit,
-        peaks at 1 at mid-transit).
-    """
-    try:
-        import batman
-    except ImportError as exc:
-        raise ImportError(
-            "batman-package is required for block_parameter().\n"
-            "Install with:  pip install batman-package"
-        ) from exc
-
-    params = batman.TransitParams()
-    params.t0 = T_0
-    params.per = P
-    params.rp = R_P / R_s
-    params.a = a / R_s
-    params.inc = i
-    params.ecc = e
-    params.w = omega
-    params.u = uu
-    params.limb_dark = limb_dark_mode
-
-    m = batman.TransitModel(params, JD)
-    flux = m.light_curve(params)
-    block = -(flux - 1)
-    block /= block.max()
-    return block
-
-
-# ---------------------------------------------------------------------------
-# dayside_fraction
-# ---------------------------------------------------------------------------
-
-def dayside_fraction(syn_jd, without_signal):
-    """Fraction of the dayside visible at each orbital phase.
-
-    Parameters
-    ----------
-    syn_jd : array
-        Julian date array for all exposures.
-    without_signal : array
-        Indices of the in-eclipse (no dayside) exposures.
-
-    Returns
-    -------
-    ndarray
-        Fraction array: ramps up before eclipse, zero during, ramps down
-        after.
-    """
-    fraction = np.empty_like(syn_jd)
-    fraction[0:without_signal[0]] = np.linspace(0.5, 1, without_signal[0])
-    fraction[without_signal] = 0
-    fraction[without_signal[-1] + 1:] = np.linspace(
-        1, 0.65, len(syn_jd) - without_signal[-1] - 1
-    )
-    return fraction

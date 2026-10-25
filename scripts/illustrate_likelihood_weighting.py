@@ -24,9 +24,9 @@ real spectra, where telluric absorption and the blaze raise sigma in some
 channels) the per-pixel weighting of Blain24 may yield a tighter constraint:
 it down-weights the noisy pixels and retains the signal in the clean ones,
 whereas BL19's single self-estimated noise level is raised by the noisy
-minority, which dilutes the signal in the clean majority.  This reflects the
-noise structure of a given dataset rather than a general ordering of the two
-formulations; BL19 was developed and validated on photon-noise-dominated
+minority, which dilutes the signal in the clean majority. The comparison
+depends on the noise structure of the dataset. BL19 was developed and
+validated on photon-noise-dominated
 simulated CRIRES data, where it recovers statistically correct credibility
 intervals and does not require reliable per-pixel uncertainties.
 
@@ -42,10 +42,9 @@ widths are printed and annotated.
 
 from __future__ import annotations
 
-# Where this script fits
-# This controlled teaching example compares likelihood behaviour on a toy
-# spectrum. It helps explain a statistical choice; it is not a replacement for
-# running a real-data preparation and atmospheric retrieval.
+# Role in the calculation
+# Compare likelihood weighting choices on an illustrative spectrum with known
+# uncertainties.
 
 
 import argparse
@@ -81,7 +80,7 @@ def lnL_bl19(data: np.ndarray, model: np.ndarray) -> float:
     """Brogi & Line (2019): -N/2 ln(s_f^2 - 2R + s_g^2).
 
     Equivalent to -N/2 ln of the mean squared residual.  The noise scale is
-    estimated from the data itself; no per-pixel sigma enters.
+    estimated from the data itself. No per-pixel sigma enters.
     """
     f = data - data.mean()
     g = model - model.mean()

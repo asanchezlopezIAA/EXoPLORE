@@ -2,7 +2,7 @@
 exoplore.retrieval.samplers
 ===========================
 
-Thin wrappers around MultiNest (pymultinest) and emcee for atmospheric
+Callable interfaces to MultiNest (pymultinest) and emcee for atmospheric
 retrieval.
 
 Both samplers are optional dependencies.  If not installed, the
@@ -30,8 +30,8 @@ receives a log-posterior callable that includes the prior, for example:
             return -np.inf
         return log_p + compute_log_likelihood(...)
 
-These are public callable adapters. The standard molecular runner still has
-inline sampler setup in Block 9; it does not yet delegate all sampling here.
+These functions set up and run the selected sampler. Block 9 in
+core/simulator.py also contains its own MultiNest/emcee setup.
 
 Examples
 --------
@@ -67,9 +67,8 @@ from typing import Callable, Optional, Sequence
 
 import numpy as np
 
-# Canonical sampler adapters; exoplore.samplers is a compatibility reexport.
-# Keep optional imports inside the corresponding run function so inspecting
-# priors or posterior summaries does not require either sampler installation.
+# Each run function imports its sampler package when called.
+# posterior_summary uses the supplied samples.
 
 # ---------------------------------------------------------------------------
 # MultiNest
@@ -112,7 +111,7 @@ def run_multinest(
         Stopping criterion Δ ln Z < ``evidence_tolerance``.
     sampling_efficiency:
         MultiNest sampling efficiency.  0.3 is recommended for
-        parameter estimation; 0.8 for evidence.
+        parameter estimation. 0.8 for evidence.
     max_iterations:
         Maximum number of iterations (0 = unlimited).
     multimodal:

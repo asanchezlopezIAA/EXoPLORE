@@ -1,6 +1,6 @@
 # EXoPLORE Tutorial
 
-This tutorial walks through twelve progressively more involved analyses. In particular, by the end the reader will know how to run the default HD 189733 b ANDES simulation, change the target planet, configure the atmospheric forward model, run a CARMENES NIR simulation, combine multiple nights, enable the Bayesian retrieval, assess retrieval pipeline bias, validate detection significances and retrieval uncertainties, analyse real CRIRES+ and IGRINS data reduced from archive frames (WASP-127 b and L 98-59 d), produce molecule detectability maps over a grid of atmospheric compositions, and prepare direct He I transmission spectra from CRIRES+ observations (WASP-121 b). We note that each tutorial builds on the previous one, so we recommend following them in order on a first reading. Readers new to the technique may wish to read the [Concepts primer](concepts.md) first.
+This tutorial walks through twelve progressively more involved analyses. In particular, by the end the reader will know how to run the default HD 189733 b ANDES simulation, change the target planet, configure the atmospheric forward model, run a CARMENES NIR simulation, combine multiple nights, enable the Bayesian retrieval, assess retrieval pipeline bias, validate detection significances and retrieval uncertainties, analyse real CRIRES+ and IGRINS data reduced from archive frames (WASP-127 b and L 98-59 d), produce molecule detectability maps over a grid of atmospheric compositions, and prepare direct He I transmission spectra from CRIRES+ observations (WASP-121 b). Follow the tutorials in order on a first reading. Readers new to the technique may wish to read the [Concepts primer](concepts.md) first.
 
 ---
 
@@ -67,7 +67,7 @@ Open `configs/hd189733b_andes_transit_clean.json`. The key scientific choices ar
 "pipeline":  { "name": "Blain24" }
 ```
 
-The atmosphere block defines **two separate petitRADTRANS models**: the injected planet atmosphere (`planet_model` + limb sub-blocks) and the CCF template (`ccf_template`). Because `cc_with_true_model: false`, the simulator uses H₂O-only as the cross-correlation template while injecting the full 10-species atmosphere. This mimics the typical observational strategy: when searching for signal in real data, the exact injected chemistry is not known a priori, and therefore a simpler template is used to cross-correlate. We note that setting `cc_with_true_model: true` would use the full injected model as the template, generally yielding higher S/N but corresponding to an idealised scenario not achievable in practice.
+The atmosphere block defines **two separate petitRADTRANS models**: the injected planet atmosphere (`planet_model` + limb sub-blocks) and the CCF template (`ccf_template`). Because `cc_with_true_model: false`, the simulator uses H₂O-only as the cross-correlation template while injecting the full 10-species atmosphere. This mimics the typical observational strategy: when searching for signal in real data, the exact injected chemistry is not known a priori, and therefore a simpler template is used to cross-correlate. Setting `cc_with_true_model: true` uses the full injected model as the template, generally yielding higher S/N but corresponding to an idealised scenario not achievable in practice.
 
 The `"pipeline": "Blain24"` entry selects the Blain24 preparation pipeline ([Blain, Sánchez-López & Mollière 2024](https://doi.org/10.3847/1538-3881/ad2c8b)). Blain24 first removes the instrumental throughput and blaze by dividing each exposure by a second-order polynomial fit over wavelength, and then removes the telluric absorption by fitting a second-order polynomial to the logarithm of the flux as a function of airmass (the log-transmittance of the Earth's atmosphere is, to first order, linear in airmass) and dividing by the resulting fit. Wavelength channels where the fitted telluric transmittance falls below 0.8 are masked, to exclude regions too strongly affected by telluric absorption.
 
@@ -469,7 +469,7 @@ cp configs/hd189733b_andes_transit_clean.json configs/hd189733b_carmenes_transit
 }
 ```
 
-The critical change is `"name": "CARMENES_NIR"`. The wavelength grid (`wave_CARMENES_NIR.fits`) is found automatically (it does not need to be copied).
+The critical change is `"name": "CARMENES_NIR"`. The instrument reader locates the bundled wavelength grid (`wave_CARMENES_NIR.fits`) automatically.
 
 **Excluded orders (9, 10, 18, 19, 20):** this selection follows Alonso-Floriano et al. (2019) for this specific dataset and observing conditions. Orders 18 to 20 (~1.9 µm water band) are consistently opaque from Calar Alto and safely discarded. Orders 9 and 10 (~1.4 µm water band) are more PWV-dependent (under dry conditions they can retain usable signal and may be worth keeping). In general, the optimal selection requires inspecting the telluric transmission in the data being analysed; the 23-order list here is a conservative starting point. All 28 orders can be restored by setting `"order_indices": []`.
 
@@ -623,7 +623,7 @@ observations_night_0_order_K.fits            # Real spectra for night 0, order K
 observations_night_1_order_K.fits            # Real spectra for night 1, order K
 ```
 
-Here `K` is the absolute spectral order number from the instrument's `order_selection` array, not a zero-based counter.
+Here `K` is the instrument order ID stored in `order_selection`.
 
 **Config for distinct nights:**
 
@@ -735,7 +735,7 @@ The simulator writes diagnostic products both per individual night and for the c
 :::{note}
 **From detection to atmospheric constraints**
 
-A peak in the Kp-Vsys map establishes that a species is present and yields its approximate orbital and rest-frame velocity. It does not, however, provide a posterior probability distribution over the atmospheric parameters, that is, the abundances, the temperature structure, or the chemical composition ratios. To go from a detection to a constraint of the form log₁₀(X<sub>H₂O</sub>) = -4.2 ± 0.3 we must perform a Bayesian retrieval.
+A peak in the Kp-Vsys map locates a line pattern compatible with the search template in orbital/rest-frame velocity space. Bayesian retrieval calculates posterior distributions for atmospheric parameters such as abundance, temperature and chemical composition ratios. To go from a detection to a constraint of the form log₁₀(X<sub>H₂O</sub>) = -4.2 ± 0.3 we must perform a Bayesian retrieval.
 
 In the retrieval, a petitRADTRANS forward model is computed for a trial set of parameters, Doppler-shifted to each exposure, and processed through the same preparation pipeline as the data. It is then compared to the data through a log-likelihood function, and a nested sampler ([MultiNest](https://github.com/JohannesBuchner/PyMultiNest)) or an MCMC ([emcee](https://emcee.readthedocs.io)) explores the parameter space to map the posterior. We caution that the forward model must be prepared identically to the data at every likelihood evaluation. This is the pipeline-bias requirement, and it is the subject of Tutorial 7.
 
@@ -767,7 +767,7 @@ The `dimensionality` field selects the free parameters, and the `log_likelihood`
 | `"1D_extended_fast"` | `"BL19"` or `"Blain24"` | log(VMR) × 6 species, T_eq (Kp/v_rest fixed) |
 | `"2D"` | `"BL19"` or `"Blain24"` | morning/evening VMR + T_eq |
 
-We note that `1D_Gibson22` must be paired with `Gibson22`, and no other. The β parameter is the noise-scaling degree of freedom that makes the Gibson22 formulation self-consistent; pairing it with Blain24 or BL19 would sample β without ever using it, yielding a meaningless posterior. The simulator raises a `ValueError` on any invalid combination.
+Pair `1D_Gibson22` with the `Gibson22` likelihood. The β parameter is the noise-scaling degree of freedom that makes the Gibson22 formulation self-consistent; pairing it with Blain24 or BL19 would sample β without ever using it, yielding a meaningless posterior. The simulator raises a `ValueError` on any invalid combination.
 
 The ASL19 preparation pipeline (Sánchez-López et al. 2019) was introduced as a detection method and does not define a retrieval likelihood of its own. Because it is SYSREM-based, retrievals that use the ASL19 preparation fall back to the Gibson22 framework: the forward model is filtered with the same linear projection and evaluated with the Gibson22 log-likelihood (with the β noise scaling). In practice this means pairing `pipeline.name: ASL19` with `dimensionality: 1D_Gibson22` and `log_likelihood: Gibson22`.
 
@@ -814,11 +814,11 @@ The preparation is unavoidable: the telluric and stellar lines dominate the spec
 
 In order to isolate pure pipeline systematics, the test should be run with `noiseless: true`, which removes the stochastic noise floor. With perfect noiseless data and the correct forward model, the likelihood should peak sharply at the injected truth. Any offset is consequently pure pipeline bias, not noise. With noisy data, biases can be hidden inside the noise uncertainty and require many injection-recovery realisations to detect.
 
-> **We note that** SYSREM-based pipelines (ASL19, Gibson22) may be problematic with noiseless data, since SYSREM can over-subtract the signal in the absence of noise. The polynomial pipeline Blain24 is therefore a natural choice for a noiseless bias test. Gibson22 remains usable in this regime provided its β parameter is pinned near 1 (see Step 1).
+> SYSREM-based pipelines (ASL19, Gibson22) may be problematic with noiseless data, since SYSREM can over-subtract the signal in the absence of noise. The polynomial pipeline Blain24 is therefore a natural choice for a noiseless bias test. Gibson22 remains usable in this regime provided its β parameter is pinned near 1 (see Step 1).
 
 ### Step 1: Configure the test
 
-To keep the retrieval fast (minutes rather than hours), we restrict the simulation to a single spectral order with strong signal from the target species. For H₂O in CARMENES NIR, order 23 (0-indexed) provides good sensitivity. To that end:
+This example uses a single spectral order with a strong signal from the target species to keep the retrieval practical to run. For H₂O in CARMENES NIR, order 23 (0-indexed) provides good sensitivity. To that end:
 
 ```json
 {
@@ -896,7 +896,7 @@ Open `<run_name>/plots/retrieval_night_0_corner.pdf`. The truth values (plotted 
 | v_rest (km/s) | Posterior offset from 0 (no net velocity injected) |
 | log₁₀(VMR) | Broader, but centred near the injected abundance |
 
-The log-evidence `ln Z` printed to the terminal by MultiNest is a useful sanity check: it should be a finite, well-behaved value rather than a diverging or `NaN` one (the run log should be checked for error messages if it is).
+The log-evidence `ln Z` printed to the terminal by MultiNest is a useful sanity check: check that it is finite and inspect the run log for any numerical errors.
 
 **Passing criterion:** Kp, T_eq, and v_rest posteriors all cover their truth values within 1 to 2σ. A representative Blain24 result:
 
@@ -1479,7 +1479,7 @@ Fibre A contains both the stellar spectrum and OH emission from the Earth's atmo
 
 Pallé et al. (2020) used matched extractions for both fibres and measured an A/B factor of 0.88. The first step in assessing the OH correction should be to check whether fibre A and fibre B have been extracted consistently. For this tutorial, we do not have fibre-A spectra extracted in the same way as fibre B. If these products are available for your observations, select `fiber_b_matched_extraction`. EXoPLORE measures the A/B factor from the strong OH line in the out-of-transit spectra and applies it throughout the night. The measured factor is saved in `oh_report.json` and shown in the legend of `oh_correction.png`.
 
-Ideally, we would start with both fibres extracted in the same way. Since we do not have those products here, we can try a few alternatives and see what happens. We could mask the OH lines, or even leave them in to see how much they affect the result (not ideal, but useful for learning). We can also fit and subtract the emission using the two approaches below. Let us compare these choices and see how the recovered helium signal changes.
+For these input products, compare OH masking, retaining the OH lines, and the two fitted-subtraction methods below. Inspect the correction diagnostics and recovered helium spectrum for each choice.
 
 The available choices are:
 
@@ -1542,7 +1542,7 @@ We now check whether the telluric fits remain consistent throughout the night. E
 :width: 95%
 :align: center
 
-Wavelength adjustment, instrumental-kernel widths and reduced chi-squared for the 34 GJ 3470 b exposures. The wavelength adjustments range from −0.30 to +0.16 km/s. Here the Gaussian and Lorentzian widths are fixed to the wavelength-dependent Voigt LSF from Nagel et al. (2023), rather than fitted for each exposure. The widths are expressed in pixels of the grid used by molecfit. Produced with `plot_carmenes_palle2020.py night`.
+Wavelength adjustment, instrumental-kernel widths and reduced chi-squared for the 34 GJ 3470 b exposures. The wavelength adjustments range from −0.30 to +0.16 km/s. Here the Gaussian and Lorentzian widths are fixed to the wavelength-dependent Voigt LSF from Nagel et al. (2023) for all exposures. The widths are expressed in pixels of the grid used by molecfit. Produced with `plot_carmenes_palle2020.py night`.
 ```
 
 We can recreate this plot from the saved fits with:
@@ -1664,7 +1664,7 @@ Both runs retain the per-exposure corrected spectra in `observations.npz`, the t
 
 **Slow simulation**, In order to speed up test runs, use `instrument.order_indices: [0, 5, 10, 20]` to run only a subset of orders, disable limb asymmetries (`limb_asymmetries: false`, which avoids the additional pRT calls for the morning and evening limbs), and use an isothermal profile while debugging.
 
-**Fully masked order warnings**, If spectral orders in deep telluric bands are fully masked (all pixels fail SNR or negative-value checks), the simulator continues gracefully and writes a report to `<run_name>/warnings/fully_masked_orders_{run_name}.txt`. These orders are automatically excluded from CCF co-adding. This is expected behaviour and not an error.
+**Fully masked order warnings**, If spectral orders in deep telluric bands are fully masked (all pixels fail SNR or negative-value checks), the simulator continues gracefully and writes a report to `<run_name>/warnings/fully_masked_orders_{run_name}.txt`. These orders are automatically excluded from CCF co-adding. The analysis continues with the remaining usable orders.
 
 **Simulation running all orders when you only want one**, `cross_correlation.order_selection` is a CCF-only filter. To restrict the entire simulation (Blocks 3 to 9) to a specific set of orders, use `instrument.order_indices`. For a single-order retrieval test: `"instrument": { "order_indices": [23] }`. We caution that forgetting this will run all orders through the forward model and make the retrieval far slower than necessary.
 

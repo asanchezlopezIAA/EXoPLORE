@@ -6,11 +6,10 @@ Cloudy iterations and their original energy files are retained in a new project.
 """
 from __future__ import annotations
 
-# Reading this file
-# This is the alternative helium provider selected by helium_provider.py.
-# It handles the external atmosphere solution and returns planet-frame spectra;
-# the observing runner subsequently shifts and samples them. Retained solver
-# files let a researcher inspect convergence rather than just the final figure.
+# Role in the calculation
+# Run the Sunbather atmosphere solver and return planet-frame spectra to the observing
+# code. Saved solver files contain the profiles and convergence information for the
+# atmosphere.
 
 
 from contextlib import contextmanager
@@ -64,7 +63,7 @@ def _preserve_solver_files(tools, solveT):
 
 
 def solve_sunbather(settings, planet) -> dict:
-    """Solve one nonisothermal H/He wind; reject absent or failed convergence.
+    """Solve one nonisothermal H/He wind. Reject absent or failed convergence.
 
 Input F_lambda is at the orbital separation in erg/s/cm²/Angstrom. Cloudy
 receives lambda*F_lambda at 1 au. Sunbather then dilutes to its illuminated
@@ -160,7 +159,7 @@ outer boundary (a-r_max), as prescribed by its native solver.
 
 
 class SunbatherTransit:
-    """Cache Sunbather optical depth; return syn_spec(phase) in the planet frame."""
+    """Cache Sunbather optical depth. Return syn_spec(phase) in the planet frame."""
     def __init__(self, settings, planet, science, profile):
         from sunbather import RT, tools
         self.settings, self.planet = settings, planet
@@ -176,7 +175,7 @@ class SunbatherTransit:
             raise ValueError('Expected three helium transitions')
         self.edges = be
         self.tau = np.zeros((len(self.wave_nm),len(be)-1))
-        # Use configured vacuum atomic data; Sunbather supplies natural widths.
+        # Use configured vacuum atomic data. Sunbather supplies natural widths.
         # Small frequency blocks keep resolved-ray Voigt integration in memory.
         nu0 = tools.c/(np.asarray(science.helium_vacuum_lines_nm)*1e-7)
         sigma0 = RT.sigt0*np.asarray(science.helium_oscillator_strengths)

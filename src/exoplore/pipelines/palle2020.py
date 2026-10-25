@@ -1,17 +1,16 @@
 """Palle2020 preparation of real CARMENES He I transit observations.
 
 Implement the OH-masked alternative of Pallé et al. (2020). Source CARACAL
-spectra are preserved; fibre B locates emission and is never science flux.
+spectra are preserved. fibre B locates emission and is never science flux.
 The existing arithmetic-reference CARMENES transmission implementation is
 reused. No SYSREM or uncertainty resampling is applied.
 """
 from __future__ import annotations
 
-# Reading this file
-# This is the observed-CARMENES workflow around the direct-transmission
-# recipe. It resolves exposure membership and OH treatment, reads correction
-# products, and then uses the shared CARMENES preparation. Sky-fibre data locate
-# contamination; they are not substituted for the science flux.
+# Role in the calculation
+# Prepare observed CARMENES helium spectra: select exposures, apply the configured OH
+# and telluric corrections and construct the transmission spectrum with the shared
+# CARMENES recipe.
 
 from dataclasses import asdict, replace
 import json

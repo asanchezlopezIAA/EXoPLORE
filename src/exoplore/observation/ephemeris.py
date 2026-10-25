@@ -25,17 +25,16 @@ night-to-night diversity without any input files:
     Earth-frame velocities as ``v_sys - berv``).
 
 All functions accept the observatory name used in the instrument config
-(e.g. ``"paranal"``); resolution to an Astropy ``EarthLocation`` uses
+(e.g. ``"paranal"``). resolution to an Astropy ``EarthLocation`` uses
 the built-in offline site registry.
 """
 
 from __future__ import annotations
 
-# Reading this file
-# Different observing dates have different sky geometry and Earth motion.
-# These helpers calculate dates, airmass and BERV from target/site information
-# for synthetic different-night observations. Returned velocities must retain
-# the same BERV sign convention used by observation.velocity.
+# Role in the calculation
+# Calculate observable transit dates, airmass and BERV from the target and observatory
+# coordinates. The observing code uses these velocities with the sign convention
+# defined in observation.velocity.
 
 
 import numpy as np
@@ -93,7 +92,7 @@ def find_observable_transit_epochs(
     min_alt_deg:
         Minimum target altitude at mid-transit (degrees).
     max_sun_alt_deg:
-        Maximum Sun altitude at mid-transit (degrees); 0 = below the
+        Maximum Sun altitude at mid-transit (degrees). 0 = below the
         horizon.
     max_epochs:
         Maximum number of consecutive transits to test.

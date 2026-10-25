@@ -1,9 +1,7 @@
-"""Named scientific products, independent of the simulator and plotting code.
+"""Completed CCFs and detection maps with named arrays, axes and units.
 
-These containers describe arrays that have already been calculated. They do
-not prepare spectra, combine CCFs, transpose maps or normalize statistics.
-Keeping this module independent lets IO, plotting and orchestration share the
-same conventions without importing each other.
+The simulator creates these objects from its calculated products. File readers
+and plotting functions use the same array conventions.
 """
 
 from dataclasses import dataclass, field
@@ -13,26 +11,25 @@ import numpy as np
 
 __all__ = ["CCFResult", "DetectionMapResult"]
 
-# NumPy arrays do not have scalar equality semantics. eq=False avoids a
-# misleading automatically generated dataclass comparison of entire datasets.
+# NumPy compares arrays element by element. eq=False keeps equality checks
+# on these result objects separate from comparisons of their array contents.
 
 @dataclass(frozen=True, eq=False)
 class CCFResult:
     """One combined Earth-frame CCF time series.
 
-    ``ccf`` has axes **(velocity, exposure)**, preserving the simulator's
-    existing layout. ``phase`` is in orbital cycles, zero at mid-transit.
+    ``ccf`` has axes **(velocity, exposure)**. ``phase`` is in orbital cycles, zero at mid-transit.
     ``signal_exposure_indices`` identifies the exposures selected for the
-    planetary-signal analysis; it is an index array, not a boolean mask.
+    planetary-signal analysis as an integer index array.
     ``berv_kms`` is scalar or one value per exposure. All velocities are km/s.
 
     For nights sharing one geometry, the CCF may already be coadded across
     nights. For different geometries, the accessor returns a selected night.
-    ``metadata`` holds extensible provenance, not additional numerical axes.
+    ``metadata`` records the observing settings and velocity conventions.
 
-    Frozen fields prevent accidental reassignment; NumPy arrays themselves
+    Frozen fields prevent accidental reassignment. NumPy arrays themselves
     remain mutable. Simulator accessors copy by default. Their ``copy=False``
-    option returns read-only views instead, which still reflect source changes.
+    option returns read-only views that reflect source changes.
     """
 
     ccf: np.ndarray
@@ -44,7 +41,7 @@ class CCFResult:
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
-        # Check axes at this public boundary; never guess a transpose from shape.
+        # Require the declared (velocity, exposure) shape and matching axes.
         if self.velocity_kms.ndim != 1 or self.phase.ndim != 1:
             raise ValueError("CCF velocity and phase axes must be one-dimensional.")
         if self.ccf.shape != (self.velocity_kms.size, self.phase.size):
@@ -63,11 +60,11 @@ class DetectionMapResult:
     """A saved detection statistic with axes **(Vrest, Kp)**.
 
     Both velocity axes are in km/s. ``metric`` distinguishes ``snr`` from
-    ``welch``; values are read as saved, without a new normalization. The
-    archive's Vrest convention is retained, or marked unspecified when absent.
+    ``welch``. Values and the Vrest convention come from the saved archive.
+    A missing convention is labelled unspecified.
 
-    Peak properties locate a maximum pixel; they provide no uncertainty or
-    false-alarm calibration. Ties follow NumPy's first-maximum convention.
+    Peak properties give the coordinates and value of the maximum pixel.
+    Uncertainties and false-alarm probabilities require statistical inference. Ties follow NumPy's first-maximum convention.
     Arrays loaded from an archive are independent of simulator working arrays.
     """
 
@@ -88,7 +85,7 @@ class DetectionMapResult:
 
     @property
     def peak_indices(self) -> tuple[int, int]:
-        """Return (Vrest index, Kp index), ignoring NaNs; reject an all-NaN map."""
+        """Return (Vrest index, Kp index), ignoring NaNs. Reject an all-NaN map."""
         return tuple(int(i) for i in np.unravel_index(
             np.nanargmax(self.values), self.values.shape
         ))

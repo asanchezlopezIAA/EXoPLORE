@@ -4,15 +4,14 @@ exoplore.instruments.crires_czesla2024
 
 Explicit, target-segment-only molecfit preparation for the Czesla et al. (2024)
 direct helium workflow. ESO cr2res dark/flat/wavelength/nodding extraction is
-upstream. Every output must be new; rejected fits never become unity models.
+upstream. Every output must be new. rejected fits never become unity models.
 """
 from __future__ import annotations
 
-# Reading this file
-# Upstream cr2res extraction has already happened before this adapter.
-# Here the selected segment's telluric anchors are protected against predicted
-# helium absorption, then external fits are checked. The resulting corrections
-# feed the direct-helium recipe rather than the raw-frame reduction.
+# Role in the calculation
+# Fit telluric corrections in the selected extracted CRIRES+ segment. Protect the
+# predicted helium wavelength intervals during fitting and check the corrections before
+# direct-transmission preparation.
 
 
 from dataclasses import asdict,dataclass
@@ -82,8 +81,8 @@ def prepare_crires_czesla2024(manifest: Path,raw_directory: Path,
     night. All settings and recipe commands are recorded. The full calctrans
     output supplies refined vacuum wavelengths and pure absorption transmission.
     Source raw/extracted files are opened read-only. With synthetic_input=True,
-    explicitly marked simulated 1D spectra supply their own observing metadata;
-    all fitting commands and acceptance gates remain the same.
+    explicitly marked simulated 1D spectra supply their own observing metadata.
+    All fitting commands and acceptance gates remain the same.
     """
     executable=shutil.which(settings.esorex)
     if executable is None:raise FileNotFoundError(f'ESO executable not found: {settings.esorex}')
@@ -102,7 +101,7 @@ def prepare_crires_czesla2024(manifest: Path,raw_directory: Path,
                 raise ValueError('Synthetic fitting requires an explicitly marked simulated 1D spectrum')
             if header['ESO SEQ NODPOS'] != nod or abs(header['MJD-OBS']-mjd) >= 1e-7:
                 raise ValueError('Synthetic manifest time/nod disagrees with its spectrum')
-            # The simulated spectrum itself supplies observing metadata;
+            # The simulated spectrum itself supplies observing metadata.
             # no ESO raw detector frame or sky subtraction is fabricated.
             raw=extracted
         else:

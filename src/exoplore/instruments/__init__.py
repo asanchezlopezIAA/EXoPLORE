@@ -65,10 +65,8 @@ from .wavegrid import (
 # ---------------------------------------------------------------------------
 # Instrument registry, add new instruments here (one line each)
 # ---------------------------------------------------------------------------
-# A dictionary is useful here because instrument names select loader functions.
-# The returned InstrumentInfo describes input locations/resolution; it does not
-# itself generate observations. The runner/wavegrid code consumes that metadata.
-# Registration alone does not remove instrument-specific branches elsewhere.
+# Map instrument names to the functions that supply their resolution and input
+# locations. wavegrid.py and the selected runner read the corresponding arrays.
 _REGISTRY: dict[str, object] = {
     "ANDES_YJHK":   get_instrument_info_YJHK,
     "ANDES_YJH":    get_instrument_info_YJH,
@@ -79,7 +77,7 @@ _REGISTRY: dict[str, object] = {
     "CARMENES_VIS": _carmenes_vis_info,
     "IGRINS":       _igrins_info,
     "CRIRES+":      _crires_plus_info,
-    # Backward-compatibility alias
+    # ANDES selects the YJHK instrument setup.
     "ANDES":        get_instrument_info_YJHK,
 }
 
@@ -87,9 +85,8 @@ _REGISTRY: dict[str, object] = {
 def load_instrument_v2(cfg: "SimulationConfig") -> InstrumentInfo:
     """Return instrument metadata directly from a config.
 
-    Takes a :class:`~exoplore.config.models.SimulationConfig` instead of an
-    ``inp_dat`` dict.  Internally builds the minimal dict the registry
-    functions need, so the registry implementations themselves are unchanged.
+    Read :class:`~exoplore.config.models.SimulationConfig`, construct the
+    instrument-loader arguments and call the function registered for its name.
     """
     from typing import TYPE_CHECKING
     _mini: dict = {
@@ -119,16 +116,15 @@ def get_WaveGrid_v2(cfg: "SimulationConfig",
                     n_orders: int):
     """Build the wavelength grid directly from a config.
 
-    Takes SimulationConfig + InstrumentInfo instead of an inp_dat dict,
-    builds the minimal dict get_WaveGrid needs, and delegates to it, so
-    the underlying function is unchanged.
+    Read SimulationConfig and InstrumentInfo, construct the wavelength-reader
+    arguments and call get_WaveGrid.
     """
     _mini: dict = {
         "instrument":       cfg.instrument.name,
         "Different_nights": cfg.observation.different_nights,
         "n_nights":         cfg.observation.n_nights,
         "Pix_per_resel":    cfg.instrument.pixels_per_resolution_element,
-        "ETC":              False,  # CRIRES-only flag; ANDES uses snr_file=="__ETC__"
+        "ETC":              False,  # CRIRES-only flag. ANDES uses snr_file=="__ETC__"
     }
     return get_WaveGrid(
         _mini,
@@ -144,8 +140,7 @@ def get_WaveGrid_v2(cfg: "SimulationConfig",
 def load_instrument(inp_dat: dict) -> InstrumentInfo:
     """Return instrument metadata for the instrument named in *inp_dat*.
 
-    This is the single entry point the simulator calls instead of the old
-    monolithic ``Load_Instrumental_Info`` function.
+    Select the instrument loader using the name in inp_dat["instrument"].
 
     Parameters
     ----------

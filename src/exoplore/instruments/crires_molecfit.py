@@ -7,30 +7,28 @@ nodding time series to (a) refine the wavelength solution per detector segment
 and (b) produce a theoretical telluric transmittance for the normalisation
 masks, following Nortmann et al. 2026 Appendix A.1 and Sec 3.1.
 
-This module does not reduce raw frames.  The upstream extraction (master dark,
-flat, wavelength solution from a uranium neon lamp plus a Fabry Perot etalon,
-and per A/B pair nodding extraction) is done with the ESO cr2res pipeline; see
-the CRIRES+ documentation at
-https://www.eso.org/sci/software/pipelines/cr2res/ and the molecfit
-documentation at https://www.eso.org/sci/software/pipelines/molecfit/ for
-installation and usage of those tools.  We only wrap molecfit; we do not
-replace the ESO pipelines or their guides.
+Input spectra come from the ESO cr2res extraction, including dark and flat
+corrections, a uranium-neon and Fabry-Perot wavelength solution, and A/B
+nodding extraction. This module runs molecfit on those extracted spectra.
+Installation and recipe documentation:
+https://www.eso.org/sci/software/pipelines/cr2res/
+https://www.eso.org/sci/software/pipelines/molecfit/
 
 What the wrapper does automatically
 -----------------------------------
 1. Reads the wavelength setting and slit width from the FITS header and selects
    the telluric molecules relevant to that band (see BAND_MOLECULES).
 2. Picks a reference spectrum per nodding position (the highest median signal to
-   noise exposure by default; all exposures share the same Fabry Perot solution,
+   noise exposure by default, all exposures share the same Fabry Perot solution,
    which Nortmann verifies does not drift over the night).
 3. Runs molecfit_model per segment in the configuration validated for CRIRES+:
-   vacuum wavelength frame (cr2res delivers vacuum wavelengths; running in air
+   vacuum wavelength frame (cr2res delivers vacuum wavelengths, running in air
    introduces an offset of order 80 km/s at 2 micron) and the reflex ANY line
    spread function (a single fitted Gaussian).
 4. Gates the refined solution: a segment is accepted only if its velocity shift
    relative to the Fabry Perot solution is below GATE_KMS.  Under constrained
    segments (telluric saturated band heads with no continuum to anchor, or
-   telluric poor segments with almost no lines) are rejected; they inherit the
+   telluric poor segments with almost no lines) are rejected. They inherit the
    median shift of the accepted detectors of the same echelle order (which agree
    to well under 1 km/s), or keep the Fabry Perot solution if no detector of the
    order is constrained.
@@ -56,11 +54,9 @@ Output
 
 from __future__ import annotations
 
-# Reading this file
-# This module connects extracted CRIRES+ spectra to external molecfit
-# recipes, wavelength checks and telluric models. It is downstream of raw-frame
-# reduction. Read the fit result/acceptance path as well as the launcher: an
-# external command returning does not by itself explain which correction is used.
+# Role in the calculation
+# Prepare extracted CRIRES+ spectra for the external molecfit recipes, run the fits and
+# check their wavelengths and transmission models.
 
 
 import glob
@@ -74,11 +70,11 @@ C_KMS = 299792.458
 
 # Telluric molecules per near infrared band.  The K band list follows Nortmann
 # 2024 Appendix A.3 (water, methane, carbon dioxide, nitrous oxide).  The other
-# bands list the standard telluric absorbers of that wavelength range; these are
-# sensible defaults for the wavelength fit rather than a published per setting
-# recipe, and can be overridden through the ``molecules`` argument.  In every
+# bands list the standard telluric absorbers of that wavelength range. These are
+# wavelength-fit defaults that can be set through the ``molecules``
+# argument. In every
 # band only water is FITTED (it has structured lines throughout the near
-# infrared and anchors the wavelength solution); the remaining species are
+# infrared and anchors the wavelength solution). The remaining species are
 # included at climatological abundance but not fitted, so their column density
 # does not run away in segments that lack their lines.
 BAND_MOLECULES = {
@@ -98,7 +94,7 @@ KERNFAC = 3           # kernel size in FWHM
 DEFAULT_SLIT = 0.2    # arcsec, used if the header carries no slit width
 
 # molecfit optimiser convergence criteria (relative chi2 / parameter change).
-# The molecfit default is 1e-2 (User Manual sec 4.7); it is the recommended
+# The molecfit default is 1e-2 (User Manual sec 4.7). It is the recommended
 # value and is already below the telluric model's own accuracy floor.  Values
 # far tighter than this (e.g. 1e-10) can leave the mpfit/LBLRTM loop oscillating
 # without converging on segments with weak, sparse telluric lines (e.g. between
@@ -109,7 +105,7 @@ MOLEC_XTOL = "1e-4"
 EDGE_TRIM = 40        # pixels trimmed from each segment end for the fit window
 
 # Wavelength refinement plausibility gate.  The Fabry Perot solution is good to
-# below 0.1 pixel, so a genuine molecfit refinement is sub pixel; under
+# below 0.1 pixel, so a genuine molecfit refinement is sub pixel. under
 # constrained fits jump by many pixels.  3 km/s (about 1.5 pixels) sits in the
 # gap between the two regimes.
 GATE_KMS = 3.0
@@ -254,7 +250,7 @@ def measure_resolution(reduced_dir, nod=None, nominal_R=100000.0,
 
         R = nominal_R * slit_fwhm_pix / FWHM_pix .
 
-    The FWHM is read for every segment of every nodding pair; the returned R
+    The FWHM is read for every segment of every nodding pair. The returned R
     is the per segment median over pairs (Nortmann and Lesjak both quote the
     median over the night, about R = 140000).
 
@@ -266,7 +262,7 @@ def measure_resolution(reduced_dir, nod=None, nominal_R=100000.0,
         Restrict to one nodding position, or use both (default).
     slit_fwhm_pix : float
         PSF FWHM in pixels that corresponds to nominal_R (the slit width in
-        pixels, ~3.5 for the 0.2 arcsec slit; Dorn et al. 2023).
+        pixels, ~3.5 for the 0.2 arcsec slit, Dorn et al. 2023).
 
     Returns
     -------
@@ -327,7 +323,7 @@ def frame_quality(path):
     """(PSF FWHM, median S/N) of one extracted spectrum, for the quality cut.
 
     PSF FWHM is the median of the pipeline ``ESO QC SLITFWHM MED`` over the
-    three detectors; a frame whose FWHM is a strong outlier (adaptive optics
+    three detectors. A frame whose FWHM is a strong outlier (adaptive optics
     loss, clouds) or whose S/N collapses is unusable."""
     fw = []
     with fits.open(path) as h:
@@ -368,7 +364,7 @@ def anchor_grids_to_tellurics(flux, wave_nm, nod, telluric,
 
     Nortmann et al. 2024 (Appendix A.2 and A.3) obtain a molecfit refined
     wavelength solution per nodding position so that the telluric lines of both
-    positions are labelled at their true observed wavelengths; the star sits at
+    positions are labelled at their true observed wavelengths. The star sits at
     a different slit position in A and B, so their raw solutions differ.  When
     the molecfit refinement of a segment is rejected by the plausibility gate
     for one nodding position but accepted for the other, the two positions end
@@ -381,9 +377,9 @@ def anchor_grids_to_tellurics(flux, wave_nm, nod, telluric,
     telluric lines sit at the model (telluric rest) positions.  Segments
     without a usable telluric anchor inherit the median correction of the
     anchored segments of the same nodding position (the slit position offset
-    is common to the whole position).  This correction is a data driven
-    completion of the per position refinement, not a step spelled out in the
-    papers, which did not gate their molecfit solutions.
+    is common to the whole position). This correction adds a data-driven
+    refinement to the published procedure. The acceptance gates below are
+    EXoPLORE settings for checking the fitted solutions.
 
     Parameters
     ----------
@@ -392,8 +388,8 @@ def anchor_grids_to_tellurics(flux, wave_nm, nod, telluric,
     nod : (n_spectra,) array of "A"/"B"
     telluric : dict nod -> (n_seg, n_pix)
         Theoretical transmittance PER NODDING POSITION, each evaluated on that
-        position's own grid (from molecfit_nod<AB>.npz).  A blended model built
-        across inconsistent grids is not a valid anchor.
+        position's own grid (from molecfit_nod<AB>.npz). Each nod therefore
+        has its own wavelength reference.
 
     Returns
     -------
@@ -458,7 +454,7 @@ def align_telluric_frame(flux, wave_nm, nod, mjd, telluric,
                          tell_threshold=0.98, v_window=5.0, v_step=0.1,
                          significance=3.0):
     """Per exposure wavelength alignment in the telluric rest frame
-    (Nortmann et al. 2024 Appendix A.2; check first, correct only if needed).
+    (Nortmann et al. 2024 Appendix A.2, check first, correct only if needed).
 
     Every exposure is resampled onto the common (median) grid in continuum
     normalised absorption and cross correlated against the mean of all the
@@ -468,8 +464,8 @@ def align_telluric_frame(flux, wave_nm, nod, mjd, telluric,
     drift.
     The correction (shifting each exposure onto the reference frame) is applied
     only when the systematic (the A/B offset or the total drift) is significant
-    relative to the per exposure scatter, as Nortmann 2024 did for WASP-127;
-    otherwise the grid is left unchanged, as Lesjak 2025 and Nortmann 2026 found
+    relative to the per exposure scatter, as Nortmann 2024 did for WASP-127.
+    Otherwise the grid is left unchanged, as Lesjak 2025 and Nortmann 2026 found
     for their nights.
 
     Parameters
@@ -492,7 +488,7 @@ def align_telluric_frame(flux, wave_nm, nod, mjd, telluric,
     snr = np.array([np.nanmedian([
         np.nanmedian(np.abs(flux[i, j])) for j in range(n_seg)])
         for i in range(n_spec)])
-    # reference exposure retained for reporting only; the shift of every
+    # reference exposure retained for reporting only. The shift of every
     # exposure is measured against the mean of all the others (leave one out),
     # which is the variance reduced form of the single reference cross
     # correlation of Nortmann 2024 A.2.
@@ -504,8 +500,8 @@ def align_telluric_frame(flux, wave_nm, nod, mjd, telluric,
     # exposure is resampled onto it in continuum normalised absorption space
     # (Nortmann 2024 A.2: the input spectra are continuum normalised before
     # the cross correlation), so the correlation is driven by the telluric
-    # lines rather than by the blaze shape, which is identical between
-    # exposures and would otherwise pin the peak to zero lag.
+    # line structure. The blaze shape is shared between exposures and
+    # contributes a zero-lag peak if retained.
     w0 = np.nanmedian(wave_nm, axis=0)                    # (n_seg, n_pix)
     tell_segs = [j for j in range(n_seg)
                  if np.nanmin(telluric[j]) < 0.7
@@ -655,7 +651,7 @@ def _kernel_params(slit):
 
 # Hard wall-clock limit for a single molecfit_model call.  A segment with too
 # few or ill-conditioned telluric lines can leave the mpfit/LBLRTM optimiser
-# oscillating without ever meeting the convergence tolerance; without a cap it
+# oscillating without ever meeting the convergence tolerance. Without a cap it
 # hangs the whole night.  On timeout the call is abandoned and the segment falls
 # back to the per-order median shift (handled by the caller), the same as any
 # other failed segment.
@@ -693,7 +689,7 @@ def _molec_model(name, wl, sp, er, header, work, scale, ranges,
     t0 = time.time()
     with open(os.path.join(work, "molecfit_model.log"), "w") as fh:
         # Run in its own process group so a timeout kills esorex *and* its
-        # LBLRTM children, not just the parent.
+        # LBLRTM child processes together with their parent process.
         proc = subprocess.Popen(cmd, env=_esorex_env(esorex_bin), cwd=work,
                                 stdout=fh, stderr=subprocess.STDOUT,
                                 start_new_session=True)

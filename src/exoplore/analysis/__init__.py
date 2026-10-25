@@ -15,11 +15,9 @@ ccf_time         Time-resolved 1D CCF analysis.
 utils            Miscellaneous helpers.
 """
 
-# Reading these imports
-# These imports provide convenient analysis names, not a required sequence
-# of analysis steps. This package currently imports plotting-oriented modules
-# as well as numerical routines; follow the selected function into its module
-# when checking inputs, plotting configuration or saved-file handling.
+# Public imports
+# Export the statistical and plotting functions listed below. Each function
+# reads or calculates the products described in its defining module.
 
 
 # ---- stats ---------------------------------------------------------------
@@ -34,10 +32,11 @@ from exoplore.analysis.stats import (
     get_corr_coeff,
     bootstrap_corrcoeffs,
     compare_correlations,
-    find_nights_with_extrema,
     perform_correlations_with_noise,
     bayes_factor_to_sigma,
 )
+
+from exoplore.observation.timing import find_nights_with_extrema
 
 # ---- diagnostics ---------------------------------------------------------
 from exoplore.analysis.diagnostics import (

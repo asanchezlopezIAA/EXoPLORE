@@ -32,11 +32,10 @@ T₁₄ = 1.94 h
 
 from __future__ import annotations
 
-# Reading this file
-# This reader converts a planet JSON into PlanetParameters, including
-# conversion from the supported older file convention. It loads system facts;
-# the simulation JSON separately selects how to observe and analyse that system.
-# Read the relevant format branch before interpreting a short legacy field name.
+# Role in the calculation
+# Read planetary-system JSON files into PlanetParameters. Format-specific branches
+# convert input names and units to the fields used by the atmosphere and observing
+# code.
 
 
 import json
@@ -67,7 +66,7 @@ def load_planet(path: str | Path) -> PlanetParameters:
     Returns
     -------
     PlanetParameters
-        Fully populated object; derived quantities (Kp, transit duration,
+        Fully populated object. derived quantities (Kp, transit duration,
         K_s) are computed automatically if not present in the file.
 
     Raises

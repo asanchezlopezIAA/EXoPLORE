@@ -7,11 +7,10 @@ retained from the existing calibrated fibre-B model. Inputs are read-only.
 """
 from __future__ import annotations
 
-# Reading this file
-# This optional OH fit uses out-of-transit science information together
-# with the sky amplitudes. A common stellar spectrum and a varying sky component
-# are fitted in their respective frames. Acceptance thresholds are needed to
-# check whether that decomposition is constrained by the supplied data.
+# Role in the calculation
+# Fit a common stellar spectrum and time-varying OH emission using out-of-transit
+# science spectra and sky amplitudes in their respective wavelength frames. Acceptance
+# checks test whether the data constrain the fitted components.
 
 
 from dataclasses import dataclass
@@ -60,8 +59,8 @@ def fit_oot_profile(wave_nm: np.ndarray, refined_wave_nm: np.ndarray,
     The stellar samples are linear nuisance parameters eliminated by SVD at
     each nonlinear OH fit evaluation. No transit exposure enters the fit.
     Pixel-error weights hold continuum, telluric fits and B amplitudes fixed.
-    Parameter errors are diagnostic linearized conditional errors, not a full
-    uncertainty budget. Acceptance gates reject insufficient sky variation,
+    Parameter errors are linearized estimates conditional on those fixed
+    quantities. Acceptance gates reject insufficient sky variation,
     parameter boundaries, poor residual fits and ill-conditioned profiles.
     """
     wave, refined, flux, error, tell = [np.asarray(a, float) for a in

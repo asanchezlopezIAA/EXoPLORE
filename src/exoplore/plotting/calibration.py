@@ -16,7 +16,7 @@ diagnostic inspection of a reduced night:
       slit-limited value.
 
 These illustrate the reduction and telluric-correction methodology of
-Nortmann et al. (2025, 2026); the underlying recipes are the ESO ``cr2res``
+Nortmann et al. (2025, 2026). The underlying recipes are the ESO ``cr2res``
 pipeline and ``molecfit`` (see the CRIRES+ reduction reference page for the
 recipe details and links).  The functions take plain NumPy arrays so they can
 be called on any reduced night, and optionally save a figure.
@@ -24,10 +24,9 @@ be called on any reduced night, and optionally save a figure.
 
 from __future__ import annotations
 
-# Reading this file
-# These figures inspect the relationship between extracted spectra,
-# telluric corrections and measured resolution. They help check an upstream
-# calibration stage; drawing the comparison is not a new external molecfit run.
+# Role in the calculation
+# Plot extracted spectra, telluric corrections and resolution measurements to inspect
+# the instrument calibration.
 
 
 from typing import Optional, Sequence, Tuple
@@ -160,7 +159,7 @@ def plot_resolution_per_order(
     """Plot the measured effective resolving power per order.
 
     The super-resolution regime (R above the nominal, slit-limited value)
-    occurs when the seeing-limited PSF underfills the slit; overfilling
+    occurs when the seeing-limited PSF underfills the slit. overfilling
     (poor seeing) is slit-limited and clamped to ``nominal_R``.
 
     Parameters

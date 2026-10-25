@@ -131,7 +131,7 @@ class TestFilterModelSingleorder:
     def test_zero_projector_returns_normalised_model(self):
         """With P=0, output should equal the median-normalised model."""
         out = self.fn(self.P_zero, self.model_ones, self.good)
-        # model_ones median-normalised is all-ones; P@ones=0; result=ones
+        # model_ones median-normalised is all-ones. P@ones=0. result=ones
         np.testing.assert_allclose(out[:, self.good], 1.0, atol=1e-12)
 
     def test_identity_projector_returns_zero(self):
@@ -257,7 +257,7 @@ class TestComputeKSigma:
     """Smoke tests for exoplore.pipelines.blain24.compute_k_sigma.
 
     The function requires .npz files on disk, so we only test that it
-    imports and has the correct signature; the actual computation is
+    imports and has the correct signature. The actual computation is
     tested via integration when real data are available.
     """
 

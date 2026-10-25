@@ -22,11 +22,10 @@ simulator.
 
 from __future__ import annotations
 
-# Reading this file
-# A planet object keeps system parameters and derived orbital quantities
-# together so the atmosphere and timing code use the same system. Public fields
-# with unit suffixes are the clearest starting point. Compatibility properties
-# convert values for older routines; they are not new independent measurements.
+# Role in the calculation
+# Store planetary-system parameters and calculate derived orbital quantities. Unit-
+# labelled fields supply the atmosphere and timing code. compatibility properties
+# convert them to the conventions used by their callers.
 
 
 import math
@@ -320,7 +319,7 @@ class PlanetParameters:
         -----
         This formula is valid for circular orbits.  For eccentric orbits an
         additional factor :math:`\\sqrt{1-e^2} / (1 \\pm e\\sin\\omega)` applies,
-        which is not implemented here; for near-circular hot Jupiters the
+        which is not implemented here. For near-circular hot Jupiters the
         correction is typically < 1 %.
         """
         R_p_km = self.planet_radius_rjup * self._R_jup_km

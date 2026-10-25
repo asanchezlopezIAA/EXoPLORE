@@ -2,7 +2,7 @@
 exoplore.core.simulator
 =======================
 
-High-level simulation orchestrator.
+Simulation runner.
 
 :class:`ExoploreSimulator` takes a :class:`~exoplore.config.SimulationConfig`
 and runs the full simulation workflow.
@@ -20,9 +20,9 @@ own runners at the beginning of :meth:`ExoploreSimulator.run`.
 8. Save the products selected by the output configuration.
 9. Run atmospheric retrieval when enabled.
 
-Blocks 3–6 share an order loop; they are not four complete passes over the
+Blocks 3–6 share an order loop. They are not four complete passes over the
 dataset. The developer architecture guide in ``docs/architecture.md`` maps
-these stages to their owning packages and explains the compatibility imports.
+these stages to the modules that perform each calculation.
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ from exoplore.results import CCFResult, DetectionMapResult
 
 # ---------------------------------------------------------------------------
 # Scientific dependencies, grouped by the stage that owns the calculation.
-# This module coordinates them; numerical implementations belong in their
+# This module coordinates them. numerical implementations belong in their
 # domain packages. Keep import order because some packages initialize state
 # at import time.
 # ---------------------------------------------------------------------------
@@ -68,7 +68,8 @@ from exoplore.instruments.wavegrid import (
     get_WaveGrid,
     pixel_snr_one_order,
 )
-from exoplore.io.stellar import LoadPhoenix, get_stellar_matrix, spec_to_mat_fraction
+from exoplore.io.stellar import LoadPhoenix, get_stellar_matrix
+from exoplore.core.observation import spec_to_mat_fraction
 from exoplore.io.utils import find_nearest, format_number, save_compressed
 from exoplore.observation.airmass import PWV_handling, get_airmass
 from exoplore.observation.noise import add_throughput
@@ -98,9 +99,8 @@ from exoplore.analysis.stats import statistical_study, plot_stats
 # ---------------------------------------------------------------------------
 
 def _apply_throughput(flux, observation, order_index, night_index):
-    """Compatibility wrapper; observation.randomness owns the stream policy."""
-    # Forward this module's binding explicitly: existing tests/instrumentation
-    # patch add_throughput here. The numerical routine and 2% scale are unchanged.
+    """Apply configured throughput using this module's add_throughput function."""
+    # Pass this module's add_throughput binding to the order/night seed helper.
     return apply_configured_throughput(
         flux, observation, order_index, night_index,
         throughput_function=add_throughput,
@@ -173,7 +173,7 @@ def build_simulation_name(cfg: SimulationConfig) -> str:
     else:
         # Fixed-N detrending (no per-order optimisation): encode the number
         # of SYSREM/PCA components in the name so runs with different N get
-        # distinct output folders rather than overwriting one another.
+        # distinct output folders.
         pca_flag = f"N{pipe.sysrem_iterations}_"
         kp_flag = opt_flag = ""
 
@@ -214,7 +214,7 @@ class SimulationSummary:
     helium_observed: bool = False
 
     def __post_init__(self):
-        # Backward-compatibility alias
+        # Expose the configured planet name in the summary.
         object.__setattr__(self, "planet", self.planet_name)
 
     # Pipeline citation strings
@@ -394,15 +394,15 @@ class ExoploreSimulator:
         )
 
     # ------------------------------------------------------------------
-    # Public access to existing results (no scientific recalculation)
+    # Read completed CCF and detection-map results
     # ------------------------------------------------------------------
 
     def get_combined_ccf(self, *, night_index: int | None = None, copy: bool = True) -> CCFResult:
         """Return a named CCFResult after a successful standard run.
 
         Arrays retain axes (Earth-frame velocity, exposure). By default they
-        are detached copies; copy=False returns read-only views. Different
-        observing sequences require a night_index; shared-geometry nights have
+        are detached copies. Copy=False returns read-only views. Different
+        observing sequences require a night_index. Shared-geometry nights have
         already been coadded. Injection/iteration cubes require separate
         selection and are not silently collapsed by this accessor.
         """
@@ -415,16 +415,15 @@ class ExoploreSimulator:
     def get_detection_map(self, *, metric: str = "snr", night_index: int | None = None) -> DetectionMapResult:
         """Load the explicitly saved S/N or Welch map as DetectionMapResult.
 
-        The file is authoritative: the old in-memory ccf_tot_sig field can
-        hold Welch values after an all-metrics run. Missing products raise an
-        error rather than substituting another statistic or recomputing it.
+        metric selects the saved S/N or Welch archive. The ccf_tot_sig working
+        array holds the last calculated statistic in an all-metrics run.
+        Missing archives raise FileNotFoundError.
         """
         from exoplore.io.results import load_detection_map
         if metric not in ("snr", "welch"):
             raise ValueError("Detection-map metric must be 'snr' or 'welch'.")
         state, _, metadata = self._completed_result_context()
-        # A reused output directory may contain maps from an older experiment.
-        # If this run did not calculate CCFs, those files are not its results.
+        # Require a CCF from this run before reading its saved detection map.
         if state.get("ccf_complete") is None:
             raise RuntimeError("This run has no CCF products; an older saved map cannot be returned as its result.")
         suffix = ""
@@ -444,7 +443,7 @@ class ExoploreSimulator:
         return load_detection_map(path, metric=metric)
 
     def _completed_result_context(self):
-        """Keep the old runner's dictionary layout behind one private boundary."""
+        """Return the state, order selection and metadata of the completed run."""
         if self._completed_run is None:
             raise RuntimeError(
                 "No successful standard run is available. Run the simulator first; "
@@ -477,24 +476,20 @@ class ExoploreSimulator:
         performs setup, per-order simulation/preparation, cross-correlation,
         detection analysis and optional retrieval, as configured.
 
-        Returns ``None``; persistent products are written under the configured
-        output tree. ``_state`` is an internal working store, not a stable
-        public result format. Output save flags control persistence rather
-        than defining separate public execution stages.
+        Returns ``None``. persistent products are written under the configured
+        output tree. ``_state`` holds intermediate arrays. Output flags select
+        which arrays are written to disk.
         """
 
         # ----------------------------------------------------------------
         # Block 1a, setup, simulation name, output directories
         # ----------------------------------------------------------------
         import time as _time
-        # If this attempt fails, readers must not accidentally return a previous
-        # run's products. This changes result availability, not the calculation.
+        # Results become available when this attempt completes successfully.
         self._completed_run = None
         cfg = self.config
         from exoplore.core.spectroscopy_mode import spectroscopy_route
-        # Select one complete workflow before loading molecular inputs. A
-        # helium grid or observed-data recipe must not accidentally run the
-        # standard synthetic molecular workflow as well.
+        # Select the runner for the configured molecular or helium experiment.
         route = spectroscopy_route(cfg)
         if route=='helium_grid':
             from exoplore.retrieval.helium_grid import run_helium_grid
@@ -853,7 +848,7 @@ class ExoploreSimulator:
                 )
             # airmass_og may be None for fully synthetic different_nights
             # (no reference files).  For use_full_skycalc=True, airmass is
-            # embedded in the per-night SkyCalc files and is not needed here;
+            # embedded in the per-night SkyCalc files and is not needed here.
             # use a list of None as a safe placeholder.
             if airmass_og is None:
                 # Synthetic different_nights: no reference airmass files.
@@ -866,8 +861,8 @@ class ExoploreSimulator:
                 # SkyCalc files (written by generate_skycalc_inputs.py), which
                 # is the airmass the telluric spectra were actually generated
                 # with, so pipelines that regress against airmass (Blain24)
-                # see a regressor consistent with the applied tellurics;
-                # (2) with accurate nights, the actual sec z from the site;
+                # see a regressor consistent with the applied tellurics.
+                # (2) with accurate nights, the actual sec z from the site.
                 # (3) the parabolic model with the configured limits.
                 _am_files = []
                 if cfg.tellurics.use_full_skycalc:
@@ -922,7 +917,7 @@ class ExoploreSimulator:
 
         # Per-night BERV for fully synthetic different_nights.  Each night
         # sits at its own epoch, so the barycentric correction differs from
-        # night to night; stellar and planetary lines then shift against the
+        # night to night. stellar and planetary lines then shift against the
         # telluric rest frame between nights, as they do between real epochs.
         # Consumed by Blocks 4a (stellar matrix) and 4b (planet velocities).
         _berv_pn = None
@@ -1005,7 +1000,7 @@ class ExoploreSimulator:
                         sig_all = np.zeros_like(snr_all)
                 else:
                     # Static SNR cube (n_orders, n_pixels), ANDES or similar.
-                    # For different_nights n_spectra is an array; use its max
+                    # For different_nights n_spectra is an array. Use its max
                     # as the placeholder size (Block 5a fills real SNR per night).
                     _ns_init = (int(np.max(n_spectra))
                                 if hasattr(n_spectra, '__len__') else n_spectra)
@@ -1222,10 +1217,8 @@ class ExoploreSimulator:
             "Period":     planet.orbital_period_days,
         }
 
-        # _mini_* dictionaries adapt named config fields to older routines
-        # expecting inp_dat keys. They are not independent scientific configs:
-        # each value above comes from the current experiment or derived geometry.
-        # Keep translations visible when following a setting into a legacy call.
+        # _mini_* dictionaries translate configuration fields and derived geometry
+        # into the inp_dat keys expected by the atmospheric functions.
 
         # Limb scaling factors are computed once (h==0) and reused each order
         _sf_morning  = None
@@ -1256,7 +1249,7 @@ class ExoploreSimulator:
         per_order_results = []
 
         # Block 5 pre-loop: accumulated arrays that span all orders.
-        # Allocated at h==0, b==0 inside the per-order loop; declared
+        # Allocated at h==0, b==0 inside the per-order loop. declared
         # here to prevent NameError if they are referenced early.
         _mask_store                         = None   # (n_nights, n_orders, n_pixels)
         # Block 6 pre-loop: CCF velocity grid (set once at h==0, b==0)
@@ -1293,13 +1286,12 @@ class ExoploreSimulator:
             )
             cfg.observation.noiseless = True   # force-noiseless for real-data run
 
-        # Accumulate fully-masked orders across the whole run so we can
-        # report them all at once rather than stopping at the first one.
+        # Collect fully masked orders for the run's combined warning report.
         _fully_masked_orders: list = []
 
         # Per-frame wavelength solution (solution-only secondary wavecal):
-        # the flux is native (never resampled); the MODEL is interpolated onto
-        # each exposure's grid, following Line+2021 / Smith+2024.  Loaded once;
+        # the flux is native (never resampled). The MODEL is interpolated onto
+        # each exposure's grid, following Line+2021 / Smith+2024.  Loaded once.
         # absent => the common grid is used (identical to <0.2 px).
         _wave_pf_all = None
         if cfg.observation.use_real_data:
@@ -1314,7 +1306,7 @@ class ExoploreSimulator:
         # Theoretical telluric transmittance per order (molecfit), for the
         # Nortmann26 pipeline's 96% normalisation mask and 20% deep mask
         # (Nortmann 2024/2026 Sec 3.1).  On the reference grid, one row per
-        # order; absent => the branch falls back to a data-driven deep mask.
+        # order. absent => the branch falls back to a data-driven deep mask.
         _telluric_model = None
         if cfg.observation.use_real_data and cfg.pipeline.name == "Nortmann26":
             from astropy.io import fits as _fits_tt
@@ -1327,7 +1319,7 @@ class ExoploreSimulator:
 
         # Follow one selected wavelength order through atmosphere -> observed
         # time series -> preparation -> CCF before advancing to the next order.
-        # h indexes our selected list; order_selection[h] is the instrument ID.
+        # h indexes our selected list. order_selection[h] is the instrument ID.
         # b in the inner observation loop indexes nights, not spectral orders.
         for h in range(n_orders):
             # ----------------------------------------------------------
@@ -1379,7 +1371,7 @@ class ExoploreSimulator:
                 # ANDES: SNR comes from ETC + per-order tellurics, computed
                 # in Block 5a after the telluric transmission is known.
                 # For single-night: init 1-D zeros, filled in Block 5a.
-                # For different_nights: init empty lists; Block 5a appends
+                # For different_nights: init empty lists. Block 5a appends
                 # one (n_spectra_n, n_pix) array per night.
                 if cfg.observation.different_nights:
                     snr = []
@@ -1392,7 +1384,7 @@ class ExoploreSimulator:
             # 3d, atmospheric forward model
             # ----------------------------------------------------------
             # This is the injected planet, described by atmosphere.planet_model
-            # or its limb regions. The search template is built separately;
+            # or its limb regions. The search template is built separately.
             # its composition need not match this simulated atmospheric truth.
             if cfg.observation.simulate_planet:
 
@@ -1648,9 +1640,8 @@ class ExoploreSimulator:
                 _order_result["ingress_idx"] = _ingress_idx
                 _order_result["egress_idx"]  = _egress_idx
 
-            # The list keeps this dictionary object, not a copy. Blocks 4–6
-            # attach observation/preparation/CCF products to that same object;
-            # Block 7 later reads the completed per-order entries to combine them.
+            # Store a reference to this order's dictionary. Blocks 4–6 add its
+            # observation, preparation and CCF products. Block 7 combines them.
             per_order_results.append(_order_result)
 
             # Mini-dict for spec_to_mat_fraction (6 keys only)
@@ -1705,7 +1696,7 @@ class ExoploreSimulator:
                     ))
 
             # ----------------------------------------------------------
-            # Block 4b, planet velocity (h==0 only; reused per order)
+            # Block 4b, planet velocity (h==0 only, reused per order)
             # ----------------------------------------------------------
             v_wind = (pm.wind_velocity_kms
                       if not cfg.atmosphere.limb_asymmetries else 0.0)
@@ -1833,7 +1824,7 @@ class ExoploreSimulator:
             # REAL data (injection-recovery tests), honour the
             # (dKp, dV_rest) offsets of pipeline.kp_vrest_injection so the
             # signal can be placed at an offset velocity.  [0, 0] keeps the
-            # nominal track (default; all other paths unchanged).  The
+            # nominal track (the default). The
             # offsets apply ONLY to the injected matrix (the analysis
             # reference track, v_planet, is untouched).
             _inj_off = cfg.pipeline.kp_vrest_injection
@@ -1915,11 +1906,9 @@ class ExoploreSimulator:
             tell_trans = None
 
             if cfg.tellurics.include_tellurics and not cfg.observation.use_real_data:
-                # Real-data analysis substitutes the observed matrices before the
-                # preparing pipeline, so simulated telluric transmittances are
-                # irrelevant and must not be loaded (tell_ref/tell_trans stay None,
-                # set above).  include_tellurics still routes the data-driven
-                # pipeline (e.g. Cheverall26) via telluric_variation.
+                # Synthetic observations use the configured transmission files.
+                # Observed-data runs read their measured spectra. include_tellurics
+                # selects the preparation's telluric_variation setting.
                 _pwv_subdir = ("Fixed_PWV" if cfg.tellurics.constant_pwv
                                else "Variable_PWV")
                 _filepath_tel = (
@@ -2032,7 +2021,7 @@ class ExoploreSimulator:
                         )
                         # Load_Telluric_Transmittances uses snr only to check
                         # ndim (1-D → reference mode, 2-D → per-exposure mode).
-                        # For ANDES the real SNR is computed after tellurics;
+                        # For ANDES the real SNR is computed after tellurics.
                         # pass a dummy 2-D array so the function takes the
                         # per-exposure path.
                         _snr_arg = (
@@ -2115,7 +2104,7 @@ class ExoploreSimulator:
                 # template, handled downstream exactly like a planetary
                 # template.  Stored as a depth (1 - F/median) so stellar
                 # absorption carries the same sign as planetary absorption
-                # in 5d.12; the chev26 template normalisation removes the
+                # in 5d.12. The chev26 template normalisation removes the
                 # continuum as it does for the data.
                 from astropy.io import fits as _fits_st
                 _wv_st = 1.0e-4 * _fits_st.getdata(
@@ -2276,7 +2265,7 @@ class ExoploreSimulator:
                     _sig_b = np.asarray(sig[b], dtype=np.float64)
                     if np.all(_sig_b == 0):
                         # sig[b] is uninformative (ANDES has no real signal
-                        # array); use ETC-based noise so the SNR mask does
+                        # array). Use ETC-based noise so the SNR mask does
                         # not reject every pixel.
                         snr[b] = np.maximum(snr[b], 1.0)
                         _std_noise_b5[b, :n_spectra, :] = _nf / snr[b] + _sc
@@ -2289,10 +2278,10 @@ class ExoploreSimulator:
                     _std_noise_b5[b, :] = sig
 
                 # 5d.4, telluric scaling of noise + Gaussian noise draw
-                # Seed selection belongs to the observation layer; the draw and
+                # Seed selection belongs to the observation layer. The draw and
                 # uncertainty scaling below stay in their original order.
-                # h is deliberately a loop position here (legacy Gaussian
-                # policy), whereas throughput above uses order_selection[h].
+                # Gaussian seeds use the selected-order position h. Throughput
+                # seeds use the physical instrument order ID order_selection[h].
                 _nseed = gaussian_noise_seed(
                     cfg.noise.noise_seed, n_nights=_nn,
                     pipeline_name=cfg.pipeline.name,
@@ -2361,7 +2350,7 @@ class ExoploreSimulator:
                             f"{_idir}reference_night/observations_berv_0.fits"
                         )[0].data
                         # berv is consumed by Block 7's _mini_b7 init ("BERV": berv),
-                        # which runs later; no need to sync a dict that does not
+                        # which runs later. No need to sync a dict that does not
                         # exist yet on this real-data path.
 
                     if not _dn:
@@ -2455,7 +2444,7 @@ class ExoploreSimulator:
                         _U_sysrem = np.zeros((_nn, _max_sp_alloc, _si), float)
                     else:
                         _U_sysrem = np.zeros((_nn, n_spectra, _si), float)
-                    # Only SYSREM/PCA pipelines have a per-order component count;
+                    # Only SYSREM/PCA pipelines have a per-order component count.
                     # BL19 and Blain24 are polynomial fitting pipelines (no SYSREM,
                     # no PCA), so this stays None and is saved as an empty array.
                     _sysrem_passes_per_order = (
@@ -2571,7 +2560,7 @@ class ExoploreSimulator:
 
                 # mat_res / propag_noise allocation (b==0 per order).
                 # Injection-based criteria (Maximum/Max_Diff) need a 5D array
-                # (with injection × SYSREM iteration axes); DeltaSigma uses
+                # (with injection × SYSREM iteration axes). DeltaSigma uses
                 # standard 3D, same shape as the non-opt path.
                 if b == 0:
                     if not _dn:
@@ -2643,7 +2632,7 @@ class ExoploreSimulator:
                         _U_ret_b5,
                     ) = _pp_result
                     # With DeltaSigma halting the pipeline may stop before
-                    # sysrem_iterations passes; pad the U store accordingly.
+                    # sysrem_iterations passes. pad the U store accordingly.
                     # Non-SYSREM pipelines return a broadcastable placeholder.
                     _U_ret_b5 = np.asarray(_U_ret_b5)
                     if _U_ret_b5.ndim == 2:
@@ -2779,9 +2768,9 @@ class ExoploreSimulator:
                                 # normalized in the same way as the spectral
                                 # data".  Apply the SAME rescale + 2nd-order
                                 # continuum normalisation as the data pipeline
-                                # (but NOT the detrending, no model reprocessing
-                                # for the CCF).  Gated to Cheverall26; other
-                                # pipelines reprocess via the branch above.
+                                # for the Cheverall26 CCF template. The template preparation
+                                # consists of rescaling and continuum normalization.
+                                # Other pipelines use the reprocessing branch above.
                                 from exoplore.pipelines.cheverall26 import (
                                     chev26_rescale as _ch_resc,
                                     chev26_normalise as _ch_norm,
@@ -2797,10 +2786,9 @@ class ExoploreSimulator:
                                 _t_norm, _ = _normfn_t(
                                     wave_ins, _t_norm, _dummy_n, _gp_t)
                                 _syn_mat_res_b5 = _t_norm
-                                # Do NOT flatten out-of-transit
-                                #, keep the fixed (chev26-normalised) template on
-                                # every exposure so the duration test gets real
-                                # out-of-transit noise CCFs.
+                                # Use the fixed, Cheverall26-normalised template for every
+                                # exposure, including out-of-transit exposures, so the
+                                # duration test samples their noise CCFs.
                             else:
                                 _syn_mat_res_b5 = _mat_cc_b5
                                 _syn_mat_res_b5[without_signal, :] = 1.01
@@ -2809,7 +2797,7 @@ class ExoploreSimulator:
                                 # Interpolate the (velocity-shifted) template
                                 # onto exposure i's own wavelength grid so it
                                 # aligns with the native-flux data columns
-                                # (per-frame solution; falls back to common).
+                                # (per-frame solution, falls back to common).
                                 _out_grid = (_wave_pf_ord[_i]
                                              if _wave_pf_ord is not None
                                              else wave_ins)
@@ -2971,9 +2959,9 @@ class ExoploreSimulator:
                         else call_ccf_numba_par_weighted)
 
                     # Error for the CCF inverse-variance weighting.  Default is
-                    # the propagated per-pixel noise; "mad_residual" uses the
+                    # the propagated per-pixel noise. "mad_residual" uses the
                     # per-wavelength-channel MAD of the time-series residuals
-                    # (Gibson+20; Nortmann+24; Cheverall+26).  Applied on the
+                    # (Gibson+20, Nortmann+24, Cheverall+26).  Applied on the
                     # standard (non-optimisation, 3D residual) path.
                     _ccf_unc_b5 = _propag_noise_b5
                     if (cfg.cross_correlation.ccf_error_estimate == "mad_residual"
@@ -3218,7 +3206,7 @@ class ExoploreSimulator:
                 "U_sysrem": (np.copy(_U_sysrem)
                              if _U_sysrem is not None else None),
                 # Structure removed by the detrending (empirical telluric/
-                # stellar template); single-night shape (n_spectra,
+                # stellar template). single-night shape (n_spectra,
                 # n_pixels).  Used by the "embedded" model-reprocessing
                 # mode in Block 9.
                 "cor": (np.copy(_cor_b5) if _cor_b5 is not None else None),
@@ -3439,14 +3427,14 @@ class ExoploreSimulator:
         #   7h  Statistical study (n_nights > 1)
         #   NOTE: Study_velocity_ranges and Noise_statistical_study are
         #         specialised optional analyses that require gauss_noise to
-        #         be persisted per-order. These are not yet wired; set
+        #         be persisted per-order. These are not yet wired. Set
         #         inp_dat["Study_velocity_ranges"] = False and
         #         inp_dat["Noise_statistical_study"] = False to skip.
         # ================================================================
 
         # Mini-dict for Block 7/8/9 functions that still take inp_dat.
         # Covers all keys used by ccf/, plotting/, and analysis/ modules.
-        # CCF_SNR and Welch_ttest start from config; All_significance_metrics
+        # CCF_SNR and Welch_ttest start from config. All_significance_metrics
         # path temporarily flips them, update _mini_b7 at those points.
         _mini_b7: dict = {
             "BERV":                  berv,
@@ -3501,7 +3489,7 @@ class ExoploreSimulator:
             "logL_choice":           cfg.retrieval.log_likelihood,
             "ret_error_model":       getattr(cfg.retrieval, "error_model", "propagated"),
             "model_reprocessing":    getattr(cfg.retrieval, "model_reprocessing", "bare"),
-            # Normalise sampler string to internal canonical form
+            # Convert the sampler name to the spelling used by the sampling branch
             "Sampler_choice":        (
                 "Nested_sampling"
                 if cfg.retrieval.sampler.lower().replace("-", "_")
@@ -3563,7 +3551,7 @@ class ExoploreSimulator:
                                       else pm.gamma_guillot),
         }
 
-        # Pre-Block-7 outputs (initialised to None; set only when paths run)
+        # Pre-Block-7 outputs (initialised to None, set only when paths run)
         ccf_values_shift = None
         v_rest            = None
         _kp_range         = None
@@ -3758,7 +3746,7 @@ class ExoploreSimulator:
                                     from exoplore.atmosphere.prt import (
                                         easychem_molecule as _echem_t)
                                     # "CO_high_Sam" and friends are opacity
-                                    # variants of one molecule; the label wants
+                                    # variants of one molecule. The label wants
                                     # only the molecule.
                                     _mol_t = [_echem_t(_s).split("_")[0]
                                               for _s in cc.species]
@@ -3880,7 +3868,7 @@ class ExoploreSimulator:
                     # simple co-add (different_nights=False, n_nights>1). The
                     # nights share one geometry (identical phase/berv), so each
                     # night's map comes from ccf_nights[b] with the same shift
-                    # arguments; ccf_complete above is their co-add. Mirrors
+                    # arguments. ccf_complete above is their co-add. Mirrors
                     # the different_nights per-night save/plot calls so the
                     # nightwise CCFs and the overlay are available alongside
                     # the combined map.
@@ -4162,7 +4150,7 @@ class ExoploreSimulator:
 
 
             # 7g, Injection-based per-order SYSREM iteration selection
-            # (Maximum / Max_Diff only; DeltaSigma selects per-order in
+            # (Maximum / Max_Diff only, DeltaSigma selects per-order in
             # prepare.py and does not need post-hoc CCF maximisation).
             if _opt_needs_injection:
                 sysrem_it_opt = get_SYSREM_its_ordbyord(
@@ -4304,7 +4292,7 @@ class ExoploreSimulator:
                             from exoplore.pipelines.cheverall26 import (
                                 chev26_timing_stats, chev26_fourmetric_corner)
                             # Reuse the per-night timing metrics already computed
-                            # in-run by the 7d.2 block (single tested source);
+                            # in-run by the 7d.2 block (single tested source).
                             # only recompute as a fallback if unavailable.
                             if _chev_tim_pos is not None:
                                 _tim_pos, _tim_max = _chev_tim_pos, _chev_tim_max
@@ -4321,7 +4309,7 @@ class ExoploreSimulator:
                                      'stats_timing_max': _tim_max})
                             # Metric 1, Kp-Vsys S/N at the planet position:
                             # stats_planet_pos is (n_nights, 3) = [S/N, Kp,
-                            # Vrest]; take the S/N column.
+                            # Vrest]. take the S/N column.
                             _kpv_pp = np.asarray(stats_planet_pos, float)
                             _kpv_pp = (_kpv_pp[:, 0] if _kpv_pp.ndim == 2
                                        else _kpv_pp.ravel())
@@ -4408,7 +4396,7 @@ class ExoploreSimulator:
                         {'stats': stats_sn, 'v_rest': v_rest,
                          'kp_range': _kp_range},
                     )
-                    # Welch statistics share the single matrices/ directory; the
+                    # Welch statistics share the single matrices/ directory. The
                     # distinct 'stats_welch' / 'v_rest_ttest' keys keep them from
                     # colliding with the S/N 'stats' / 'v_rest' files.
                     save_compressed(
@@ -4428,11 +4416,11 @@ class ExoploreSimulator:
             # -------------------------------------------------------
             # Note on skipped optional analyses:
             # * Study_velocity_ranges  (inp_dat["Study_velocity_ranges"])
-            #   → requires iterating ccf_v_step grid; skipped pending
+            #   → requires iterating ccf_v_step grid. skipped pending
             #     dedicated analysis module
             # * Noise_statistical_study (inp_dat["Noise_statistical_study"])
             #   → requires gauss_noise per order which is not yet stored
-            #     in per_order_results; skipped pending Block 5 update
+            #     in per_order_results. skipped pending Block 5 update
             # -------------------------------------------------------
 
             _t_blocks["Block 7, CCF statistics, Kp-Vsys maps"] = (
@@ -4638,10 +4626,10 @@ class ExoploreSimulator:
             "2D":          [(-8., 0.), (-8., 0.), (85., 200.), (400., 1500.),
                             (400., 1500.), (-20., 20.)],
             # K_p, V_rest, alpha  (alpha prior includes 0 so the posterior can
-            # approach the null; config overrides for the target).
+            # approach the null. config overrides for the target).
             "1D_alpha":    [(40., 100.), (-25., 25.), (0., 5.)],
             # K_p, V_rest, alpha, beta  (beta = Gibson22 noise-rescaling of the
-            # propagated σ; config overrides alpha for model/null).
+            # propagated σ. config overrides alpha for model/null).
             "1D_alpha_Gibson22": [(40., 100.), (-25., 25.), (0., 5.), (0.01, 100.)],
         }
         _PRIOR_BOUNDS_B9 = {
@@ -4656,7 +4644,7 @@ class ExoploreSimulator:
         # Detection above searches template similarity in velocity space.
         # Retrieval below evaluates atmospheric/orbital parameter proposals
         # against the prepared data, using the selected likelihood and priors.
-        # The enable flag gates expensive sampling; setup labels above it are
+        # The enable flag gates expensive sampling. setup labels above it are
         # also constructed when sampling is disabled.
         if cfg.retrieval.enabled:
             import copy as _copy_b9
@@ -4673,15 +4661,14 @@ class ExoploreSimulator:
                 "Inject_Scale_Factor": cfg.pipeline.inject_scale_factor,
                 "Noise_statistical_study": False,
             })
-            # Override species_ret to match the abundances array built inside
-            # each loglike function.  This is set explicitly per ret_dim;
-            # our code defaulted to all planet species → len mismatch in pRT.
+            # Set species_ret for the abundance array constructed by each
+            # likelihood. The species list and abundance array must align.
             _ret_dim_b9 = cfg.retrieval.dimensionality
             if _ret_dim_b9 in ("1D", "1D_Gibson22"):
                 # Single-species abundance retrieval: honour the species
                 # named in retrieval.atmosphere when provided (H2/He filler
                 # + one line species, matching the abundances array built in
-                # the loglike); default to H2O for backward compatibility.
+                # the likelihood). The default line species is H2O.
                 if (cfg.retrieval.atmosphere is not None
                         and cfg.retrieval.atmosphere.species):
                     _mini_b7["species_ret"] = [
@@ -4722,7 +4709,7 @@ class ExoploreSimulator:
 
             # ------------------------------------------------------------------
             # 9a, Build retrieval matrices from per_order_results (in-memory)
-            #      This version reads from RAM rather than disk.
+            #      Read the order products held in memory.
             # ------------------------------------------------------------------
             _n_orders_b9 = n_orders
             _n_nights_b9 = _nn
@@ -5173,7 +5160,7 @@ class ExoploreSimulator:
                         for hh in range(_n_orders_b9):
                             atm_r = _atm_list[hh]
                             if _mini_b7["Ret_dim"] in ("1D_alpha", "1D_alpha_Gibson22"):
-                                # FIXED nominal model (computed once, pre-sampler);
+                                # FIXED nominal model (computed once, pre-sampler).
                                 # α scales its depth via Scale_inj below. No pRT.
                                 wave_pRT_r = _ctx["nominal_wave"][hh]
                                 syn_spec_r = _ctx["nominal_spec"][hh]
@@ -5251,7 +5238,7 @@ class ExoploreSimulator:
                                         _mini_b7["V_wind"])
 
                             # 1D_alpha[_Gibson22]: α scales the model depth via
-                            # Scale_inj; all other modes keep the config value.
+                            # Scale_inj. All other modes keep the config value.
                             _smf_inp = (dict(_mini_b7, Scale_inj=alpha)
                                         if _mini_b7["Ret_dim"] in
                                            ("1D_alpha", "1D_alpha_Gibson22")
@@ -5273,7 +5260,7 @@ class ExoploreSimulator:
                                 if (_mini_b7["preparing_pipeline"] == "Gibson22"
                                         or _mrp_ll == "projector"):
                                     # Linear filter: project the data-derived
-                                    # temporal modes out of the model only;
+                                    # temporal modes out of the model only.
                                     # the template carries no background
                                     # structure.
                                     _usp_i9 = np.where(
@@ -5495,8 +5482,7 @@ class ExoploreSimulator:
                     if _mini_b7["logL_choice"] == "BL19":
                         # The model must carry the same preparation as the data
                         # (as the CCF and the Blain24/Gibson22 loglikes do), so
-                        # it is compared using model_mat_prepared, not the raw
-                        # model_mat.
+                        # compare the prepared data with model_mat_prepared.
                         if _mini_b7["Different_nights"]:
                             for n in with_signal_ret:
                                 _d = _mat_res_ret[n,
@@ -6126,11 +6112,11 @@ class ExoploreSimulator:
                             n_live_points=_mini_b7["Multinest_live_points"],
                             max_iter=0,
                         )
-                        # ── Analyzer: try the pymultinest Analyzer first;
+                        # ── Analyzer: try the pymultinest Analyzer first.
                         # fall back to reading the plain-text MultiNest
                         # output files directly when the Analyzer's loadtxt
                         # fails on Fortran fixed-point exponents (e.g.
-                        # "1.23-313" instead of "1.23E-313").
+                        # a missing exponent marker: "1.23-313" represents "1.23E-313").
                         _sa = None
                         _sa_pts = None
                         try:
@@ -6164,7 +6150,7 @@ class ExoploreSimulator:
                         except Exception as _e9_sa:
                             print(f"  WARNING: Analyzer failed ({_e9_sa}).")
                             print("  Falling back to post_equal_weights.dat")
-                            # post_equal_weights has n_params cols + logL col;
+                            # post_equal_weights has n_params cols + logL col.
                             # read only the first n_params cols (standard E fmt)
                             _pew = f"{_out_pfx}post_equal_weights.dat"
                             try:
@@ -6312,7 +6298,7 @@ class ExoploreSimulator:
                         # OpenMP internally, which fights Python threads and
                         # serialises everything with extra contention.
                         # atmosphere_ret_list is pre-loaded so each loglike
-                        # call is only spectrum computation (~0.4 s); with
+                        # call is only spectrum computation (~0.4 s). With
                         # minimum walkers (2-3× n_params) serial emcee is
                         # fast enough and gives correct autocorrelation stats.
                         _samp9 = _emcee.EnsembleSampler(
@@ -6449,7 +6435,7 @@ class ExoploreSimulator:
 
                         # 1D_alpha with a telluric template: the fixed nominal
                         # "model" is the Earth-transmittance depth spectrum
-                        # (same construction as the CCF template in Block 5b);
+                        # (same construction as the CCF template in Block 5b).
                         # the sampler then treats it exactly like a planetary
                         # model (α scale, Doppler shift, lightcurve weighting,
                         # PCA reprocessing, same likelihood).  A contamination
@@ -6529,7 +6515,7 @@ class ExoploreSimulator:
                                   f"loop).")
 
                         # 1D_alpha: precompute the fixed nominal model ONCE per
-                        # order (no pRT inside the sampler; α just scales its
+                        # order (no pRT inside the sampler, α just scales its
                         # depth).  Nominal abundance/T = the CCF template.
                         if (_mini_b7["Ret_dim"] in ("1D_alpha", "1D_alpha_Gibson22")
                                 and _ctx.get("nominal_spec") is None
@@ -7186,9 +7172,8 @@ class ExoploreSimulator:
                 print(f"  [timing] Report saved: {_doc_path}")
             except Exception as _te:
                 print(f"  [timing] Could not save report: {_te}")
-        # Capture provenance only after success. Do not construct/validate result
-        # containers here: unsupported optional array layouts must not turn an
-        # otherwise successful scientific run into a failure. Access is lazy.
+        # Store this completed run's arrays and observing metadata. The public
+        # result methods validate their selected array layout when called.
         self._completed_run = (
             self._state, tuple(int(i) for i in order_selection),
             {

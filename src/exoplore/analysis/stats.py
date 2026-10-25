@@ -5,11 +5,10 @@ exoplore.analysis.stats
 Statistical analysis tools for high-resolution cross-correlation spectroscopy.
 """
 
-# Reading this file
-# Several statistics live here: night-stack summaries, correlations,
-# iteration selection and evidence conversions. Follow the specific statistic's
-# inputs instead of treating every output named significance as the same quantity.
-# Plotting and numerical postprocessing are still mixed in some functions.
+# Role in the calculation
+# Calculate night-stack summaries, correlations, iteration choices and evidence
+# conversions. Each function defines the statistic it returns and the data needed to
+# calculate it.
 
 
 import numpy as np
@@ -29,7 +28,7 @@ def bayes_factor_to_sigma(bayes_factor):
     detection significance σ, following the **minimum-Bayes-factor bound**.
 
     This is a generic Bayesian→frequentist calibration, not specific to any one
-    analysis: the underlying result is Sellke, Bayarri & Berger (2001); it was
+    analysis: the underlying result is Sellke, Bayarri & Berger (2001). It was
     introduced to exoplanet-atmosphere retrievals by Benneke & Seager (2013) and
     written in the now-standard form by Welbanks & Madhusudhan (2021, Eq. 17)
     (the conversion Cheverall et al. 2026 use to quote "≤3.9σ"). Because it is a
@@ -194,8 +193,7 @@ def plot_stats(stats, kp_lim_inf, kp_lim_sup,
                     linewidth = 2)
 
     ax = plt.subplot(gs[2, 2]) # row 2, col 2
-    # If the injected signal is found clearly, V_rest is 
-    # always = inp_dat['V_wind'] and a histogram cannot be shown as before
+    # Identical recovered velocities occupy a single histogram bin.
     if np.all(stats[:,2] == inp_dat['V_wind']) or all(element == stats[:,2][0] for element in stats[:,2]):
         hist, bins = np.histogram(stats[:,2], bins=[0, 1])
         plt.bar(bins[:-1], hist, width=1)
@@ -784,7 +782,7 @@ def statistical_study(inp_dat, ccf_v_step, ccf_stat, kp_range, phase,
         (order-by-order SYSREM optimisation).
     kp_range : ndarray, shape (n_kp_steps,)
         Grid of trial Kp values in km/s over which the map is evaluated.
-    phase : ndarray
+    Phase : ndarray
         Orbital phase array (or list of arrays for multi-night simulations).
     v_ccf : ndarray
         Earth-frame CCF velocity grid in km/s.
@@ -802,7 +800,7 @@ def statistical_study(inp_dat, ccf_v_step, ccf_stat, kp_range, phase,
     ccf_iterations : int
         Total number of CCF lag steps.
     in_trail_pix : int
-        Width of the in-trail velocity window (pixels; must be odd) used
+        Width of the in-trail velocity window (pixels, must be odd) used
         by the Welch t-test significance metric.
     auto_lims : bool
         If True, axis limits in the corner plot are determined automatically.
@@ -817,7 +815,7 @@ def statistical_study(inp_dat, ccf_v_step, ccf_stat, kp_range, phase,
     show_plot, save_plot : bool
         Display and/or save the corner plot.
     CCF_Noise : bool
-        If True, process the noise-only CCF instead of the signal CCF.
+        If True, process the noise-only CCF.
     ccf_SSIM : bool
         Reserved for structural similarity metric (not yet implemented).
 
@@ -1169,7 +1167,7 @@ def get_SYSREM_its_ordbyord(inp_dat, ccf_store, v_rest, with_signal, phase, berv
         This optimisation is performed using the *injected* signal and
         should only be applied to the noiseless or signal-injected dataset.
         Applying it to a real detection will inflate the reported S/N because
-        SYSREM is tuned to maximise a known signal rather than a blind search.
+        SYSREM is tuned against the specified injected signal.
 
     Parameters
     ----------
@@ -1491,7 +1489,7 @@ def plot_std_errors(inp_dat, save_plot, error, prop_error, stats
     Parameters
     ----------
     inp_dat : dict
-        Simulation input dictionary; uses ``'n_nights'``, ``'plots_dir'``,
+        Simulation input dictionary. uses ``'n_nights'``, ``'plots_dir'``,
         ``'Simulation_name'``.
     save_plot : bool
         If True, save the figure as a PDF.
@@ -1500,7 +1498,7 @@ def plot_std_errors(inp_dat, save_plot, error, prop_error, stats
     prop_error : ndarray, shape (n_nights, n_orders, n_spectra, n_pixels)
         Propagated noise (σ) array from the pipeline.
     stats : ndarray, shape (n_nights, 3)
-        Per-night detection statistics; column 0 is the peak CCF S/N.
+        Per-night detection statistics. column 0 is the peak CCF S/N.
     """
     std_error = np.zeros((inp_dat['n_nights']))
     std_prop_error = np.zeros((inp_dat['n_nights']))
@@ -1565,7 +1563,7 @@ def compare_KpVr_dist(inp_dat, v_rest, ccf_matrix, night1,
     Parameters
     ----------
     inp_dat : dict
-        Simulation input dictionary; uses ``'V_wind'``, ``'K_p'``,
+        Simulation input dictionary. uses ``'V_wind'``, ``'K_p'``,
         ``'kp_max'``, ``'plots_dir'``, ``'Simulation_name'``.
     v_rest : ndarray, shape (n_v_rest,)
         Planet rest-frame velocity axis in km/s.
@@ -1576,7 +1574,7 @@ def compare_KpVr_dist(inp_dat, v_rest, ccf_matrix, night1,
     saveplot : bool
         If True, save the figure as a PDF.
     SNR : bool
-        If True, treat ``ccf_matrix`` values as S/N; if False, as raw CCF.
+        If True, treat ``ccf_matrix`` values as S/N. If False, as raw CCF.
     """
     plt.close()
     gs = gridspec.GridSpec(1, 4)
@@ -1727,9 +1725,9 @@ def get_corr_coeff(inp_dat, with_signal, data, model, color_variable,
         Simulation input dictionary.
     with_signal : ndarray or list
         In-transit exposure indices per night.
-    data : ndarray, shape (n_orders, n_nights, n_spectra, n_pixels)
+    Data : ndarray, shape (n_orders, n_nights, n_spectra, n_pixels)
         Pipeline residual data.
-    model : ndarray, shape (n_orders, n_nights, n_spectra, n_pixels)
+    Model : ndarray, shape (n_orders, n_nights, n_spectra, n_pixels)
         Injected atmospheric model spectra.
     color_variable : ndarray, shape (n_nights,)
         Per-night scalar variable used to colour the scatter plot
@@ -1737,13 +1735,13 @@ def get_corr_coeff(inp_dat, with_signal, data, model, color_variable,
     h : int
         Spectral order index to use for the 1D correlation.
     stats : ndarray, shape (n_nights, 3)
-        Per-night detection statistics; column 0 is peak S/N.
+        Per-night detection statistics. column 0 is peak S/N.
     title : str
         Figure title string.
     night_max, night_min : int
         Indices of the best and worst nights (from
-        :func:`find_nights_with_extrema`), highlighted in the plot.
-    phase : ndarray or list
+        :func:`exoplore.observation.timing.find_nights_with_extrema`), highlighted in the plot.
+    Phase : ndarray or list
         Orbital phase arrays.
     plotname : str
         Output filename suffix for the saved PDF.
@@ -1783,7 +1781,7 @@ def get_corr_coeff(inp_dat, with_signal, data, model, color_variable,
                     )[0,1]
     
     # Now look for a correlation between higher correlations
-    # and higher S/N of the MSS in the canonical analysis
+    # and higher S/N of the MSS in the reference analysis
 
     # Calculate Pearson correlation coefficient and p-value
     if CC_2D:
@@ -1959,37 +1957,6 @@ def compare_correlations(inp_dat, corr_x, corr_y, filename_flag, plotname,
     return original_correlation, standard_error
 
 
-def find_nights_with_extrema(stats, first_night_noiseless):
-    """Return the indices of the best and worst nights by peak CCF S/N.
-
-    Scans ``stats[:, 0]`` (the per-night peak detection S/N) and returns the
-    indices of the minimum and maximum values.  When the first night is
-    noiseless (``first_night_noiseless=True``), it is excluded from the
-    maximum search so that the noiseless reference night does not trivially
-    win.
-
-    Parameters
-    ----------
-    stats : ndarray, shape (n_nights, 3)
-        Per-night statistics array; column 0 is peak CCF S/N, column 1 is
-        best-fit Kp (km/s), column 2 is best-fit Vrest (km/s).
-    first_night_noiseless : bool
-        If True, exclude night index 0 from the maximum search.
-
-    Returns
-    -------
-    night_min : int
-        Index of the night with the lowest peak S/N.
-    night_max : int
-        Index of the night with the highest peak S/N (excluding night 0 when
-        ``first_night_noiseless=True``).
-    """
-    night_min = np.where(stats[:, 0] == stats[:, 0].min())[0][0]
-    if first_night_noiseless:
-        night_max = np.where(stats[1:, 0] == stats[1:, 0].max())[0][0] + 1
-    else:
-        night_max = np.where(stats[:, 0] == stats[:, 0].max())[0][0]
-    return night_min, night_max
 
 
 def perform_correlations_with_noise(inp_dat, stats, stats_tvalue, stats_pvalue,
@@ -2007,7 +1974,7 @@ def perform_correlations_with_noise(inp_dat, stats, stats_tvalue, stats_pvalue,
     :func:`compare_correlations` to measure the Pearson correlation between
     the per-night statistics from the noise-only CCF and those from the
     signal+noise CCF.  A high correlation indicates that the nightly noise
-    properties dominate the detection variability; a low correlation suggests
+    properties dominate the detection variability. A low correlation suggests
     the signal itself drives night-to-night scatter.
 
     Results are collected into an ``outputs`` dict and saved as a compressed
@@ -2020,7 +1987,7 @@ def perform_correlations_with_noise(inp_dat, stats, stats_tvalue, stats_pvalue,
         ``"All_significance_metrics"``, ``"Simulation_name"``,
         ``"Noise_scaling_factor"``, ``"correlations_dir"``).
     stats : ndarray, shape (n_nights, 3)
-        Signal+noise detection statistics; column 0 is the S/N maximum.
+        Signal+noise detection statistics. column 0 is the S/N maximum.
     stats_tvalue, stats_pvalue : ndarray or None
         Welch t-value and p-value statistics arrays, same shape.
     stats_planet_pos : ndarray, shape (n_nights, 3)

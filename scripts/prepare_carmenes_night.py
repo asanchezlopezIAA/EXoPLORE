@@ -35,7 +35,7 @@ Notes
     hdu[3].data   : uncertainties shape (n_pixels, n_orders)
     hdu[4].data   : wavelengths,  shape (n_pixels, n_orders), units Angstrom
 
-- The CARACAL BJD header keyword stores BJD - 2400000; this script adds
+- The CARACAL BJD header keyword stores BJD - 2400000. This script adds
   2400000 back to obtain the full BJD.
 
 - Exposures with mean S/N < --snr_threshold are discarded before saving.
@@ -45,10 +45,10 @@ Notes
   1e-7 are replaced with 800 (flagged as unreliable).
 """
 
-# Where this script fits
-# This converts extracted CARACAL observations into the reference-night
-# arrays consumed by the instrument loader. Keep exposure order and matching
-# wavelength/flux/error arrays together. Raw detector reduction is upstream.
+# Role in the calculation
+# Convert extracted CARACAL observations to reference-night arrays for the instrument
+# reader. Match the wavelength, flux and uncertainty arrays by exposure and spectral
+# order.
 
 
 import argparse
@@ -143,7 +143,7 @@ def _read_night(files: list[str], n_orders: int, n_pixels: int) -> dict:
 
     for i, f in enumerate(tqdm(files, desc="  Reading FITS", unit="exp")):
         with fits.open(f) as hdu:
-            # Arrays in FITS are (n_pixels, n_orders); transpose to (n_orders, n_pixels)
+            # Arrays in FITS are (n_pixels, n_orders). transpose to (n_orders, n_pixels)
             wave[i] = np.transpose(hdu[4].data, (1, 0)) * 1e-4   # Å → µm
             spec[i] = np.transpose(hdu[1].data, (1, 0))
             sig[i]  = np.transpose(hdu[3].data, (1, 0))

@@ -4,8 +4,8 @@ exoplore.pipelines.pca
 
 PCA-based systematic removal for high-resolution spectral time-series.
 
-Principal Component Analysis detrending (de Kok et al. 2013; Giacobbe et al.
-2021; Holmberg & Madhusudhan 2022; Cheverall et al. 2023) removes the dominant
+Principal Component Analysis detrending (de Kok et al. 2013, Giacobbe et al.
+2021, Holmberg & Madhusudhan 2022, Cheverall et al. 2023) removes the dominant
 *common modes* in the time-variation of each wavelength channel by subtracting
 the leading singular components of the ``(n_spectra, n_pixels)`` matrix.
 
@@ -29,11 +29,10 @@ Cheverall, Madhusudhan & Holmberg (2023), MNRAS, 522, 661.
 
 from __future__ import annotations
 
-# Reading this file
-# PCA removes selected singular components from the exposure/pixel matrix.
-# Its call signature resembles SYSREM so the dispatcher can choose either, but
-# PCA does not use the uncertainty array as inverse-variance weights. Interface
-# compatibility does not make their scientific operators identical.
+# Role in the calculation
+# Remove selected singular components from the exposure/pixel matrix with PCA. The call
+# signature matches the preparation dispatcher. The decomposition uses the spectral
+# matrix directly.
 
 
 from typing import List, Tuple
@@ -92,7 +91,7 @@ def apply_pca(
 
     The signature mirrors :func:`exoplore.pipelines.sysrem.apply_sysrem` so the
     two are interchangeable behind a ``detrend_method`` switch.  ``uncertainties``
-    is accepted for signature compatibility but unused (PCA is unweighted; use
+    is accepted for signature compatibility but unused (PCA is unweighted, use
     SYSREM for inverse-variance weighting).
 
     Parameters
@@ -103,7 +102,7 @@ def apply_pca(
         Number of principal components to remove.
     good_pixels:
         Integer index array of unmasked columns.  If ``None``, all columns used.
-    uncertainties:
+    Uncertainties:
         Ignored (compatibility with the SYSREM signature).
 
     Returns
@@ -112,7 +111,7 @@ def apply_pca(
         Residual over the good columns after removing ``n_components`` modes,
         shape ``(n_spectra, n_good_pixels)``.
     corrections:
-        List of length ``n_components``; each element is the rank-1 component
+        List of length ``n_components``. Each element is the rank-1 component
         removed, shape ``(n_spectra, n_good_pixels)``.
     basis:
         Left singular vectors of the removed modes (time-evolution modes),
@@ -134,9 +133,8 @@ def apply_pca(
 
     n_components = int(max(0, min(n_components, min(d.shape))))
 
-    # Factor the exposure-by-pixel matrix into time and wavelength patterns.
-    # This implementation does not mean-center d before the SVD; preserving
-    # that choice matters when comparing it with another PCA implementation.
+    # Apply SVD directly to the exposure-by-pixel matrix, using its original
+    # column means. U describes time patterns and Vt wavelength patterns.
     U, S, Vt = np.linalg.svd(d, full_matrices=False)
 
     corrections: List[np.ndarray] = []
@@ -145,7 +143,7 @@ def apply_pca(
         corrections.append(np.outer(U[:, i] * S[i], Vt[i]))
         basis[:, i] = U[:, i]
 
-    # Zeroing selected singular values removes those components; keeping U
+    # Zeroing selected singular values removes those components. keeping U
     # separately lets downstream model processing refer to the removed modes.
     s_kept = S.copy()
     s_kept[:n_components] = 0.0

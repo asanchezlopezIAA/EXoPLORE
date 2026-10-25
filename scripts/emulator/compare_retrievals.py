@@ -8,10 +8,9 @@ Usage
     python scripts/emulator/compare_retrievals.py
 """
 
-# Where this script fits
-# This compares saved emulator and physical-model retrieval results.
-# The emulator remains experimental; inspecting timings and corner plots here
-# is part of assessing its limitations, not switching the default solver.
+# Role in the calculation
+# Read emulator and physical-model retrieval outputs and compare their runtimes and
+# posterior distributions.
 
 
 import os, sys, json, glob

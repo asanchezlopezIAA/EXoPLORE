@@ -24,10 +24,9 @@ Usage
 
 from __future__ import annotations
 
-# Where this script fits
-# This plots statistics saved over repeated realizations. Identify which
-# metric and realization table are supplied before interpreting the cloud of
-# points; displaying the table does not generate another noise ensemble.
+# Role in the calculation
+# Read detection statistics from repeated noise realizations and plot their
+# distributions. The selected table and metric determine which statistic is shown.
 
 
 import argparse

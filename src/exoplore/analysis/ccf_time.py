@@ -5,11 +5,10 @@ exoplore.analysis.ccf_time
 Time-resolved 1D CCF analysis for high-resolution transit/eclipse spectroscopy.
 """
 
-# Reading this file
-# These routines examine how CCF profiles change across parts of an event.
-# They mix selections, combinations and figure construction; they are not simply
-# image viewers. Start with the function's exposure/frame inputs and follow the
-# selected time intervals before interpreting a change between panels.
+# Role in the calculation
+# Select time intervals from CCF products, combine their information and plot the
+# resulting profiles. Exposure selections and velocity frames determine which parts of
+# the event are compared.
 
 
 import numpy as np

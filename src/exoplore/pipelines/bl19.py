@@ -22,11 +22,10 @@ Brogi, M. & Line, M. R. (2019), AJ, 157, 114.
 
 from __future__ import annotations
 
-# Reading this file
-# These are preparation operations selected by pipelines/prepare.py.
-# Normalization and the subsequent telluric fits act in a particular sequence;
-# the output of one becomes the input of the next. Preserve that sequence when
-# following data, uncertainties and excluded wavelength columns.
+# Role in the calculation
+# Apply the BL19 normalization and telluric fits in the order selected by
+# pipelines/prepare.py. Each step passes its corrected data, propagated uncertainties
+# and wavelength selections to the next.
 
 
 from typing import Tuple
@@ -137,7 +136,7 @@ def pipeline_BL19_tellcorr(result1, error1, good):
     ----------
     result1 : ndarray
         Normalised spectra, shape ``(n_spectra, n_pixels)``.
-        (Full-grid matrix; ``good`` selects which columns to use.)
+        (Full-grid matrix, ``good`` selects which columns to use.)
     error1 : ndarray
         Propagated noise, same shape.
     good : ndarray

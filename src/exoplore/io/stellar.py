@@ -21,7 +21,7 @@ def LoadPhoenix(file, wave, res):
     ----------
     file : list of str or None
         ``[wave_fits_path, flux_fits_path]``.  Phoenix wavelengths are
-        expected in Angstrom; they are converted to microns internally.
+        expected in Angstrom. They are converted to microns internally.
         Pass ``None`` to raise an exception (no stellar model available).
     wave : ndarray
         Instrument wavelength grid in microns.  May be 1-D (n_pixels,)
@@ -50,7 +50,7 @@ def LoadPhoenix(file, wave, res):
 
     # This reader also performs convolution/interpolation: it supplies the
     # instrument-sampled stellar spectrum used later to construct exposures.
-    # The PHOENIX wavelength file is in Angstrom; wave uses microns, so convert
+    # The PHOENIX wavelength file is in Angstrom. wave uses microns, so convert
     # once here before combining the two wavelength grids.
     spec_og = fits.open(file[1])[0].data
     wave_og = 1.0e-4 * fits.open(file[0])[0].data   # Å → µm
@@ -90,36 +90,6 @@ def LoadPhoenix(file, wave, res):
         return np.interp(wave, wave_og, convolve(wave_og, spec_og, res))
 
 
-def spec_to_mat_fraction(inp_dat, syn_jd, T_0, v, wave, wave_prt,
-                         spec, mat_stellar, with_signal, without_signal,
-                         fraction, spec_morning_day=None, spec_morning_night=None,
-                         spec_evening_day=None, spec_evening_night=None,
-                         sf_evening_day=None, sf_evening_night=None,
-                         sf_morning_day=None, sf_morning_night=None,
-                         injection_setup=False, include_star=True,
-                         ccf_setup=False):
-    """Thin shim, canonical implementation in :mod:`exoplore.core.observation`.
-
-    This alias keeps ``exoplore.io.stellar.spec_to_mat_fraction`` importable
-    for any code that references it here; the single source of truth is
-    :func:`exoplore.core.observation.spec_to_mat_fraction`.
-    """
-    from exoplore.core.observation import spec_to_mat_fraction as _impl
-    return _impl(
-        inp_dat, syn_jd, T_0, v, wave, wave_prt,
-        spec, mat_stellar, with_signal, without_signal, fraction,
-        spec_morning_day=spec_morning_day,
-        spec_morning_night=spec_morning_night,
-        spec_evening_day=spec_evening_day,
-        spec_evening_night=spec_evening_night,
-        sf_evening_day=sf_evening_day,
-        sf_evening_night=sf_evening_night,
-        sf_morning_day=sf_morning_day,
-        sf_morning_night=sf_morning_night,
-        injection_setup=injection_setup,
-        include_star=include_star,
-        ccf_setup=ccf_setup,
-    )
 
 
 def get_stellar_matrix(spec_star, v_star, wave):

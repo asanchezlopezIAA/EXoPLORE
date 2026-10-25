@@ -1,14 +1,13 @@
-"""exoplore.core, simulation orchestration."""
+"""exoplore.core, simulation execution."""
 
-# Reading these imports
-# This exposes the user-facing simulator and forwards older observation
-# helper names on demand through __getattr__. Actual science belongs to the
-# selected runner/helper; the list of exported names is not an execution order.
+# Public imports
+# Export ExoploreSimulator and SimulationSummary. __getattr__ loads the listed
+# observation helpers from core.observation when requested.
 
 
 from exoplore.core.simulator import ExoploreSimulator, SimulationSummary
 
-# Observation matrix builders require scipy; import lazily so that the
+# Observation matrix builders require scipy. import lazily so that the
 # config layer can be used without scipy installed.
 def __getattr__(name):
     _obs_exports = {

@@ -16,11 +16,9 @@ statistical_study
 
 from __future__ import annotations
 
-# Reading this file
-# This module contains Welch-map calculations and night-combination
-# statistics. A CCF value, a map S/N and a Welch-derived value have different
-# definitions. Read the selected branch and the supplied in/out-of-trail samples
-# before comparing numbers or interpreting repeated night combinations.
+# Role in the calculation
+# Calculate Welch detection maps and night-combination statistics from CCFs. The
+# selected in-trail and out-of-trail samples define each statistic.
 
 
 import random
@@ -61,8 +59,7 @@ def Welch_ttest_map(
     b : int or None
         Bootstrap index (noise mode).
     CCF_Noise : bool
-        If ``True``, report significance at the position given by
-        ``stats[b]`` rather than at the true maximum.
+        If ``True``, report significance at the position given by ``stats[b]``.
 
     Returns
     -------
@@ -183,7 +180,7 @@ def Combine_Nights(inp_dat, ccf, CCF_Noise, previous_shuffle):
     ccf : ndarray, shape (n_nights, ...)
         CCF array indexed by night along axis 0.
     CCF_Noise : bool
-        If ``True``, use ``previous_shuffle`` instead of a fresh random draw.
+        If ``True``, reuse the indices in ``previous_shuffle``.
     previous_shuffle : list or None
         Shuffled night indices from the paired "real" data run (noise mode).
 
@@ -622,16 +619,16 @@ def get_corr_coeff(inp_dat, with_signal, data, model, color_variable,
         ``'n_nights'``, ``'plots_dir'``, ``'Simulation_name'``.
     with_signal : array_like of int
         In-transit exposure indices.
-    data : numpy.ndarray, shape (n_orders, n_nights, n_spectra, n_pixels)
+    Data : numpy.ndarray, shape (n_orders, n_nights, n_spectra, n_pixels)
         Observed data cube.
-    model : numpy.ndarray, shape (n_orders, n_spectra, n_pixels)
+    Model : numpy.ndarray, shape (n_orders, n_spectra, n_pixels)
         Model template.
     color_variable : array_like
         Variable used to colour the scatter plot (e.g. night index).
     h : int
         Spectral order index.
     stats : numpy.ndarray
-        Statistics array; column 0 contains the S/N per night.
+        Statistics array. column 0 contains the S/N per night.
     title, plotname : str
         Plot title and output filename stem.
     CC_2D : bool, optional

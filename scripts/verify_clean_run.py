@@ -6,10 +6,9 @@ Run with the venv active:
     python "/Users/alexsl/Documents/Claude/Projects/EXoPLORE Repository/scripts/verify_clean_run.py"
 """
 
-# Where this script fits
-# This inspects existing run outputs against its programmed checks. Read
-# its path settings and assumptions before using it for another experiment; an
-# archived verification script is not a universal guarantee for every route.
+# Role in the calculation
+# Read saved run products and check them against the settings and assumptions defined
+# in this script.
 
 
 import sys, os, glob

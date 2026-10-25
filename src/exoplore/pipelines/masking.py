@@ -5,7 +5,7 @@ exoplore.pipelines.masking
 Spectral masking utilities for high-resolution time-series data.
 
 Mask sources identify unusable wavelength columns. The public helpers below
-return integer column indices; temporary boolean selections inside functions
+return integer column indices. temporary boolean selections inside functions
 are converted to those indices. Good-pixel lists describe the retained columns.
 
 Telluric mask

@@ -36,7 +36,7 @@ This script reverses each band and places H before K so that the combined
 
 BERV
 ----
-IGRINS PLP does not compute the Barycentric Earth Radial Velocity (BERV).
+EXoPLORE computes the Barycentric Earth Radial Velocity (BERV) during input preparation.
 This script computes it at mid-exposure from the header keywords JD-OBS,
 OBJRA, OBJDEC, and the known Gemini South coordinates using
 ``astropy.coordinates.SkyCoord.radial_velocity_correction``.  The
@@ -94,7 +94,7 @@ Use raw extracted flux without A0V telluric pre-correction::
 
 References
 ----------
-Cheverall et al. 2026, used .spec_a0v.fits (A0V-corrected) as the default;
+Cheverall et al. 2026, used .spec_a0v.fits (A0V-corrected) as the default.
     tested without it in their Section 3.4.
 Wright & Eastman 2014, BERV computation algorithm (implemented in
     astropy.coordinates.radial_velocity_correction).
@@ -102,10 +102,9 @@ Wright & Eastman 2014, BERV computation algorithm (implemented in
 
 from __future__ import annotations
 
-# Where this script fits
-# This reads upstream PLP H/K products and writes the reference-night
-# layout used by the IGRINS loader. The conversion must keep time, order and
-# pixel axes aligned across all saved inputs; it does not reduce raw frames.
+# Role in the calculation
+# Convert reduced IGRINS PLP H/K spectra to reference-night inputs. Keep exposure times
+# and the wavelength, flux and uncertainty arrays aligned.
 
 
 import argparse
@@ -172,7 +171,7 @@ def _read_spec_file(
         Path to the compressed or uncompressed FITS file.
     use_a0v:
         If True, read from ext 1 (A0V-corrected flux) and ext 11 (DQ).
-        If False, read from ext 1 (raw flux); DQ array is all zeros.
+        If False, read from ext 1 (raw flux). DQ array is all zeros.
     tmpdir:
         Temporary directory for decompression.
 
@@ -204,7 +203,7 @@ def _read_spec_file(
     flux[bad] = np.nan
     var[bad]  = np.nan
 
-    # sigma = sqrt(variance); guard against zero/negative variance
+    # sigma = sqrt(variance). guard against zero/negative variance
     with np.errstate(invalid="ignore"):
         sigma = np.sqrt(np.abs(var))
     sigma[var <= 0] = np.nan
@@ -240,8 +239,7 @@ def _compute_berv_bjd(hdr: dict) -> tuple[float, float]:
 
     target = SkyCoord(ra=ra_deg * u.deg, dec=dec_deg * u.deg, frame="icrs")
 
-    # Barycentric correction (do not attach location to Time here to avoid
-    # duplicate-location error in astropy)
+    # Supply the observatory location once, in radial_velocity_correction.
     t_utc = Time(jd_mid, format="jd", scale="utc")
     berv = target.radial_velocity_correction(
         "barycentric", obstime=t_utc, location=_GEMINI_SOUTH
@@ -249,8 +247,8 @@ def _compute_berv_bjd(hdr: dict) -> tuple[float, float]:
     berv_kms = berv.to(u.km / u.s).value
 
     # BJD_TDB: TDB timescale conversion *plus* the barycentric light-travel-time
-    # (Roemer) correction.  ``.tdb.jd`` alone only converts the timescale; the
-    # spatial light-travel term (up to ~8.3 min; ~98 s for this target/night)
+    # (Roemer) correction.  ``.tdb.jd`` alone only converts the timescale. The
+    # spatial light-travel term (up to ~8.3 min, ~98 s for this target/night)
     # must be added explicitly to obtain a true BJD_TDB.
     t_loc    = Time(jd_mid, format="jd", scale="utc", location=_GEMINI_SOUTH)
     ltt_bary = t_loc.light_travel_time(target, kind="barycentric")
@@ -301,12 +299,12 @@ def _secondary_wavelength_calibration_solution(
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Secondary wavelength calibration applied to the SOLUTION (no flux resample).
 
-    Faithful to the IGRINS HRCCS lineage (Line et al. 2021; Brogi et al. 2023;
-    Smith et al. 2024; Cheverall et al. 2026): the flux is kept in pixel space
-    and is NEVER interpolated; instead the per-frame wavelength *solution* is
+    Faithful to the IGRINS HRCCS lineage (Line et al. 2021, Brogi et al. 2023,
+    Smith et al. 2024, Cheverall et al. 2026): the flux is kept in pixel space
+    and is NEVER interpolated. instead the per-frame wavelength *solution* is
     refined so that each frame's features align with the reference (last)
     exposure.  Interpolating the flux would correlate neighbouring pixels and
-    inflate the downstream S/N; adjusting the solution avoids that entirely.
+    inflate the downstream S/N. adjusting the solution avoids that entirely.
     The model is later interpolated onto each frame's solution in the CCF and
     likelihood.
 
@@ -397,14 +395,14 @@ def _secondary_wavelength_calibration(
     """Secondary wavelength calibration: 2nd-order stretch+shift, resampled.
 
     Following Cheverall et al. (2026) Section 2.3 and the methods of
-    Line et al. (2021); Brogi et al. (2023); Smith et al. (2024): each spectrum
+    Line et al. (2021). Brogi et al. (2023). Smith et al. (2024): each spectrum
     is aligned to the spectrum at the END of the observing night (the last
     exposure, closest in time to the PLP wavelength-calibration reference) via a
     per-order, per-exposure SECOND-ORDER stretch-and-shift transform, and the
     flux (and sigma) are RESAMPLED onto the reference exposure's wavelength grid.
 
     Procedure, per exposure i (≠ reference) and per order h:
-      1. Split the order into ``n_segments`` windows; cross-correlate the
+      1. Split the order into ``n_segments`` windows. cross-correlate the
          exposure flux against the reference flux in each window to measure a
          sub-pixel pixel shift at each window centre (parabolic peak interp).
       2. Fit a ``poly_deg``-order polynomial Δx(p) = c₀ + c₁p + c₂p² to the
@@ -455,7 +453,7 @@ def _secondary_wavelength_calibration(
             f_exp = all_flux[i, h]
             good_exp = np.isfinite(f_exp)
             if good_exp.sum() < 0.3 * n_pixels:
-                continue                                  # too little signal; leave as-is
+                continue                                  # too little signal. leave as-is
 
             seg_px, seg_shift = [], []
             for c in centres:
@@ -468,7 +466,7 @@ def _secondary_wavelength_calibration(
                 sr -= sr.mean(); se -= se.mean()
                 if sr.std() < 1e-12 or se.std() < 1e-12:
                     continue
-                # cc(L) = sum( roll(exp,L) * ref ); peak L => shift to apply to exp
+                # cc(L) = sum( roll(exp,L) * ref ). peak L => shift to apply to exp
                 cc = np.array([np.dot(np.roll(se, L), sr) for L in lags])
                 k  = int(np.argmax(cc))
                 if k == 0 or k == len(cc) - 1:
@@ -530,7 +528,7 @@ def _wavecal_doppler(
     cross-correlate the *whole* order against the last (reference) exposure over
     a velocity grid, find the single best-fit velocity, and shift the
     exposure's flux with the standard Doppler relation
-    ``wave_shift = wave*(1 + v/c)``; ``flux_aligned = interp(wave, wave_shift, flux)``.
+    ``wave_shift = wave*(1 + v/c)``. ``flux_aligned = interp(wave, wave_shift, flux)``.
 
     One velocity per order per exposure (no stretch).  Self-consistent in sign:
     the velocity that maximises alignment is the one applied.
@@ -584,15 +582,11 @@ def _wavecal_doppler(
 
 
 def _correct_nan(flux: np.ndarray, sigma: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """Set bad/edge pixels to a masking sentinel (0.0) instead of fabricating data.
+    """Set bad and edge pixels to the masking value 0.0.
 
-    DQ-flagged bad pixels and edge-trimmed columns arrive here as NaN.  Rather
-    than filling them with the time-median (which injects fabricated values into
-    the cross-correlation), they are set to 0.0 so the EXoPLORE pipeline masks
-    those columns: any column containing a value <= 0 in any exposure is masked
-    (simulator Block 5d.8).  This mirrors the paper's "cleaned of bad pixels and
-    outliers" rather than interpolating over them.  The corresponding sigma is
-    set to a large value.
+    DQ-flagged pixels and trimmed columns enter as NaN. Setting them to 0.0
+    makes simulator Block 5d.8 exclude each column containing a non-positive
+    value in any exposure. Their uncertainties are set to a large value.
 
     Parameters
     ----------
@@ -635,14 +629,14 @@ def prepare(
     output_dir : str
         Directory where EXoPLORE reference-night files are written.
     night_index : int or None
-        Suffix index for multi-night runs; None for single-night.
+        Suffix index for multi-night runs. None for single-night.
     use_a0v : bool
         If True, read .spec_a0v.fits (A0V telluric pre-corrected).
         If False, read .spec.fits (raw extracted flux).
     edge_trim_pixels : int
         Number of pixels to mask at each edge of every spectral order to
         remove low-throughput regions due to the instrumental blaze function.
-        Brogi et al. (2023) use 100; Smith et al. (2024) use 200.
+        Brogi et al. (2023) use 100. Smith et al. (2024) use 200.
         Default 100 following Brogi et al. (2023), as cited by Cheverall
         et al. (2026) Section 2.3.
     """
@@ -713,8 +707,8 @@ def prepare(
             combined_wave  = np.vstack([wave_h_r, wave_k_r])
 
             # Edge trim: mask first and last edge_trim_pixels of every order
-            # to remove low-throughput blaze regions (Brogi+2023: 100 px;
-            # Smith+2024: 200 px; Cheverall+2026 Section 2.3).
+            # to remove low-throughput blaze regions (Brogi+2023: 100 px,
+            # Smith+2024: 200 px. Cheverall+2026 Section 2.3).
             if edge_trim_pixels > 0:
                 combined_flux[:,  :edge_trim_pixels] = np.nan
                 combined_flux[:,  -edge_trim_pixels:] = np.nan
@@ -726,7 +720,7 @@ def prepare(
             all_wave[i]  = combined_wave
 
             # Timing and ancillary, read from K-band header (H is identical
-            # for JD-OBS, OBJRA/DEC; use K as authoritative)
+            # for JD-OBS, OBJRA/DEC. Use K as authoritative)
             berv_kms, bjd = _compute_berv_bjd(hdr_k)
             bjd_arr[i]  = bjd
             berv_arr[i] = berv_kms
@@ -741,7 +735,7 @@ def prepare(
 
         # ------------------------------------------------------------------
         # No exposure-level S/N cut.  Cheverall et al. (2026) §2.3 keep every
-        # exposure of the night (14 in-transit + 16 out-of-transit = 30); they
+        # exposure of the night (14 in-transit + 16 out-of-transit = 30). They
         # describe no exposure S/N selection.  The earlier mean-S/N<20 discard
         # here was inherited from the CARMENES reader and is removed for
         # faithfulness to the paper.
@@ -753,7 +747,7 @@ def prepare(
         # Secondary wavelength calibration (Cheverall+26 Section 2.3):
         # per-exposure 2nd-order stretch+shift aligning each spectrum to the LAST
         # exposure, applied by resampling flux & sigma onto the reference grid
-        # (following Line+2021; Brogi+2023; Smith+2024).
+        # (following Line+2021, Brogi+2023, Smith+2024).
         # ------------------------------------------------------------------
         # wave_perframe: per-frame refined solution (n_spectra, n_orders,
         # n_pixels), used by the engine to interpolate the MODEL onto each
@@ -823,7 +817,7 @@ def prepare(
         fits.writeto(os.path.join(output_dir, _name("wave")),
                      wave_ref, overwrite=True)  # reference (last-exposure) grid
         # Per-frame refined wavelength solution (solution-only wavecal). The
-        # engine interpolates the MODEL onto this per exposure; the flux is
+        # engine interpolates the MODEL onto this per exposure. The flux is
         # never resampled.  Absent => engine uses the common wave grid.
         if wave_perframe is not None:
             fits.writeto(os.path.join(output_dir, _name("wave_perframe")),

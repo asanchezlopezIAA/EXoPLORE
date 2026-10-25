@@ -16,11 +16,9 @@ format_number
 
 from __future__ import annotations
 
-# Reading this file
-# These are shared file/array helpers, including saving and numerical
-# summaries. Check whether a particular helper writes files or samples/bootstrap
-# indices before calling it during inspection. Formatting and serialization
-# should not be confused with the scientific operation that produced an array.
+# Role in the calculation
+# Read, save and format shared file and array products. Numerical helpers in this
+# module also calculate summaries and sampling indices for analysis functions.
 
 
 import os
@@ -60,7 +58,7 @@ def create_directory(directory_path: str, cluster: bool = False) -> None:
     directory_path : str
         Path to the directory to create.
     cluster : bool
-        Unused flag retained for backward compatibility.
+        Accepted argument with no effect on directory creation.
     """
     os.makedirs(directory_path, exist_ok=True)
     return
@@ -83,7 +81,7 @@ def format_number(x, decimals: int = 1):
     x : float or numpy.ndarray
         Value(s) to format.
     decimals : int
-        Currently unused; retained for API parity.
+        Accepted argument with no effect on this calculation.
 
     Returns
     -------

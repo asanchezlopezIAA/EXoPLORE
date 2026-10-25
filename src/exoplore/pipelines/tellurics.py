@@ -17,11 +17,9 @@ This module provides:
 
 from __future__ import annotations
 
-# Reading this file
-# Telluric transmittance is an input to synthetic observations, while
-# pipeline_fixedTellurics is a preparation path for the configured fixed case.
-# Loading a theoretical atmosphere and removing structure from observed spectra
-# are different operations, even though both concern terrestrial absorption.
+# Role in the calculation
+# Read telluric transmission for synthetic observations and apply the configured fixed-
+# telluric preparation through pipeline_fixedTellurics.
 
 
 import numpy as np
@@ -32,7 +30,7 @@ def validate_telluric_coverage(wavelength_um, required_wave_um, *, source):
 
     Both arguments are in microns. The required array may contain several
     selected orders. Ascending and descending input grids remain supported by
-    the existing interpolator; a malformed/duplicate grid is rejected.
+    the existing interpolator. A malformed/duplicate grid is rejected.
     """
     wave = np.asarray(wavelength_um, dtype=float)
     required = np.asarray(required_wave_um, dtype=float)
@@ -92,7 +90,7 @@ def Load_Telluric_Transmittances(snr, telluric_variation,
     Parameters
     ----------
     snr : ndarray
-        SNR array. Shape ``(n_pixels,)`` triggers 1-D branch;
+        SNR array. Shape ``(n_pixels,)`` triggers 1-D branch.
         ``(n_spectra, n_pixels)`` triggers 2-D branch.
     telluric_variation : bool
         Whether to model time-varying telluric absorption.
@@ -202,12 +200,12 @@ def pipeline_fixedTellurics(phase, wave, mat, noise, good, mask, mask_snr):
         Wavelength array, shape ``(n_pixels,)``.
     mat : ndarray
         Spectral matrix, shape ``(n_spectra, n_pixels)``.
-    noise : ndarray
+    Noise : ndarray
         Noise matrix, same shape as ``mat``.
     good : ndarray
         Integer indices of good spectral columns.
-    mask : ndarray
-        Integer mask (telluric or other; columns set to 1 after
+    Mask : ndarray
+        Integer mask (telluric or other, columns set to 1 after
         correction).
     mask_snr : ndarray
         Integer SNR mask (columns set to 1 after correction).

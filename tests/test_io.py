@@ -218,7 +218,7 @@ class TestBootstrapCorrcoeffs:
 # ---------------------------------------------------------------------------
 
 class TestSpecToMatFraction:
-    """Smoke tests for exoplore.io.stellar.spec_to_mat_fraction."""
+    """Smoke tests for exoplore.core.observation.spec_to_mat_fraction."""
 
     def _make_inputs(self, n_spec=20, n_pix=100, n_prt=120):
         rng = np.random.default_rng(42)

@@ -9,11 +9,9 @@ not perform the paper's separate bootstrap analysis or add observation noise.
 """
 from __future__ import annotations
 
-# Reading this file
-# This measures a configured helium band relative to continuum-noise
-# behaviour. The bandwidth, continuum selections and binning are part of that
-# statistic. It is a separate calculation from the molecular CCF-map S/N and
-# from a statistical bootstrap experiment.
+# Role in the calculation
+# Measure the helium absorption statistic for the configured band, continuum intervals
+# and binning. The selected continuum samples supply the noise estimate.
 
 
 from dataclasses import dataclass, asdict
@@ -61,7 +59,7 @@ OLS fits log(RMS) against log(bin size), without tuning to the signal value.
 No floor is applied to the fitted noise scaling: the result matches the fit,
 including a scale below one if the measured noise curve demands it. No
 injected model is subtracted from the continuum. Report unavailable estimates
-explicitly rather than substituting diagonal errors or a unity model.
+explicitly when the required covariance or model is missing.
     """
     w,y=np.asarray(wave_nm,float),np.asarray(transmission,float)
     if w.ndim!=1 or y.shape!=w.shape or not np.isfinite(w).all() or np.any(np.diff(w)<=0):

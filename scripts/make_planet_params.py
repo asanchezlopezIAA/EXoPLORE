@@ -24,10 +24,9 @@ Units expected here:
     Temperatures : K
 """
 
-# Where this script fits
-# This writes a planetary-system input JSON after calculating derived
-# quantities from the user-input section. Check those physical inputs and units
-# before executing; the later simulator reads the resulting system description.
+# Role in the calculation
+# Calculate derived planetary-system quantities and write the parameter JSON read by
+# the simulator. Set the physical inputs and their units in the user-input section.
 
 
 import json
@@ -68,9 +67,9 @@ M_pl_mjup        = 0.1647           # planet mass [M_jup]
 R_star_rsun      = 1.33             # stellar radius [R_sun]
 M_star_msun      = 0.949            # stellar mass [M_sun]
 T_star_K         = 5828.0           # stellar effective temperature [K]
-stellar_logg     = 4.18             # stellar log g [cgs], stored but not yet used in computations; set to None if unknown
-stellar_metallicity = 0.0           # stellar [Fe/H], stored but not yet used in computations; set to None if unknown
-v_rotsini_kms    = None             # stellar v sin i [km/s]; None if unknown
+stellar_logg     = 4.18             # stellar log g [cgs], stored but not yet used in computations. Set to None if unknown
+stellar_metallicity = 0.0           # stellar [Fe/H], stored but not yet used in computations. Set to None if unknown
+v_rotsini_kms    = None             # stellar v sin i [km/s]. None if unknown
 
 # Velocities
 V_sys_kms        = -8.25            # systemic velocity [km/s]
@@ -103,7 +102,7 @@ output_file = os.path.join(output_dir, f"{name.replace(' ', '-')}.json")
 
 
 # ---------------------------------------------------------------------------
-# Derived quantities (do not edit)
+# Derived quantities calculated from the inputs above
 # ---------------------------------------------------------------------------
 
 # Convert to SI/CGS for intermediate calculations

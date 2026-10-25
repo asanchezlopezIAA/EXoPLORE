@@ -1,10 +1,8 @@
 """exoplore.atmosphere, atmospheric forward model building blocks."""
 
-# Reading these imports
-# This collects public atmospheric helpers. The actual implementation is
-# in the named pressure, temperature, chemistry, broadening and pRT modules.
-# The runner still uses some older call interfaces alongside descriptive ones;
-# read the actual caller before deciding which helper represents its calculation.
+# Public imports
+# Export the atmospheric functions defined in the pressure, temperature,
+# chemistry, wind and pRT modules.
 
 
 from exoplore.atmosphere.pressure import create_log_pressure_grid

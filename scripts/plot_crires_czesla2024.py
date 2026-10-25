@@ -2,15 +2,14 @@
 """Plot saved CRIRES+ helium preparation products without repeating any fit.
 
 The exposure view shows only the fitted telluric windows. Its continuum
-scaling is for display; scientific correction uses pure calctrans transmission.
+scaling is for display. scientific correction uses pure calctrans transmission.
 Every output is created exclusively. Source corrections remain unchanged.
 """
 from __future__ import annotations
 
-# Where this script fits
-# This displays saved telluric-correction and helium-preparation products.
-# The fitting/acceptance decisions happened upstream. Display scaling in a panel
-# must be distinguished from the correction applied to scientific flux.
+# Role in the calculation
+# Read saved CRIRES+ telluric fits and helium preparation products and display their
+# spectra, residuals and diagnostics. Display options control the panel scales.
 
 
 import argparse
@@ -38,7 +37,7 @@ def read_reports(directory: Path) -> list[dict]:
 
 
 def save_figure(figure: plt.Figure, output: Path) -> None:
-    """Create a PNG exclusively; never replace an earlier diagnostic."""
+    """Create a PNG exclusively. Never replace an earlier diagnostic."""
     with output.open("xb") as stream:
         figure.savefig(stream, format="png", dpi=160, bbox_inches="tight")
     plt.close(figure)

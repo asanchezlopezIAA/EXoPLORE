@@ -8,10 +8,8 @@ The primary function is :func:`compute_inverse_variance_weighted_ccf`,
 which computes a CCF using inverse-variance weighting of the spectral
 uncertainties.  This is the main numerical kernel used throughout EXoPLORE.
 
-The implementation uses Numba JIT compilation with parallelisation
-(``nb.prange``) for performance.  The scientific interface is intentionally
-separated from implementation details: callers do not need to know that
-Numba is used internally.
+Numba compiles the numerical loops and distributes trial velocities with
+``nb.prange``. Functions in ccf.compute supply the arrays and settings.
 
 References
 ----------
@@ -21,11 +19,10 @@ Blain et al. 2024 (Blain24), improved CCF weighting scheme
 
 from __future__ import annotations
 
-# Reading this file
-# These are numerical inner loops: wrappers in compute.py choose inputs
-# and allocate results before entering them. At every boundary check exposure,
-# pixel and velocity axes plus the weighting choice. Numba acceleration changes
-# execution mechanics; it is not a reason to change normalization or arithmetic.
+# Role in the calculation
+# Calculate exposure CCFs over the trial velocity grid. compute.py supplies the arrays
+# and allocates the results. These Numba loops evaluate the selected weighting and
+# correlation formula.
 
 
 import numpy as np
@@ -61,7 +58,7 @@ if _NUMBA_AVAILABLE:
         with_signal,
         c_kms,
     ):
-        """Inner Numba kernel, do not call directly.  Use
+        """Inner Numba kernel called by
         :func:`compute_inverse_variance_weighted_ccf`.
         """
         # Telluric mask: determine valid pixels from the first in-transit frame
@@ -160,7 +157,7 @@ def compute_inverse_variance_weighted_ccf(
     template_wavelength_grid:
         1-D wavelength array for the template.
         Shape: (n_template_pixels,).
-    uncertainties:
+    Uncertainties:
         2-D array of per-pixel uncertainties (1σ) for each spectrum.
         Shape: (n_spectra, n_pixels).
     in_transit_indices:
@@ -172,7 +169,7 @@ def compute_inverse_variance_weighted_ccf(
     Returns
     -------
     numpy.ndarray, shape (n_lags, n_spectra)
-        CCF values.  Rows correspond to trial velocities; columns to
+        CCF values.  Rows correspond to trial velocities. Columns to
         individual spectra (time frames).
 
     Notes
@@ -251,7 +248,7 @@ try:
 
         Computes the same inverse-variance weighted normalised cross-correlation
         function as :func:`compute_inverse_variance_weighted_ccf`, but takes its
-        arguments in positional rather than keyword order.
+        positional arguments in the order listed below.
 
         For new code, prefer :func:`compute_inverse_variance_weighted_ccf`
         which has descriptive keyword arguments.
@@ -268,15 +265,15 @@ try:
         ccf_iterations : int
             Number of lag steps (= ``len(lag)``).
         wave : ndarray, shape (n_pixels,)
-            Wavelength grid of the observed spectra (μm or nm; consistent
+            Wavelength grid of the observed spectra (μm or nm, consistent
             with ``wave_CC``).
         wave_CC : ndarray, shape (n_template_pixels,)
             Wavelength grid of the template.
         ccf_values : ndarray, shape (ccf_iterations, n_spectra)
-            Pre-allocated output array; modified in-place and returned.
-        template : ndarray, shape (n_spectra, n_template_pixels)
+            Pre-allocated output array. modified in-place and returned.
+        Template : ndarray, shape (n_spectra, n_template_pixels)
             CCF template spectra (one per exposure epoch).
-        uncertainties : ndarray, shape (n_spectra, n_pixels)
+        Uncertainties : ndarray, shape (n_spectra, n_pixels)
             Per-pixel 1σ uncertainties.
         with_signal : ndarray of int
             Indices of in-transit exposures, used to select a representative
@@ -290,7 +287,7 @@ try:
         Notes
         -----
         This is a Numba JIT-compiled, parallel function.  It is available
-        only when Numba is installed; otherwise the stub below raises
+        only when Numba is installed. Otherwise the stub below raises
         ``ImportError``.
         """
         valid_tellurics = np.where((obs[with_signal[0], :] != 1))[0]
@@ -359,7 +356,7 @@ try:
                     syn_spec_shifted = syn_spec_shifted[valid_interp]
                     # Weighted-mean-subtract both (continuum/DC removal) so the
                     # un-normalised weighted covariance captures the line
-                    # correlation rather than the constant continuum term.
+                    # correlation after removing the constant continuum term.
                     weighted_mean1 = np.average(
                         syn_spec_shifted, weights=(1 / uncertainties_i ** 2.))
                     syn_spec_shifted -= weighted_mean1
@@ -449,7 +446,7 @@ if _NUMBA_AVAILABLE:
         """Parallel CCF kernel (unweighted normalised cross-correlation).
 
         Numba-parallelised version of :func:`ccf_numba`.  Telluric-masked
-        pixels (obs == 1) are excluded; interpolation edge effects are
+        pixels (obs == 1) are excluded. interpolation edge effects are
         removed.  No uncertainty weighting, each pixel contributes equally
         to the cross-correlation.
 
@@ -469,9 +466,9 @@ if _NUMBA_AVAILABLE:
             Template wavelength grid.
         ccf_values : ndarray, shape (ccf_iterations, n_spectra)
             Pre-allocated output array.
-        template : ndarray, shape (n_spectra, n_template_pixels)
+        Template : ndarray, shape (n_spectra, n_template_pixels)
             CCF template.
-        uncertainties : ndarray, shape (n_spectra, n_pixels)
+        Uncertainties : ndarray, shape (n_spectra, n_pixels)
             Per-pixel uncertainties (used only for the fallback telluric mask).
 
         Returns

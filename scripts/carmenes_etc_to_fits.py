@@ -46,13 +46,12 @@ Notes
 - The SNR values from the ETC correspond to a single exposure of the
   duration you entered in the ETC.  EXoPLORE scales them per-exposure
   using the noise model.
-- Use --snr_column max  to use the maximum per-order SNR instead of median.
+- Use --snr_column max to select the maximum S/N of each order.
 """
 
-# Where this script fits
-# This converts an ETC table into the S/N FITS input expected by EXoPLORE.
-# It prepares an input noise description; it does not simulate the transit or
-# measure a planet from spectra. Channel/order layout must match the later loader.
+# Role in the calculation
+# Convert an instrument ETC table to the S/N FITS arrays read by EXoPLORE. Preserve the
+# table's spectral-order and pixel layout when preparing these inputs.
 
 
 import argparse
@@ -105,7 +104,7 @@ def _parse_etc_table(path: str, n_orders: int, snr_col: str) -> np.ndarray:
             # columns: rel_order diffr_order wav_range(2) wav_max max_snr median_snr
             # The ETC sometimes puts the wav_range as "XXXX - YYYY" (3 tokens)
             # or "XXXX - YYYY" combined. We detect by checking token count.
-            # Robust: find the last two numeric-or-dash tokens as max_snr, median_snr.
+            # Read the last two numeric-or-dash tokens as max_snr and median_snr.
             numeric = []
             for p in parts[1:]:
                 try:

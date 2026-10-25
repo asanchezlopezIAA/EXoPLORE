@@ -9,7 +9,7 @@ of Nortmann et al. 2026 Appendix A.1.  It turns a directory of raw frames plus
 their associated calibrations into the extracted 1D spectral time series (one
 spectrum per nodding exposure) that ``prepare_crires_night.py`` ingests.
 
-This is only a convenience wrapper around the ESO tools; it does not replace
+This is only a convenience wrapper around the ESO tools. It does not replace
 them.  You must install the cr2res pipeline yourself and have ``esorex`` on the
 PATH.  For installation and for the authoritative description of every recipe
 see the ESO CRIRES+ pipeline pages:
@@ -34,10 +34,9 @@ where step is one of {dark, flat, wave, nod, all} and <raw_dir> holds the raw
 FITS frames.  Products are written under <raw_dir>/../ in calib/ and reduced/.
 """
 
-# Where this script fits
-# This launches upstream ESO cr2res reduction of raw exposures and their
-# calibrations. Its extracted spectra are inputs to prepare_crires_night.py.
-# It is a different stage from later atmospheric preparation/cross-correlation.
+# Role in the calculation
+# Run the ESO cr2res recipes on raw CRIRES+ exposures and calibration frames. Pass the
+# extracted spectra to prepare_crires_night.py for EXoPLORE input preparation.
 
 import argparse
 import glob
@@ -75,7 +74,7 @@ class Reducer:
         self.frames, self.masters = self._classify()
 
     def _classify(self):
-        """dpr type -> list of (path, DIT); plus static master products."""
+        """dpr type -> list of (path, DIT). plus static master products."""
         frames, masters = {}, {}
         for f in sorted(glob.glob(os.path.join(self.RAW, "*.fits"))):
             h = fits.getheader(f)
@@ -171,7 +170,7 @@ class Reducer:
         return ok
 
     def _nod_calib(self, dit=None):
-        """Calibration entries for one nodding pair; the master dark is picked
+        """Calibration entries for one nodding pair. The master dark is picked
         for the pair's own DIT (nights can mix exposure times)."""
         wtw = (self.find(self.CAL, "cr2res_cal_wave_tw_fpet.fits")
                or self.find(self.CAL, "cr2res_cal_wave_tw*.fits")

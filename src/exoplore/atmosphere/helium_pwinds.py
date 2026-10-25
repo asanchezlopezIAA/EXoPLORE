@@ -6,11 +6,10 @@ Atmospheric absorption follows projected overlap, including outside optical cont
 """
 from __future__ import annotations
 
-# Reading this file
-# This backend solves a physical outflow and evaluates how it absorbs
-# stellar light during transit. The transit object caches expensive optical-depth
-# information for repeated phases. Detector sampling, observational noise and
-# transmission preparation belong to the observing runner, not this solver.
+# Role in the calculation
+# Solve the planetary outflow and calculate its absorption during transit. The transit
+# object caches optical depths for repeated phase calculations. The observing code
+# samples these spectra onto detector pixels.
 
 
 from importlib.metadata import version
@@ -35,7 +34,7 @@ def geometry(phase: float, planet) -> tuple[float, float, float]:
 
 
 def contact_phases(planet) -> np.ndarray:
-    """Calculate first through fourth optical contacts; require a full transit."""
+    """Calculate first through fourth optical contacts. Require a full transit."""
     _, b, p = geometry(0, planet)
     a = planet.semi_major_axis_au * AU_M / (planet.stellar_radius_rsun * RS_M)
     if abs(b) >= 1 - p or a <= 1 + p:

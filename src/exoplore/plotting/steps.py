@@ -12,11 +12,10 @@ steps for a single spectral order, following Fig. 5 of Sánchez-López et al.
              set to NaN so they appear white).
 """
 
-# Reading this file
-# These diagnostics connect the simulated spectra to prepared residuals.
-# Some helpers reconstruct intermediate SYSREM stages from stored components:
-# that is deliberate numerical reconstruction, unlike loading a saved PDF.
-# Display-only options must be distinguished from the arrays used for analysis.
+# Role in the calculation
+# Plot the simulated spectra and preparation stages. SYSREM diagnostics reconstruct
+# intermediate matrices from saved components. Display options control how the arrays
+# appear in each panel.
 
 
 import numpy as np
@@ -78,7 +77,7 @@ def plot_pipeline_steps(
         The 2D panels always show the complete good-pixel wavelength range.
     noise_illustration_factor : float or None
         Add a labelled display-only curve: noiseless + factor * (noisy - noiseless).
-        Original spectra and the actual noisy curve remain unchanged.
+        The original spectra and noisy curve use the simulated flux values.
     save_plot : bool
     show_plot : bool
     """
@@ -245,14 +244,14 @@ def reconstruct_sysrem_stages(
     wave : ndarray, shape (n_pixels,)
     mat_noisy : ndarray, shape (n_spectra, n_pixels)
         Noisy data matrix before preparation.
-    noise : ndarray, shape (n_spectra, n_pixels)
+    Noise : ndarray, shape (n_spectra, n_pixels)
         Per-pixel uncertainties.
     good_pixels : ndarray
         Integer indices of the unmasked columns.
     iterations : list of int
         1-based SYSREM iteration indices to reconstruct (e.g. [1, 5]).
     use_normalised_errors : bool
-        ASL19 weights SYSREM by the normalised uncertainties; Gibson22 by
+        ASL19 weights SYSREM by the normalised uncertainties. Gibson22 by
         the original noise.  Set False for Gibson22.
 
     Returns
@@ -304,8 +303,8 @@ def _plot_sysrem_waterfall(
     else:
         iters = [i for i in sysrem_iters if i in sysrem_stages]
 
-    # The raw matrix is unmasked; the stages already carry NaN at the masked
-    # columns, shown as a uniform colour.  Integer keys are SYSREM iterations;
+    # The raw matrix is unmasked. The stages already carry NaN at the masked
+    # columns, shown as a uniform colour.  Integer keys are SYSREM iterations.
     # a string key (e.g. polynomial "Corrected (residual)") is used verbatim.
     panels = [(mat_noisy, 'Raw matrix (throughput + tellurics)')]
     for k in iters:
@@ -343,7 +342,7 @@ def _plot_sysrem_waterfall(
     # ── Panel 0: 1-D spectrum (same wavelength window as the matrices) ────────
     ax = axes[0]
     _g1 = (wave_ins >= _mxlo) & (wave_ins <= _mxhi)
-    # Keep gaps at excluded channels; do not amplify mask-fill values as noise.
+    # Apply the display scaling to valid channels and leave gaps at masked pixels.
     _valid1 = np.zeros(wave_ins.size, dtype=bool)
     _valid1[good] = True
     _visible_good = _valid1[_g1]

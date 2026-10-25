@@ -11,7 +11,7 @@ two teaching figures:
                             and enhances carbon-bearing species, for Tutorial 3
                             (Example A).
 
-The opacity tables are loaded once (slow, a few minutes); the two spectra are
+The opacity tables are loaded once (slow, a few minutes). The two spectra are
 then computed from the same Radtrans object.
 
     python scripts/illustrate_model_spectrum.py \
@@ -21,10 +21,9 @@ then computed from the same Radtrans object.
 
 from __future__ import annotations
 
-# Where this script fits
-# This runs atmospheric-model calculations to make documentation figures.
-# It is more than a viewer of existing PNG files: the configured inputs determine
-# the physical spectra generated when the script is executed.
+# Role in the calculation
+# Calculate planetary transmission spectra and use them to draw the model-spectrum and
+# chemistry figures in the documentation.
 
 
 import argparse

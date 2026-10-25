@@ -17,8 +17,8 @@ samplers
 
 # Reading these imports
 # This exposes likelihoods, priors and sampler adapters. A likelihood
-# evaluates a supplied model against data; a prior supplies parameter support
-# or a coordinate transform; a sampler explores proposals. Importing these
+# evaluates a supplied model against data. A prior supplies parameter support
+# or a coordinate transform. A sampler explores proposals. Importing these
 # objects is separate from enabling and executing a retrieval.
 
 

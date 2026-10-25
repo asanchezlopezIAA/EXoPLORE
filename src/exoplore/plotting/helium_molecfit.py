@@ -6,11 +6,10 @@ reported in the fitting grid's pixels, with fitted/fixed status from the recipe.
 """
 from __future__ import annotations
 
-# Reading this file
-# These routines read saved per-exposure fit reports to show accepted
-# correction/kernel behaviour. Distinguish a fitted kernel width from a fixed
-# configured width, and keep detector-section/nod membership when comparing
-# exposures. Reading reports does not repeat external fits.
+# Role in the calculation
+# Read saved per-exposure molecfit reports and plot the correction and instrumental-
+# kernel diagnostics. Reports distinguish fitted and fixed widths and identify the
+# detector section or nod.
 
 
 import json
@@ -25,7 +24,7 @@ def read_molecfit_diagnostics(directory: Path, instrument: str) -> list[dict]:
     """Read chronological reports, including a reused first-exposure pilot.
 
     ``directory`` may be the correction directory or its parent night directory.
-    Only accepted reports contribute; absent or rejected reports raise an error.
+    Only accepted reports contribute. absent or rejected reports raise an error.
     """
     if instrument not in ('CRIRES+', 'CARMENES_NIR'):
         raise ValueError('Helium molecfit diagnostics support CRIRES+ and CARMENES_NIR')

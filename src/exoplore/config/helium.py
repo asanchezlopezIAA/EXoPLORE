@@ -5,11 +5,9 @@ mass-loss rate, temperature, or limb darkening is inferred from its name.
 """
 from __future__ import annotations
 
-# Reading this file
-# These are explicit inputs to a helium atmosphere/observation route.
-# Selecting a planet name alone does not supply its irradiation or wind model.
-# Validation here catches incompatible options before the optional atmosphere
-# solver or external observing tools are started.
+# Role in the calculation
+# Define the helium atmosphere and observing inputs. Validation checks the irradiation,
+# wind and observing settings before starting the selected solver or external tools.
 
 
 from dataclasses import dataclass

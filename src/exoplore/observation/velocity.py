@@ -17,9 +17,8 @@ import math
 
 import numpy as np
 
-# Canonical implementation for the descriptive velocity API. The historical
-# exoplore.velocity module reexports these same objects so older scripts retain
-# their signatures and conventions without a second copy of the equations.
+# Function arguments specify orbital phase and the velocity-frame
+# convention used in the calculation.
 
 def planet_radial_velocity(
     phases: np.ndarray,
@@ -169,11 +168,9 @@ def stellar_radial_velocity(
 
 
 # ---------------------------------------------------------------------------
-# Legacy configuration-facing functions
-# Keep these signatures and conventions until their callers are migrated and
-# independently checked. In particular, get_V_eccentric takes omega in degrees
-# and uses a different phase-anchor implementation from the descriptive API
-# above; similar names alone are not sufficient grounds to merge them.
+# Configuration-facing velocity functions
+# get_V_eccentric takes omega in degrees and anchors the orbital phase at
+# transit. Each function documents its angle units and velocity convention.
 # ---------------------------------------------------------------------------
 
 def get_V(sem_amp, phase, berv, v_sys, v_wind):
@@ -211,7 +208,7 @@ def get_V_eccentric(Kp, phases, e, omega, berv, v_sys, v_wind=0.0):
     phases = np.asarray(phases)
     omega = np.deg2rad(omega)
     # Anchor phi = 0 at mid-transit. In this convention the true anomaly at
-    # transit is nu_t = -omega; convert it to the mean anomaly M_t so the phase
+    # transit is nu_t = -omega. convert it to the mean anomaly M_t so the phase
     # offset is exact at any eccentricity (it reduces to -omega when e = 0).
     nu_t = -omega
     E_t = 2.0 * np.arctan2(np.sqrt(1.0 - e) * np.sin(nu_t / 2.0),

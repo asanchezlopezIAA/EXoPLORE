@@ -205,7 +205,7 @@ the parts connect.
 ```
 src/exoplore/
 ├── config/         SimulationConfig and all sub-configs (typed dataclasses)
-├── core/           High-level orchestration (simulator, CLI)
+├── core/           Simulation runner and command-line interface
 ├── planets/        Planet system parameters
 ├── atmosphere/     Atmospheric physics (petitRADTRANS wrappers, winds, chemistry)
 ├── instruments/    Instrument models (ANDES, CARMENES, CRIRES+)

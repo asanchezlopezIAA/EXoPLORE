@@ -87,7 +87,7 @@ class TestGetCorrCoeff:
                                    self.n_spec, self.n_pix)
         self.model = np.random.rand(self.n_orders, self.n_spec, self.n_pix)
         self.with_signal = np.arange(3, 7)
-        # stats must have n_nights rows; with first_night_noiseless=True,
+        # stats must have n_nights rows. With first_night_noiseless=True,
         # stats_0 = stats[1:, 0] has shape (n_nights-1,) matching corr_coeff
         self.stats = np.random.rand(self.n_nights, 3)
         self.inp_dat = {

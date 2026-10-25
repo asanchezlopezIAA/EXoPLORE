@@ -1,7 +1,7 @@
 """
 Tests for the new atmosphere modules: chemistry.py and prt.py.
 
-petitRADTRANS and easychem are optional dependencies; tests that
+petitRADTRANS and easychem are optional dependencies. tests that
 require them are skipped when the packages are not installed.
 """
 
@@ -64,7 +64,7 @@ class TestEquilibriumChemistry:
 
 
 # ---------------------------------------------------------------------------
-# prt.py, convolve (single instrument-LSF convolution; no pRT required)
+# prt.py, convolve (single instrument-LSF convolution, no pRT required)
 # ---------------------------------------------------------------------------
 
 class TestConvolve:

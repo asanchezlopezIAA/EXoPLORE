@@ -16,7 +16,7 @@ The deposit contains:
 - `observations_night_0_order_0.fits` … `observations_night_0_order_27.fits`, normalised observed spectra per order
 
 The files `julian_date_0.fits`, `airmass_0.fits`, and `observations_berv_0.fits`
-are included in the git repository and do not need to be downloaded separately.
+are included in the Git repository.
 
 These data were first published in:
 

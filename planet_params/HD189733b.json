@@ -1,5 +1,5 @@
 {
-  "_description": "HD 189733 b, canonical hot Jupiter, primary target for EXoPLORE development",
+  "_description": "HD 189733 b system parameters used by the ANDES and CARMENES examples",
   "_note_units": "Physical quantities stored in natural astronomical units; to_inp_dat() converts them to CGS/km as required by petitRADTRANS.",
   "_references": [
     "Bouchy et al. 2005, A&A 444, L15 (discovery)",

@@ -17,11 +17,11 @@ Pipeline steps (applied in this order per spectral order):
         the maxima in 80 wavelength bins (``pipeline_pseudocontinuum_norm``
         from ``exoplore.pipelines.bl19``), tracing the blaze/throughput
         envelope without distortion from absorption lines.
-    4.  PCA detrending (unweighted SVD, de Kok et al. 2013;
+    4.  PCA detrending (unweighted SVD, de Kok et al. 2013,
         ``detrend_method='pca'``) with Max_Diff/ΔCCF optimisation, inject H2S
         model at offset velocity (+19 km/s, ``kp_vrest_injection=[70, 19]``),
         remove N=1..max common modes, select N where marginal ΔCCF gain is
-        maximised (Holmberg & Madhusudhan 2022; Cheverall et al. 2023; 2026).
+        maximised (Holmberg & Madhusudhan 2022, Cheverall et al. 2023, 2026).
 
 Notes
 -----
@@ -40,11 +40,10 @@ Brogi, M. et al. (2023), AJ, 165, 91, edge trimming convention.
 
 from __future__ import annotations
 
-# Reading this file
-# This file provides the individual preparation operations and timing
-# checks used by the Cheverall26 branch. The dispatcher/runner determines their
-# sequence and which data enter them. Normalization, outlier removal and a
-# signal-duration diagnostic are different tasks despite sharing this module.
+# Role in the calculation
+# Apply the preparation operations and timing checks used by Cheverall26. The
+# dispatcher selects their order, including normalization, outlier removal and the
+# signal-duration diagnostic.
 
 
 import numpy as np
@@ -69,7 +68,7 @@ def chev26_rescale(
     ----------
     data : ndarray, shape (n_spectra, n_pixels)
         Input flux time series for one order.
-    noise : ndarray, shape (n_spectra, n_pixels)
+    Noise : ndarray, shape (n_spectra, n_pixels)
         Associated uncertainties.
     good_pixels : ndarray of int
         Indices of unmasked pixels used to compute the median.
@@ -77,7 +76,7 @@ def chev26_rescale(
     Returns
     -------
     data_out : ndarray, shape (n_spectra, n_pixels)
-        Rescaled flux; each row divided by its median over good pixels.
+        Rescaled flux. Each row divided by its median over good pixels.
     noise_out : ndarray, shape (n_spectra, n_pixels)
         Uncertainties rescaled by the same factor.
     """
@@ -198,17 +197,16 @@ def chev26_normalise(
           95th-percentile values across the order.
       3.  The spectrum is **divided by the fit**.
 
-    Note this is NOT the ASL19 maxima method (80-bin maxima, see
-    :func:`chev26_normalise_maxima`), it is the 95th-percentile sliding
-    envelope specific to Cheverall & Madhusudhan (2024).
+    This is the 95th-percentile sliding envelope of Cheverall & Madhusudhan
+    (2024). :func:`chev26_normalise_maxima` implements the ASL19 method.
 
     Parameters
     ----------
     wave : ndarray, shape (n_pixels,)
         Wavelength grid for the order in µm.
-    data : ndarray, shape (n_spectra, n_pixels)
+    Data : ndarray, shape (n_spectra, n_pixels)
         Median-rescaled, outlier-cleaned flux (output of Steps 1 to 2).
-    noise : ndarray, shape (n_spectra, n_pixels)
+    Noise : ndarray, shape (n_spectra, n_pixels)
         Associated uncertainties.
     good_pixels : ndarray of int
         Indices of unmasked pixels.
@@ -222,7 +220,7 @@ def chev26_normalise(
     Returns
     -------
     data_norm : ndarray, shape (n_spectra, n_pixels)
-        Normalised flux array (full n_pixels width; masked pixels = 1).
+        Normalised flux array (full n_pixels width, masked pixels = 1).
     noise_norm : ndarray, shape (n_spectra, n_pixels)
         Propagated uncertainties (masked pixels = 1).
     """
@@ -246,7 +244,7 @@ def chev26_normalise(
         cont_pts = percentile_filter(
             spec, percentile=percentile, size=window, mode="nearest"
         )
-        # (2) quadratic fit to those values; (3) divide
+        # (2) quadratic fit to those values. (3) divide
         fit = np.polyval(np.polyfit(xc, cont_pts, degree), xc)
         fit = np.where(np.abs(fit) < 1e-30, 1e-30, fit)
         res[n] = spec / fit
@@ -268,10 +266,10 @@ def chev26_normalise_maxima(
     """ASL19-style pseudo-continuum normalisation (80-bin maxima, degree 2).
 
     Divides each spectrum by a 2nd-order polynomial fitted to the maximum
-    flux in 80 equal-width wavelength bins.  This is the ASL19 maxima
-    approach (delegates to ``pipeline_pseudocontinuum_norm``), retained as a
-    selectable alternative (``continuum_method='maxima'``).  It is NOT the
-    Cheverall & Madhusudhan (2024) recipe, see :func:`chev26_normalise`.
+    flux in 80 equal-width wavelength bins using
+    ``pipeline_pseudocontinuum_norm``. Select it with
+    ``continuum_method='maxima'``. :func:`chev26_normalise` implements
+    the percentile-envelope method of Cheverall & Madhusudhan (2024).
     """
     from exoplore.pipelines.bl19 import pipeline_pseudocontinuum_norm
 
@@ -314,7 +312,7 @@ def chev26_normalise_polyfit(
     continuum polynomial.
 
     This differs from :func:`chev26_normalise` (which traces the continuum via
-    the maxima of 80 bins); both yield a continuum near unity, but this one is
+    the maxima of 80 bins). Both yield a continuum near unity, but this one is
     the literal per-exposure polynomial continuum fit.
 
     Parameters mirror :func:`chev26_normalise`.
@@ -363,7 +361,7 @@ def chev26_normalise_polyfit(
 
 
 # ---------------------------------------------------------------------------
-# Statistical-study extras for the Cheverall26 route (local; gated in the
+# Statistical-study extras for the Cheverall26 route (local, gated in the
 # simulator to pipeline.name == "Cheverall26").  Reuse the per-night CCF cube
 # already produced by the run to add the timing (in-transit duration) map
 # alongside the Kp-Vsys map, and store the planet-position and maximum values
@@ -401,11 +399,11 @@ def chev26_duration_map(ccf_exp, v_ccf, phase, berv, kp, vsys,
     n_lag, n_exp = ccf_exp.shape
     vp = kp * np.sin(2.0 * np.pi * phase) + vsys - berv
     dv = np.median(np.diff(v_ccf))
-    # Display/measurement half-window (kept for the map, plot and metrics;
+    # Display/measurement half-window (kept for the map, plot and metrics,
     # ~ the Kp-Vsys ±40 scale).
     _disp_half = vwin + exclude + 5
     # Noise half-range: match the main Kp-Vsys map (±vmax_noise) so the 'point'
-    # noise denominator is estimated over the SAME velocity span; clipped so
+    # noise denominator is estimated over the SAME velocity span. clipped so
     # vp+v_rest never leaves the CCF grid (no extrapolation).
     if vmax_noise is None:
         _half = _disp_half
@@ -419,12 +417,9 @@ def chev26_duration_map(ccf_exp, v_ccf, phase, berv, kp, vsys,
         np.interp(vp[i] + v_rest, v_ccf, ccf_exp[:, i], left=np.nan, right=np.nan)
         for i in range(n_exp)])
     order = np.argsort(np.abs(phase))
-    # Noise normalisation = 'point' convention, IDENTICAL to
-    # the main Kp-Vsys map (get_max_CCF_peak): for each velocity the noise is the
-    # mean/std of the co-add values MORE than `exclude` km/s from THAT velocity
-    # (the trail under test), via a sliding window, NOT the std around the
-    # co-add's own peak.  Keeps the timing map and the Kp-Vsys map on the same
-    # S/N scale.
+    # Normalize each trial velocity using the coadded values outside its
+    # exclusion window. Their mean and standard deviation define the
+    # off-trail reference for that velocity (the point convention).
     n = v_rest.size
     _W = int(round(exclude / dv)) if dv > 0 else 0
     _idx = np.arange(n)
@@ -446,7 +441,7 @@ def chev26_duration_map(ccf_exp, v_ccf, phase, berv, kp, vsys,
         _nstd = np.sqrt(np.maximum(_nss / _nn - _nmean ** 2, 0.0))
         snmap[k - 1] = np.where(_nstd > 0, (co - _nmean) / _nstd, 0.0)
     # Restrict the OUTPUT to the display/measurement window (the noise above was
-    # estimated over the full ±vmax_noise span); keeps the 'timing max' metric
+    # estimated over the full ±vmax_noise span). keeps the 'timing max' metric
     # on the same ±vwin scale as the Kp-Vsys ±40 map.
     _keep = np.abs(v_rest) <= _disp_half
     snmap = snmap[:, _keep]
@@ -612,7 +607,7 @@ def chev26_fourmetric_corner(metrics, out_path, truths=None, title=None):
 
 # ---------------------------------------------------------------------------
 # Bayes factor -> frequentist detection significance.
-# This conversion is GENERIC (Sellke, Bayarri & Berger 2001; Benneke & Seager
-# 2013; Welbanks & Madhusudhan 2021, Eq. 17), not Cheverall-specific, so it now
+# This conversion is GENERIC (Sellke, Bayarri & Berger 2001, Benneke & Seager
+# 2013. Welbanks & Madhusudhan 2021, Eq. 17), not Cheverall-specific, so it now
 # lives in exoplore.analysis.stats.bayes_factor_to_sigma.
 # ---------------------------------------------------------------------------

@@ -31,7 +31,7 @@ inp_dat conversion
 
 # Reading these imports
 # Use load_planet to obtain the system-parameter object consumed by the
-# runner. Configuration selects the observation/analysis separately; the planet
+# runner. Configuration selects the observation/analysis separately. The planet
 # object records the physical system and derived quantities used across stages.
 
 

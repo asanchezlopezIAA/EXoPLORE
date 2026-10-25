@@ -6,11 +6,9 @@ their meaning. Fibre transfer factors never have scientific defaults.
 """
 from __future__ import annotations
 
-# Reading this file
-# OH emission is sky contamination near the helium feature. These checks
-# resolve the requested treatment and whether sky-fibre data/calibration are
-# required. They prevent an instrument-incompatible correction from being
-# selected before loading spectra; they do not perform the correction.
+# Role in the calculation
+# Validate the OH-emission treatment and its required sky-fibre data. The selected
+# correction is applied later by the instrument preparation code.
 
 
 import math

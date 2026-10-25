@@ -12,7 +12,7 @@ exposed so that advanced users can call petitRADTRANS directly.
 Workflow
 --------
 1. Call :func:`create_radtrans` once per atmosphere region to build the
-   ``Radtrans`` opacity table (expensive; cache this object).
+   ``Radtrans`` opacity table (expensive, cache this object).
 2. Call :func:`compute_transmission_spectrum` or
    :func:`compute_emission_spectrum` to compute a spectrum from a
    temperature profile and mass fractions (cheap after step 1).
@@ -58,7 +58,7 @@ def create_radtrans(
     """Create and return a petitRADTRANS ``Radtrans`` object.
 
     The pressure grid is passed at construction time (petitRADTRANS ≥ 3
-    style).  Opacity tables are loaded immediately; this call is slow
+    style).  Opacity tables are loaded immediately. This call is slow
     the first time for a given species set (minutes), but subsequent
     calls with the same cached object are fast.
 
@@ -69,7 +69,7 @@ def create_radtrans(
     species:
         Line-absorbing species, e.g.
         ``["H2O_main_iso", "CO_all_iso"]``.
-        Do **not** include ``"H2"`` or ``"He"`` here; pass them as
+        Do **not** include ``"H2"`` or ``"He"`` here. pass them as
         ``rayleigh_species`` instead.
     wavelength_min_um:
         Minimum wavelength in μm.
@@ -165,7 +165,7 @@ def compute_transmission_spectrum(
         If provided, an opaque grey cloud deck is placed at this
         pressure in bar.
     haze_factor:
-        Haze enhancement factor (currently not passed to pRT; reserved
+        Haze enhancement factor (currently not passed to pRT, reserved
         for future use).
 
     Returns
@@ -409,10 +409,9 @@ def convolve_velocity(delta_v, spec, res, central_wavelength):
 # ExoMol/opacity isotopologue string -> easyCHEM chemical-species name.
 _EASYCHEM_MOLECULE = {
     "H2": "H2", "He": "He",
-    # easyCHEM keys by molecule and does not care about the line list, so every
-    # spelling of a species resolves to the same chemical key. Both the plain
-    # name and any isotopologue/opacity form are hardcoded here: e.g. "H2S" and
-    # "1H2-32S__AYT2..." (or "1H2-32S__HITRAN...") all map to "H2S".
+    # EasyChem uses molecule names. Map each supported opacity/isotopologue
+    # spelling to its chemical key: H2S, AYT2 and HITRAN opacity names for this
+    # molecule all map to the EasyChem key "H2S".
     "H2S": "H2S", "H2O": "H2O", "CH4": "CH4", "NH3": "NH3",
     "CO": "CO", "CO2": "CO2", "SO2": "SO2",
     "1H2-32S": "H2S", "1H2-16O": "H2O", "12C-1H4": "CH4",
@@ -423,7 +422,7 @@ _EASYCHEM_MOLECULE = {
 def easychem_molecule(species_name: str) -> str:
     """Map a line-opacity name (e.g. '1H2-32S__AYT2.R1e+06_0.3-28.0mu') to the
     easyCHEM chemical-species key (e.g. 'H2S').  Strips the opacity suffix after
-    '__' or '.', then looks up the isotopologue; plain names pass through."""
+    '__' or '.', then looks up the isotopologue. plain names pass through."""
     base = species_name.split("__")[0].split(".")[0]
     return _EASYCHEM_MOLECULE.get(base, _EASYCHEM_MOLECULE.get(species_name, base))
 
@@ -434,8 +433,8 @@ def call_easyCHEM(inp_dat, metallicity, C_to_O, pressures, t, species,
 
     Parameters
     ----------
-    inp_dat : dict  Simulation input dictionary (unused directly here;
-        kept for backward compatibility).
+    inp_dat : dict
+        Simulation input dictionary, accepted but unused by this function.
     metallicity : float  [M/H] metallicity relative to solar.
     C_to_O : float  Carbon-to-oxygen number ratio.
     pressures : array  Pressure grid in bar.
@@ -532,7 +531,7 @@ def call_pRT(inp_dat, pressures, prt_object, species, vmr, MMW, p0,
     easychem_CtoO_ret : bool
         Use symmetric C/O modification in EasyChem.
     haze_fac : float or None
-        Haze factor (reserved; currently not passed to pRT).
+        Haze factor (reserved, currently not passed to pRT).
 
     Returns
     -------
@@ -543,9 +542,8 @@ def call_pRT(inp_dat, pressures, prt_object, species, vmr, MMW, p0,
     spec_star_conv : array  Convolved stellar spectrum (zeros for transit).
     t : array  Temperature profile used.
     """
-    # The runner calls this for injected atmospheres and for separate search or
-    # retrieval models. The passed settings/species determine which role this
-    # call serves; do not assume all calls represent the same atmosphere.
+    # The runner supplies the settings and species for the injected atmosphere,
+    # search template or retrieval model requested by this call.
     # prt_object owns the loaded opacity tables. This function supplies the
     # temperature/chemistry and requests a spectrum for those conditions.
     from petitRADTRANS import physical_constants as cst
@@ -579,13 +577,11 @@ def call_pRT(inp_dat, pressures, prt_object, species, vmr, MMW, p0,
         return mass_fracs, MMW_tot
 
     if use_easyCHEM:
-        # easyCHEM expects the metallicity in dex (it scales metal abundances
-        # by 10**metallicity), which is exactly what our config's
-        # metallicity_wrt_solar already carries, so it is passed through
-        # unchanged.  Species may be given as full opacity names
-        # (e.g. '1H2-32S__AYT2…'); map them to the easyCHEM chemical keys,
-        # then re-key the returned mass fractions back onto the opacity names
-        # pRT expects.  Plain names (e.g. 'H2O') pass through unchanged.
+        # easyCHEM takes metallicity in dex, as stored in metallicity_wrt_solar.
+        # Convert full opacity names (e.g. '1H2-32S__AYT2…') to chemical
+        # names for easyCHEM, then label its returned fractions with the
+        # opacity names used by pRT. Plain chemical names such as H2O are
+        # valid keys for both steps.
         chem = [easychem_molecule(s) for s in species]
         ec_fracs, MMW_tot = call_easyCHEM(
             inp_dat, metallicity, C_to_O, pressures, t, chem, easychem_CtoO_ret

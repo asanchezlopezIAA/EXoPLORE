@@ -40,12 +40,10 @@ def test_compute_inverse_variance_weighted_ccf_import_and_run():
 
 
 def test_positional_ccf_name_available():
-    """ccf_numba_par_weighted must still be importable (separate from clean API).
+    """Import the two CCF functions with their respective signatures.
 
-    These are two distinct functions with different signatures:
-    - compute_inverse_variance_weighted_ccf: clean 7-arg API
-    - ccf_numba_par_weighted: 10-arg positional API
-    Both must be importable; they are intentionally not the same object.
+    - compute_inverse_variance_weighted_ccf: seven arguments
+    - ccf_numba_par_weighted: ten positional arguments
     """
     assert callable(ccf_numba_par_weighted)
     assert callable(compute_inverse_variance_weighted_ccf)

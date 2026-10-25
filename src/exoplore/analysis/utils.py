@@ -5,11 +5,9 @@ exoplore.analysis.utils
 Miscellaneous helper utilities for analysis workflows.
 """
 
-# Reading this file
-# The cleanup function below actually deletes directory contents. It is
-# not a spectrum-processing operation or a harmless path constructor. Read its
-# caller and target path before using it: existing files are not recoverable
-# through this function.
+# Role in the calculation
+# Delete every file and subdirectory inside the supplied directory. Check the target
+# path before calling remove_all_elements. deletion is permanent.
 
 
 import os, shutil
@@ -18,9 +16,9 @@ def remove_all_elements(folder_path):
     """Recursively delete all files and subdirectories inside a folder.
 
     Iterates over the contents of ``folder_path`` and removes each entry:
-    files and symlinks are deleted with ``os.unlink``; subdirectories are
+    files and symlinks are deleted with ``os.unlink``. subdirectories are
     removed with ``shutil.rmtree``.  The parent folder itself is preserved.
-    Deletion failures are caught and printed rather than raised, so the
+    Deletion failures are caught and printed, so the
     function continues cleaning up remaining entries even if one fails.
 
     Parameters

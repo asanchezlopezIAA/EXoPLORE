@@ -1,10 +1,8 @@
 """exoplore.io, file I/O and output path management."""
 
-# Reading these imports
-# These public names make file/path helpers convenient to import. Look in
-# the implementing module to distinguish reading, writing, name construction
-# and numerical helpers retained under IO. A path returned by a helper does
-# not by itself establish that the file already exists.
+# Public imports
+# Export the path constructors, stellar readers, saving functions and numerical
+# utilities listed below. io.paths creates directories when requested.
 
 
 from exoplore.io.paths import (
@@ -14,7 +12,7 @@ from exoplore.io.paths import (
     plots_dir,
     correlations_dir,
 )
-from exoplore.io.stellar import LoadPhoenix, get_stellar_matrix, spec_to_mat_fraction
+from exoplore.io.stellar import LoadPhoenix, get_stellar_matrix
 from exoplore.io.utils import (
     save_compressed,
     create_directory,
@@ -37,7 +35,6 @@ __all__ = [
     # stellar loaders
     "LoadPhoenix",
     "get_stellar_matrix",
-    "spec_to_mat_fraction",
     # utilities
     "save_compressed",
     "create_directory",

@@ -12,16 +12,16 @@ velocity
     Planet and stellar radial velocities (circular + eccentric orbits).
 airmass
     Synthetic airmass curves for ETC-based simulations.
-noise
+Noise
     Shot-noise and read-noise models, SNR estimation.
 randomness
-    Existing component seed policies; separate from numerical noise amplitudes.
+    Existing component seed policies. separate from numerical noise amplitudes.
 """
 
 # Reading these imports
 # This groups the observing ingredients used by runners: times, motion,
 # airmass and noise. They must refer to the same exposure sequence when combined.
-# The package exports the helpers; the runner determines when and with which
+# The package exports the helpers. The runner determines when and with which
 # arrays each is called.
 
 
@@ -105,7 +105,7 @@ __all__ = [
     "snr_per_pixel",
     "compute_global_exposure_limit",
     "add_throughput",
-    # Stream selection does not change noise amplitudes or the draw routines.
+    # Seed selection and configured throughput draws.
     "throughput_child_seed",
     "apply_configured_throughput",
     "gaussian_noise_seed",

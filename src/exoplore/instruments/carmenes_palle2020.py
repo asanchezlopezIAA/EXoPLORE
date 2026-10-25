@@ -2,15 +2,14 @@
 
 Fibre A supplies the observed science spectrum. Fibre B locates OH emission
 for the masked alternative of Pallé et al. (2020), doi:10.1051/0004-6361/202037719.
-All source files are read-only; all correction products must be new.
+All source files are read-only. All correction products must be new.
 """
 from __future__ import annotations
 
-# Reading this file
-# This is the CARACAL ingestion/telluric-fitting adapter for observed
-# CARMENES helium work. Keep native pixel orientation and matched fibre/exposure
-# membership before correction. The later transmission recipe is a separate
-# stage from reading extracted spectra and fitting tellurics.
+# Role in the calculation
+# Read extracted CARACAL exposures for CARMENES helium analysis and fit their telluric
+# corrections. Preserve native pixel orientation and match fibres by exposure before
+# constructing transmission spectra.
 
 import hashlib
 import json
@@ -26,7 +25,7 @@ from exoplore.pipelines.helium_math import C_KMS
 
 
 def native_array(array):
-    """Accept both recorded CARACAL orientations; return orders by pixels."""
+    """Accept both recorded CARACAL orientations. Return orders by pixels."""
     value = np.asarray(array, float)
     if value.shape == (28, 4080):
         return value.copy()
@@ -73,7 +72,7 @@ def sky_windows(night: dict, order: int, catalogue_nm: list[float], halfwidth_nm
     """Locate resolved sky lines on a median-filtered master B spectrum.
 
     The three-pixel filter suppresses isolated detector spikes for locating
-    emission only; it never changes the fibre A spectrum. Weak sky lines retain
+    emission only. It never changes the fibre A spectrum. Weak sky lines retain
     their catalogue centres. Mask width is an explicit local choice.
     """
     wave = np.median(night['sky_wave_nm'][:,order], axis=0)
@@ -85,7 +84,7 @@ def sky_windows(night: dict, order: int, catalogue_nm: list[float], halfwidth_nm
         if len(indices)<3:
             raise ValueError('Sky-line catalogue lies outside the selected order')
         peak=indices[np.argmax(smooth[indices])]
-        # Follow a resolved peak only; do not shift a weak line to noise.
+        # Follow a resolved peak only. do not shift a weak line to noise.
         baseline=float(np.median(smooth[indices]))
         scatter=max(float(1.4826*np.median(abs(smooth[indices]-baseline))),1e-12)
         measured=float(wave[peak]) if smooth[peak]-baseline>5*scatter else float(centre)
@@ -98,8 +97,8 @@ def fit_exposure(directory: Path, wave, flux, error, header, settings: dict,
     """Fit H2O using explicit fixed or fitted Voigt component widths.
 
     Nagel2023 mode uses a uniform wavelength grid only for model fitting.
-    Component FWHMs scale with wavelength; their relative coefficients remain
-    fixed. The correction is evaluated back on the unchanged native grid.
+    Component FWHMs scale with wavelength. Their relative coefficients remain
+    fixed. Evaluate the correction on the native wavelength grid.
     """
     directory.mkdir(parents=True, exist_ok=False)
     native_wave=np.array(wave,float,copy=True)

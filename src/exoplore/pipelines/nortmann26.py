@@ -7,17 +7,17 @@ Faithful implementation of the CRIRES+ high resolution analysis pipeline of
 CO2 in the atmosphere of GJ 1214 b from high resolution K band spectroscopy",
 A&A, arXiv:2604.15292).
 
-This module provides the Nortmann specific *preparation* primitives; the
+This module provides the Nortmann specific *preparation* primitives. The
 driving branch lives in :mod:`exoplore.pipelines.prepare` (pipeline name
 ``"Nortmann26"``), mirroring the way :mod:`exoplore.pipelines.cheverall26`
 backs the ``"Cheverall26"`` route.  Everything here is additive and gated to
-that route; no other pipeline is affected.
+that route. No other pipeline is affected.
 
 The two methodological pieces implemented here, verbatim from the paper:
 
 1. **Two step common blaze normalisation** (their Sec 3.1).  All A and B
    spectra are treated as one data set.  (i) A *master* spectrum is formed by
-   summing the out of transit spectra; each individual spectrum is divided by
+   summing the out of transit spectra. Each individual spectrum is divided by
    a 2nd order polynomial fit to its ratio to master, with significant
    tellurics (theoretical transmittance < 96 % of continuum) masked *for the
    fit only*, plus NaN/>4 sigma outlier flagging.  (ii) The master itself is
@@ -29,8 +29,8 @@ The two methodological pieces implemented here, verbatim from the paper:
    al. 2020).  After shifting to the stellar rest frame and masking the
    deepest tellurics (< 20 % of continuum), SYSREM is run for N iterations and
    the *normalised uncorrected data are divided by the summed up correction
-   matrices* (rank N reconstruction of the systematics), rather than having
-   the components subtracted.  Uncertainties are divided through by the same
+   matrices* (rank N reconstruction of the systematics). Uncertainties
+   are divided by the same
    model.  The per iteration time basis vectors ``U`` are retained for the
    Gibson 2022 model filtering used in the retrieval (their Appendix A.3).
 
@@ -44,11 +44,10 @@ Tamuz, Mazeh & Zucker 2005, MNRAS 356, 1466 (SYSREM).
 
 from __future__ import annotations
 
-# Reading this file
-# These are the Nortmann-specific preparation/model-filtering operations.
-# The driving branch is in prepare.py; wavelength/telluric inputs can come from
-# the CRIRES preparation adapters. Inspect whether a call acts on observations,
-# a model, or already calculated CCFs before interpreting its output.
+# Role in the calculation
+# Apply the Nortmann preparation and model-filtering operations selected by prepare.py.
+# CRIRES+ preparation supplies the wavelength and telluric inputs for these
+# calculations.
 
 
 from typing import List, Tuple
@@ -82,7 +81,7 @@ def nortmann_telluric_mask(
     telluric_transmittance:
         Theoretical telluric transmittance (1 = transparent), shape
         ``(n_pixels,)`` or ``(n_spectra, n_pixels)``.  A ``Molecfit`` model in
-        practice; any per pixel transmittance works.
+        practice. any per pixel transmittance works.
     threshold:
         Mask a column where the transmittance falls below this fraction of the
         continuum in *any* spectrum.
@@ -90,7 +89,7 @@ def nortmann_telluric_mask(
     Returns
     -------
     mask:
-        Boolean array, shape ``(n_pixels,)``; ``True`` = masked.
+        Boolean array, shape ``(n_pixels,)``. ``True`` = masked.
     """
     t = np.atleast_2d(np.asarray(telluric_transmittance, dtype=float))
     return np.any(t < threshold, axis=0)
@@ -204,7 +203,7 @@ def nortmann_normalise(
         noise_1[i] = unc[i] / trend
 
     # ---- Step (ii): common blaze = 2nd order fit to the master with
-    #      iterative stellar line masking; divide every spectrum by it.
+    #      iterative stellar line masking. Divide every spectrum by it.
     master_n = np.nansum(data_1[without_signal], axis=0)
     master_n /= np.nanmedian(master_n[np.isfinite(master_n)]) or 1.0
     stellar_mask = tell_mask.copy()
@@ -215,7 +214,7 @@ def nortmann_normalise(
         if good.sum() <= deg + 2:
             break
         sd = np.std(resid[good])
-        # Strong NEGATIVE outliers = stellar/telluric line cores; mask them
+        # Strong NEGATIVE outliers = stellar/telluric line cores. Mask them
         # and their immediate neighbours.
         newly = (resid < -outlier_sigma * sd) & np.isfinite(resid)
         if not newly.any():
@@ -237,19 +236,19 @@ def nortmann_column_mask(
     data: np.ndarray,
     max_flagged_per_column: int = 3,
 ) -> Tuple[np.ndarray, np.ndarray]:
-    """Column mask heavily flagged columns; interpolate the rest (Sec 3.1).
+    """Column mask heavily flagged columns. interpolate the rest (Sec 3.1).
 
     A column with more than ``max_flagged_per_column`` flagged pixels is
-    masked entirely; otherwise flagged pixels are linearly interpolated over
+    masked entirely. Otherwise flagged pixels are linearly interpolated over
     in time.
 
     Returns
     -------
     data_out:
-        Data with light flags interpolated (heavy columns left as is; caller
+        Data with light flags interpolated (heavy columns left as is, caller
         applies the column mask).
     column_mask:
-        Boolean array, shape ``(n_pixels,)``; ``True`` = column masked.
+        Boolean array, shape ``(n_pixels,)``. ``True`` = column masked.
     """
     data_out = np.array(data, dtype=float, copy=True)
     n_spectra, n_pixels = data_out.shape
@@ -299,7 +298,7 @@ def nortmann_shift_to_stellar_frame(
     out = np.empty_like(data)
     for i in range(data.shape[0]):
         # A feature at observed wavelength w sits at w*(1 - v/c) in the star
-        # frame; sample the observed spectrum at the wavelengths that map onto
+        # frame. sample the observed spectrum at the wavelengths that map onto
         # the common grid.
         src = wave * (1.0 + v_star[i] / _C_KMS)
         out[i] = np.interp(wave, src, data[i])
@@ -316,26 +315,24 @@ def nortmann_sysrem_division(
     good_pixels: np.ndarray | None = None,
     return_all_iterations: bool = False,
 ) -> dict:
-    """Run SYSREM and correct by DIVISION (Gibson 2020; Nortmann Sec 3.2).
+    """Run SYSREM and correct by DIVISION (Gibson 2020, Nortmann Sec 3.2).
 
     Standard SYSREM finds, at iteration k, a rank 1 systematic component
     ``C_k = a_k (x) c_k`` of the running residual.  The *summed* correction
     after N passes, ``M_N = sum_k C_k``, is the rank N reconstruction of the
-    (quasi static) telluric+stellar systematics ,  which do NOT include the
-    velocity shifting planet signal.  The division convention then sets
+    quasi-static telluric and stellar structure. The division correction is
 
-        R_N = D / M_N           (centred near 1; planet preserved),
+        R_N = D / M_N           (centred near 1).
 
-    instead of the subtractive ``D - M_N``.  Uncertainties are divided through
-    by the same model.  The per iteration time vectors ``U`` (the ``a_k``) are
-    kept for the Gibson 2022 model filter used in the retrieval.
+    Uncertainties are divided by the same model. The per-iteration time
+    vectors ``U`` (the ``a_k``) supply the Gibson 2022 retrieval model filter.
 
     Parameters
     ----------
     data:
         Common blaze normalised, stellar frame flux, shape
-        ``(n_spectra, n_pixels)``; continuum near 1.
-    uncertainties:
+        ``(n_spectra, n_pixels)``. Continuum near 1.
+    Uncertainties:
         Per pixel uncertainties, same shape.
     n_iterations:
         Number of SYSREM components (9 in the paper for GJ 1214 b).
@@ -426,12 +423,11 @@ def nortmann_model_filter(
         M' = (M + 1) / (C + 1) - 1                               (A.3)
 
     where ``Lambda = diag(1/sigma_av)`` (``sigma_av`` = mean uncertainty over
-    wavelength per spectrum) and ``M`` is the normalised model minus 1.  Two
-    deliberate deviations from Gibson et al. (2022), stated in the paper:
-    **no ones column** ``u_0`` is appended to ``U`` (there is no master spectrum
-    division before SYSREM in this analysis), and the correction is applied by
-    **division** (A.3) rather than subtraction (the two differ negligibly, but
-    division is the faithful form for the division convention SYSREM).
+    wavelength per spectrum) and ``M`` is the normalised model minus 1.
+    ``U`` contains the fitted SYSREM time vectors. The analysis omits the
+    master-spectrum division, so ``U`` has no additional constant column
+    ``u_0``. Equation A.3 applies the model correction by division, matching
+    the correction applied to the data.
 
     Parameters
     ----------
@@ -443,7 +439,7 @@ def nortmann_model_filter(
         ``(n_spectra,)`` (``sigma_av``).
     model_dev:
         Normalised model matrix **minus 1** (continuum at 0), shape
-        ``(n_spectra, n_pixels)``; already Doppler shifted to the trial planet
+        ``(n_spectra, n_pixels)``. already Doppler shifted to the trial planet
         velocity per exposure.
     good_pixels:
         Integer indices of unmasked columns.  If ``None``, all are used.
@@ -452,7 +448,7 @@ def nortmann_model_filter(
     -------
     model_filtered:
         Filtered model deviation ``M'`` (continuum at 0), shape
-        ``(n_spectra, n_pixels)``; masked columns left at 0.
+        ``(n_spectra, n_pixels)``. Masked columns left at 0.
     """
     U = np.asarray(U, dtype=float)
     n_spectra = U.shape[0]
@@ -536,7 +532,7 @@ def nortmann_kpv_map(
         stellar rest frame.
     v_grid:
         CCF velocity grid (km/s), shape ``(n_v,)``.
-    phase:
+    Phase:
         Orbital phase per exposure, shape ``(n_spectra,)``.
     in_transit:
         Boolean mask of the fully in transit (t2 to t3) exposures to co add,
@@ -556,7 +552,7 @@ def nortmann_kpv_map(
         Signal to noise map, shape ``(n_kp, n_v)`` (rows = Kp, columns =
         rest velocity ``v_grid``).
     v_grid:
-        The rest velocity grid (returned for convenience; equals the input).
+        The rest velocity grid (returned for convenience, equals the input).
     """
     ccf = np.asarray(ccf, dtype=float)
     v_grid = np.asarray(v_grid, dtype=float)
@@ -597,7 +593,7 @@ def nortmann_in_out_trail(
 
     The CCF is shifted to the planet rest frame at the given ``kp``.  The in
     trail distribution is the CCF values within ``+/- trail_halfwidth_kms`` of
-    ``peak_v`` across the fully in transit exposures; the out of trail
+    ``peak_v`` across the fully in transit exposures. The out of trail
     distribution is the values at ``out_min_kms < |v_rest| < out_max_kms`` over
     the same exposures.  A Welch t test (unequal variances) tests whether the
     two are drawn from the same parent distribution.
@@ -631,7 +627,7 @@ def nortmann_in_out_trail(
     # Two sided Gaussian equivalent (large sample limit of the t statistic).
     from math import erfc, sqrt
     p = erfc(abs(t) / sqrt(2.0))
-    from scipy.special import erfcinv  # local import; engine ships scipy
+    from scipy.special import erfcinv  # local import. engine ships scipy
     sigma = float(sqrt(2.0) * erfcinv(p)) if p > 0 else float("inf")
     return {"t": float(t), "sigma": sigma, "mid_in": float(ma),
             "mid_out": float(mb), "n_in": int(a.size), "n_out": int(b.size)}
@@ -668,7 +664,7 @@ def _self_test() -> None:
     # Moving planet: a FOREST of many weak lines (a realistic molecular
     # template) that Doppler shifts across the transit.  Each line is buried
     # in the noise (sub pixel S/N << 1, so it never trips the outlier flag,
-    # exactly like a real planet); the signal only emerges after co adding
+    # exactly like a real planet). The signal only emerges after co adding
     # many lines and many frames in the CCF.
     phase = np.linspace(-0.03, 0.03, n_spectra)
     intransit = np.abs(phase) < 0.02
@@ -712,7 +708,7 @@ def _self_test() -> None:
     # telluric columns should be small and comparable to elsewhere.
     resid_dev = np.nanstd(r[:, good] - 1.0)
     # Cross correlate the in transit residual with the moving planet template
-    # (mean subtracted, matched filter) along the true track; compare against a
+    # (mean subtracted, matched filter) along the true track. compare against a
     # shuffled phase null.
     def _ccf_at_track(shift_phase):
         acc = 0.0
@@ -746,7 +742,7 @@ def _self_test_filter() -> None:
     annihilates the signal (a regime one avoids by choosing the iteration count
     on injection recovery, their Appendix A.2).  This test therefore uses a
     moving planet + modest iteration count (~20 % removed), where the filter is
-    accurate; the amplitude/correlation degrade smoothly outside it, as
+    accurate. The amplitude/correlation degrade smoothly outside it, as
     documented.
     """
     rng = np.random.default_rng(1)

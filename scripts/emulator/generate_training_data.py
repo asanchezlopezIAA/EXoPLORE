@@ -3,8 +3,8 @@
 Two-pass strategy: generates spectra twice using the same Latin-hypercube
 parameter set (deterministic, fixed seed).  First pass fits IncrementalPCA
 without saving any raw spectra to disk.  Second pass transforms each batch
-to PCA coefficients and saves only those.  Peak disk usage is ~40 MB for
-100k samples instead of ~8 GB for raw spectra.
+to PCA coefficients and saves them. Peak disk usage for 100k samples is
+approximately 40 MB for the coefficients and 8 GB for the raw spectra.
 
 Usage
 -----
@@ -25,10 +25,9 @@ Output
     metadata.json
 """
 
-# Where this script fits
-# This generates physical spectra used to train the experimental emulator.
-# Its sampling, batches and stored coefficients define the training set. It is
-# a model-generation job, not a light plotting-only command.
+# Role in the calculation
+# Calculate atmospheric spectra for the emulator training set. The sampling, batches
+# and saved coefficients specify which models enter that set.
 
 
 import argparse, json, multiprocessing, os, sys, time

@@ -16,11 +16,9 @@ convolve_spectrum_with_kernel
 get_sflimbs
 """
 
-# Reading this file
-# These functions describe broadening and the changing contributions of
-# planetary limbs. Broadening spreads a line over velocities; shifting a whole
-# exposure along an orbital track is a separate observation operation. The
-# runner combines these ingredients, so preserve their order and units.
+# Role in the calculation
+# Calculate velocity broadening and the changing contributions of planetary limbs. The
+# runner combines these profiles with the exposure-dependent orbital velocity.
 
 
 import numpy as np
@@ -150,8 +148,8 @@ def rotation_kernel_Maguire24(
     kernel_morning[x >= 0] = kernel[x >= 0]
     kernel_evening[x < 0] = kernel[x < 0]
 
-    # Normalize using the velocity-grid spacing, not just the number of bins.
-    # The full-mode halves retain their existing shared normalization below;
+    # Normalize the kernel integral using the velocity-grid spacing.
+    # The full-mode halves retain their existing shared normalization below.
     # normalizing each half independently to unity would change their sum.
     dv = np.diff(delta_v)[0]
 
@@ -291,11 +289,11 @@ def get_sflimbs(inp_dat, with_signal, without_signal, phase, syn_jd, mode="gradu
     inp_dat : dict  Simulation input dictionary.
     with_signal : array-like  Indices of in-transit exposures.
     without_signal : array-like  Indices of out-of-transit exposures.
-    phase : array-like  Orbital phase array.
+    Phase : array-like  Orbital phase array.
     syn_jd : array-like  Julian date array.
     mode : str
         ``"gradual"`` (default): smooth cubic transition from morning-dominated
-        ingress to evening-dominated egress; equal mix (0.5/0.5) at full transit.
+        ingress to evening-dominated egress. equal mix (0.5/0.5) at full transit.
         ``"asymmetric"``: as above but morning dominates the first quarter of
         full transit and the transition is completed by mid-transit, calibrated
         for ultra-hot Jupiters (e.g. WASP-76 b) with extreme day-night asymmetry.

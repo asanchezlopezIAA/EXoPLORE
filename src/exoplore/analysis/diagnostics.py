@@ -5,11 +5,9 @@ exoplore.analysis.diagnostics
 Diagnostic and model-comparison plots for high-resolution spectroscopy.
 """
 
-# Reading this file
-# These functions compare already available models, matrices or retrieval
-# products. Some also calculate summaries or generate illustrative examples.
-# Check the function's input/source before treating a figure as a diagnostic of
-# your actual simulation rather than a separate demonstration.
+# Role in the calculation
+# Compare model spectra, spectral matrices and retrieval products, and generate the
+# selected diagnostic or illustrative figure.
 
 
 import numpy as np
@@ -84,7 +82,7 @@ def plot_absolute_differences(inp_dat, matrix, name, stat,
         # Calculate Pearson correlation coefficient and p-value
         pearson_coeff = sc.pearsonr(stat[:, 0][mask], 
                                     np.sum(abs_diff, axis=1)[mask])
-        # Plot absolute differents vs. the S/N of the night
+        # Plot absolute differences against the night's S/N.
         plt.plot(stat[:, 0][mask], np.sum(abs_diff, axis=1)[mask], 'ko',
                  label=f"Pearson coeff & p-value = {np.round(pearson_coeff, 2)}")
         plt.xlabel('S/N', fontsize=17)
@@ -107,7 +105,7 @@ def plot_absolute_differences(inp_dat, matrix, name, stat,
         # Calculate Pearson correlation coefficient and p-value
         pearson_coeff = sc.pearsonr(stat[:, 0][mask], 
                                     np.sum(amp, axis=1)[mask])
-        # Plot absolute differents vs. the S/N of the night
+        # Plot absolute differences against the night's S/N.
         plt.plot(stat[:, 0][mask], np.sum(amp, axis=1)[mask], 'ko',
                  label=f"Pearson coeff & p-value = {np.round(pearson_coeff, 2)}")
         plt.xlabel('S/N', fontsize=17)
@@ -185,7 +183,7 @@ def plot_absolute_differences(inp_dat, matrix, name, stat,
             # Calculate Pearson correlation coefficient and p-value
             pearson_coeff = sc.pearsonr(stat[:, 0][mask], 
                                         abs_diff[:, h][mask])
-            # Plot absolute differents vs. the S/N of the night
+            # Plot absolute differences against the night's S/N.
             plt.plot(stat[:, 0][mask], abs_diff[:, h][mask], 'ko',
                      label=f"Pearson coeff & p-value = {np.round(pearson_coeff, 2)}")
             plt.xlabel('S/N', fontsize=17)
@@ -207,7 +205,7 @@ def plot_absolute_differences(inp_dat, matrix, name, stat,
         
         pearson_coeff = sc.pearsonr(stat[:, 0][mask], 
                                     amp[:, h][mask])
-        # Plot absolute differents vs. the S/N of the night
+        # Plot absolute differences against the night's S/N.
         plt.plot(stat[:, 0][mask], amp[:, h][mask], 'ko',
                  label=f"Pearson coeff & p-value = {np.round(pearson_coeff, 2)}")
         plt.xlabel('S/N', fontsize=17)
@@ -241,7 +239,7 @@ def diff_res_model(inp_dat, matrix_res, model, stats,
     signal relative to the injected model.
 
     Night index 0 is always treated as the reference (noiseless) night and
-    excluded from the comparison; the remaining ``n_nights - 1`` nights are
+    excluded from the comparison. The remaining ``n_nights - 1`` nights are
     compared against ``model``.
 
     Parameters
@@ -251,12 +249,12 @@ def diff_res_model(inp_dat, matrix_res, model, stats,
         ``'instrument'``, ``'Exoplanet_name'``, ``'event'``, and
         ``'Simulation_name'``.
     matrix_res : np.ndarray, shape (n_nights, n_orders, n_spectra, n_pixels)
-        4D residual matrix from the pipeline.  Night index 0 is excluded;
-        the remaining nights are compared to the model.
-    model : np.ndarray, shape (n_orders, n_spectra, n_pixels)
+        4D residual matrix from the pipeline.  Night index 0 is excluded.
+        The remaining nights are compared to the model.
+    Model : np.ndarray, shape (n_orders, n_spectra, n_pixels)
         Reference forward-model template for comparison.
     stats : np.ndarray, shape (n_nights, ...)
-        Per-night statistics array; column 0 is the CCF S/N used for colour
+        Per-night statistics array. column 0 is the CCF S/N used for colour
         coding the scatter plots.
     save_plot : bool
         If True, save figures to disk.
@@ -424,14 +422,14 @@ def plot_difference(wave, spec1, spec2):
     Creates a two-panel figure: the upper panel overlays ``spec1`` and ``spec2``
     as a function of wavelength, and the lower panel shows the signed percentage
     difference ``(spec2 - spec1) / spec1 * 100``.  Useful for visually comparing
-    two model spectra or a model vs. a telluric-corrected observation.
+    two model spectra or a model vs. A telluric-corrected observation.
 
     Parameters
     ----------
     wave : array-like, shape (n_pixels,)
         Wavelength array in any consistent unit (nm, µm, or Å).
     spec1 : array-like, shape (n_pixels,)
-        Reference spectrum (plotted in blue; denominator of the % difference).
+        Reference spectrum (plotted in blue, denominator of the % difference).
     spec2 : array-like, shape (n_pixels,)
         Comparison spectrum (plotted in red).
     """

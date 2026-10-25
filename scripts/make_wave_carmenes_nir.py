@@ -7,7 +7,7 @@ to the clean EXoPLORE format wave_CARMENES_NIR.fits (shape 28 × 4080).
 
 The raw file contains the wavelength solution from 46 exposures of a real
 CARMENES night.  All 46 solutions are essentially identical (thermal/mechanical
-drift is < 1e-5 µm); we take the mean and drop the time dimension.
+drift is < 1e-5 µm). we take the mean and drop the time dimension.
 
 Usage (from repo root, with venv active):
     python scripts/make_wave_carmenes_nir.py \
@@ -15,10 +15,9 @@ Usage (from repo root, with venv active):
         --output src/exoplore/instruments/data/wave_CARMENES_NIR.fits
 """
 
-# Where this script fits
-# This converts an upstream time-dependent CARACAL wavelength array to
-# the reference order/pixel layout. Averaging those wavelength solutions is an
-# explicit preparation choice, separate from processing a planetary spectrum.
+# Role in the calculation
+# Average time-dependent CARACAL wavelength solutions and save the order/pixel grid
+# used as the CARMENES NIR reference.
 
 
 import argparse

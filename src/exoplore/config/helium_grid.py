@@ -1,15 +1,13 @@
 """Explicit inputs for Sunbather temperature–mass-loss grid fitting.
 
 The grid is an opt-in inference stage on an already prepared helium spectrum.
-It does not simulate noise, run molecfit or decide whether a signal is detected.
+The runner uses these settings to select grid models, compare spectra and save fit results.
 """
 from __future__ import annotations
 
-# Reading this file
-# A grid fit starts with a measured, prepared helium spectrum and explores
-# explicit model axes. These settings specify that inference stage, not a new
-# noisy observation. axis_values expands the user's grid description before
-# retrieval/helium_grid.py evaluates its points.
+# Role in the calculation
+# Define the atmospheric axes and input spectrum for a helium grid fit. axis_values
+# expands the configured axes into the values evaluated by retrieval/helium_grid.py.
 
 
 from dataclasses import dataclass

@@ -1,6 +1,6 @@
 """Smoke tests for exoplore.plotting, import and signature checks only.
 
-Plotting functions call matplotlib and open figure windows; we do not
+Plotting functions call matplotlib and open figure windows. we do not
 render pixels in the test suite.  These tests verify:
 
 1. All functions are importable from the public API.
@@ -52,9 +52,9 @@ def test_public_imports():
     assert callable(plot_matrix_difference)
 
 
-def test_detection_shim_imports():
-    """detection.py shim exports the same names as kpvsys."""
-    from exoplore.plotting.detection import (
+def test_detection_plot_imports():
+    """Import detection-map and velocity-profile plots from their module."""
+    from exoplore.plotting.kpvsys import (
         plot_Kp_Vrest,
         plot_1D_CCF,
         plot_combined_KpVrest_1DCCF,

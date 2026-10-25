@@ -1,16 +1,14 @@
 """Molecfit adapter for synthetic CARMENES detector sections.
 
-Use ordinary wavelength/flux/error tables and explicit CAHA metadata; do not
+Use ordinary wavelength/flux/error tables and explicit CAHA metadata. do not
 fabricate CRIRES nods or detector products. Fit each native detector section
 separately, using only the configured helium-order telluric anchors.
 """
 from __future__ import annotations
 
-# Reading this file
-# This is the external-tool bridge for telluric fitting of synthetic
-# CARMENES sections. Fitting sections separately respects detector boundaries.
-# Configured fit gates determine whether a correction is accepted; a failed fit
-# must not be interpreted as a successful unity-transmission atmosphere.
+# Role in the calculation
+# Fit telluric transmission separately in the synthetic CARMENES detector sections. The
+# configured acceptance checks determine which fitted corrections can be used.
 
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -28,7 +26,7 @@ from exoplore.pipelines.helium_math import C_KMS
 
 @dataclass(frozen=True)
 class CarmenesMolecfitConfig(HeliumMolecfitConfig):
-    """Calibrated synthetic LSF; fitting its width is an explicit choice."""
+    """Calibrated synthetic LSF. fitting its width is an explicit choice."""
     fit_gaussian_width: bool
     wavelength_degree: int = 1
     calibrated_resolving_power: float | None = None
@@ -58,7 +56,7 @@ def fit_section(directory, wave, flux, error, settings, science, mjd, berv, rv, 
     n = len(windows)
     fwhm = settings.gaussian_initial_fwhm_pixels
     if settings.calibrated_resolving_power is not None:
-        # A pixel integration is approximated by a box of variance 1/12;
+        # A pixel integration is approximated by a box of variance 1/12.
         # express the known resolving power at this detector's central pixel.
         center = len(wave)//2
         sampling = wave[center]/settings.calibrated_resolving_power/np.gradient(wave)[center]
@@ -80,7 +78,7 @@ def fit_section(directory, wave, flux, error, settings, science, mjd, berv, rv, 
         params = {str(row['parameter']):float(row['value']) for row in fits.getdata(directory/'BEST_FIT_PARAMETERS.fits',1) if np.isfinite(row['value'])}
         model = fits.getdata(directory/'BEST_FIT_MODEL.fits',1)
         # BEST_FIT_MODEL can contain corrupt edge mlambda outside mrange.
-        # Recover the declared low-order correction only from fitted pixels;
+        # Recover the declared low-order correction only from fitted pixels.
         # the accepted flux divisor and wavelength grid still come from calctrans.
         anchored = (model['mrange'] > 0) & np.isfinite(model['mlambda'])
         if np.count_nonzero(anchored) < 10:

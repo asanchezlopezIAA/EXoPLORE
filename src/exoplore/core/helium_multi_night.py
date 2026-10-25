@@ -1,20 +1,17 @@
 """Independent synthetic CARMENES nights and direct helium transmission coadds.
 
-The first implementation repeats the explicitly supplied cadence, BERV and
-atmospheric conditions. Each night has its own Gaussian observation noise,
-molecfit fit and out-of-transit reference. It does not sample uncertainties or
-alter the molecular cross-correlation route. Existing night directories remain
-read-only. The cross-night combination is an arithmetic mean, with propagated
-shared-reference and interpolation covariance conditional on fitted continua
-and telluric parameters.
+Each night uses the supplied cadence, BERV and atmospheric conditions,
+with its own Gaussian noise, molecfit fit and out-of-transit reference.
+Existing night directories are read-only. The cross-night combination is
+an arithmetic mean with propagated shared-reference and interpolation
+covariance, conditional on fitted continua and telluric parameters.
 """
 from __future__ import annotations
 
-# Reading this file
-# This runner coordinates separate synthetic helium nights and then
-# combines their prepared products. Each night retains its own observation noise,
-# telluric fit and reference spectrum. Read the covariance propagation alongside
-# the mean: reusing a reference creates correlations that averaging alone misses.
+# Role in the calculation
+# Simulate and prepare separate helium nights, then combine their products. Each night
+# supplies its noise, telluric correction and reference spectrum. covariance
+# propagation accounts for the shared-reference errors.
 
 
 from dataclasses import asdict, replace
@@ -48,7 +45,7 @@ def _physical_config(config: dict) -> dict:
             choices.pop('reference_running_numbers',None)
             choices.pop('in_transit_running_numbers',None)
     h = result['atmosphere']['helium']
-    # A significance estimator changes reporting, not the saved observations.
+    # Select the significance estimator used when reporting the saved spectra.
     h.pop('allart2023_significance', None)
     if h.get('sysrem_iterations') is None:
         h.pop('sysrem_iterations',None)
@@ -250,7 +247,7 @@ def combine_helium_nights(output: Path, sources: list[Path], science, settings):
 def plot_helium_nights(output, wave, spectra, combined, error, phases,
                       lightcurves, stellar_wave, maps, science, *, significance=None,
                       lightcurve_errors=None, combined_lightcurve_error=None):
-    """Show every night and the combined spectrum/curve; four maps for three nights."""
+    """Show every night and the combined spectrum/curve. four maps for three nights."""
     import matplotlib
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt

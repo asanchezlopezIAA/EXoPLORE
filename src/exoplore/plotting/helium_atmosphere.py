@@ -1,10 +1,8 @@
 """Physical atmosphere diagnostics for Sunbather helium simulations."""
 
-# Reading this file
-# These diagnostics let a researcher inspect the actual solved atmospheric
-# profiles rather than only the observed line. They accompany the optional
-# Sunbather result; their quantities are atmosphere profiles, not detector counts
-# or a measured transmission spectrum.
+# Role in the calculation
+# Plot the atmospheric profiles calculated by Sunbather, including the quantities saved
+# with the solved atmosphere.
 
 from pathlib import Path
 import json
@@ -15,8 +13,8 @@ import numpy as np
 def write_atmosphere_diagnostics(directory: Path, settings, planet, profile: dict) -> None:
     """Save original Parker arrays and Cloudy profiles with labelled figures.
 
-    Files are created exclusively. T0 is a Parker input; Tmax is the maximum
-    over the entire saved Cloudy domain, not a temperature consistency test.
+    Files are created exclusively. T0 is a Parker input. Tmax is the maximum
+    over the entire saved Cloudy domain.
     """
     import matplotlib.pyplot as plt
 

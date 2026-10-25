@@ -1,5 +1,5 @@
 {
-  "_description": "Copy the Sunbather settings below into atmosphere.helium.sunbather in your main simulation JSON. This is a settings fragment, not a complete observing configuration.",
+  "_description": "Copy the Sunbather settings below into atmosphere.helium.sunbather in your main simulation JSON. The simulation JSON supplies the remaining atmosphere and observation settings.",
   "_sunbather_documentation": "https://sunbather.readthedocs.io/en/latest/faq.html#how-do-i-choose-the-composition-of-the-atmosphere",
   "_helium_field_descriptions": {
     "telluric_correction": "Set atmosphere.helium.telluric_correction to molecfit or sysrem (SYSREM can aggressively remove the planetary signal).",

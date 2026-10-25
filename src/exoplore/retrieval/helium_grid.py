@@ -7,11 +7,10 @@ telluric fit is performed. Covariance is conditional on upstream corrections.
 """
 from __future__ import annotations
 
-# Reading this file
-# This inference runner consumes a prepared helium spectrum and evaluates
-# physical atmosphere points while retaining the supplied sampling/covariance
-# context. It does not generate a new noisy observation. Follow native-input
-# replay in _night_prediction when checking how model and data are compared.
+# Role in the calculation
+# Fit a prepared helium spectrum by evaluating atmospheric grid points with its
+# sampling and covariance information. _night_prediction samples each model using the
+# stored observing inputs.
 
 
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -34,7 +33,7 @@ from exoplore.pipelines.helium_noise_propagation import interpolation_operator
 
 
 def _json(path, value):
-    """Create a new provenance or result file; never overwrite a product."""
+    """Create a new provenance or result file. Never overwrite a product."""
     with Path(path).open('x') as stream:
         json.dump(value,stream,indent=2,allow_nan=False)
 
@@ -374,7 +373,7 @@ def _point(task):
                 phases,durations,weights=np.array([0.]),np.array([0.]),np.array([1.])
             else:
                 phases=np.asarray(sampling['phase_midpoints']);durations=np.asarray(sampling['exposure_seconds']);weights=np.asarray(sampling['weights'],float);weights/=weights.sum()
-            # External coadds are already in the planetary frame; retain
+            # External coadds are already in the planetary frame. retain
             # within-exposure orbital smearing, but remove each midpoint RV.
             dense=np.exp(np.linspace(np.log(model.wave_nm[0]),np.log(model.wave_nm[-1]),settings.atmosphere['model_wavelength_points']))
             rows=_model_rows(model,phases,durations,planet.kp_kms,planet.orbital_period_days,settings.resolving_power,settings.exposure_quadrature_points,dense)
@@ -420,7 +419,7 @@ def _point(task):
 
 
 def run_helium_grid(config) -> Path:
-    """Run only the explicitly enabled grid; retain all solver products."""
+    """Run only the explicitly enabled grid. retain all solver products."""
     validate_grid_config(config)
     from importlib.util import find_spec
     missing=[name for name in ('sunbather','p_winds') if find_spec(name) is None]

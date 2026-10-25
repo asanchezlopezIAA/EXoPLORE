@@ -14,11 +14,9 @@ filled-contour map for one molecule.
 
 from __future__ import annotations
 
-# Reading this file
-# The simulation sweep writes one statistic per atmospheric grid point;
-# this reader assembles those points into a figure. The plotted colour is the
-# chosen detection statistic, not a posterior abundance probability or a fresh
-# simulation performed by the plotting function.
+# Role in the calculation
+# Read detection statistics from atmospheric grid points and assemble the detectability
+# figure. The colour scale shows the statistic saved by the simulation sweep.
 
 
 import glob
@@ -95,15 +93,15 @@ def plot_detectability_map(
     data_dir : str
         Directory holding the ``detectability_*.txt`` files for this molecule.
     x_variable, y_variable : str
-        The swept atmosphere variables (for axis labels and log scaling; the
+        The swept atmosphere variables (for axis labels and log scaling, the
         cloud-pressure axis is plotted in log10).
     molecule : str
         Species name, used in the title.
     contour_levels : "auto_last3", sequence of float, or None
         Detection contours to overlay.  ``"auto_last3"`` (default) draws the
         last three multiples of 5 at or below the map maximum, so contours
-        appear even when the whole map is well above 5 sigma; a sequence draws
-        those explicit S/N levels (kept if 0 < level < max); ``None`` draws none.
+        appear even when the whole map is well above 5 sigma. A sequence draws
+        those explicit S/N levels (kept if 0 < level < max). ``None`` draws none.
     truth : (x, y), optional
         Composition to mark with a gold star.
 

@@ -53,7 +53,7 @@ Notes
   in the simulation JSON. Other sky-model defaults are defined in _query_skycalc.
 - The wavelength grid is queried at R = 150 000 (fixed_spectral_resolution)
   before interpolation/convolution onto the selected instrument grid. Wavelength
-  coverage is checked separately; high resolving power cannot supply missing bands.
+  coverage is checked separately. high resolving power cannot supply missing bands.
 - ``vacair = vac``, vacuum wavelengths, consistent with petitRADTRANS output.
 - The observatory code is read from the instrument config
   (e.g. ``lasilla`` for CARMENES, ``paranal`` for CRIRES+, ANDES).
@@ -61,10 +61,10 @@ Notes
 
 from __future__ import annotations
 
-# Where this script fits
-# This prepares telluric input spectra through the SkyCalc service. It is
-# an input-generation step before the simulation reads transmittances, not a
-# fit to the observed planetary signal. Read its observing/PWV choices first.
+# Role in the calculation
+# Download telluric transmission spectra from SkyCalc for the simulation's wavelength
+# range, observatory and water-vapour settings. The simulator reads these files when
+# building the observations.
 
 
 import argparse
@@ -78,8 +78,8 @@ from pathlib import Path
 import numpy as np
 from astropy.io import fits
 
-# Use the same field validation as the simulation JSON, including when this
-# script is run directly from a source checkout rather than an installed wheel.
+# Validate wavelength settings with the configuration class used by the
+# simulator. Add src so the script can also run from a source checkout.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from exoplore.config.models import TelluricConfig
 
@@ -98,7 +98,7 @@ def _query_skycalc(
     """Query ESO SkyCalc REST API for one (airmass, PWV) pair.
 
     Parameters match the Skycalc CLI parameter file exactly.  Returns an
-    open astropy HDUList; caller is responsible for closing it.
+    open astropy HDUList. Caller is responsible for closing it.
     """
     try:
         from skycalc_ipy import SkyCalc
@@ -204,10 +204,10 @@ def _build_airmass(cfg: dict, n_spectra: int = None) -> np.ndarray:
     else:
         t0_bjd = obs.get("specific_T0_bjd", 0.0)
 
-    # n_spectra must match what the simulator builds; the caller (generate())
+    # n_spectra must match what the simulator builds. The caller (generate())
     # already derives it from the event duration, so use that. Only fall back
     # to a config value if not passed. Read the real config keys
-    # (exposure_time_seconds, not the old CARMENES-default _s aliases).
+    # (exposure_time_seconds and readout_time_seconds).
     if n_spectra is None:
         n_spectra = int(obs.get("n_spectra", 45))
     exp_s        = float(obs.get("exposure_time_seconds",
@@ -342,7 +342,7 @@ def _build_airmass_astro(cfg: dict, search_from: str = None,
     # exactly (same formula used at simulator.py lines 388-392).
     try:
         # Use load_planet (full unit handling) so transit_duration_hours is
-        # computed exactly as the simulator does; constructing PlanetParameters
+        # computed exactly as the simulator does. constructing PlanetParameters
         # directly from the raw JSON skips the conversions and yields 0.
         from exoplore.planets import load_planet as _load_planet
         _pp = _load_planet(p_file)
@@ -351,7 +351,7 @@ def _build_airmass_astro(cfg: dict, search_from: str = None,
         dur_h = _transit_duration_hours(p)  # fallback
 
     # Per-night cadence: with exposure_time_seconds_per_night set, each
-    # night has its own DIT and therefore its own number of exposures;
+    # night has its own DIT and therefore its own number of exposures.
     # skip_transits doubles as the night index here.
     _exp_pn = obs_cfg.get("exposure_time_seconds_per_night")
     if _exp_pn and skip_transits is not None and skip_transits < len(_exp_pn):
@@ -491,7 +491,7 @@ def generate(config_path: str, overwrite: bool = False,
         Overwrite existing output files (default: skip existing).
     mode : str
         ``"astro"`` (**default**), real airmass from sky geometry via
-        astroplan.  Finds the next observable transit automatically; no
+        astroplan.  Finds the next observable transit automatically. No
         date input required.  Recommended for all simulations because the
         telluric spectra are generated at the correct per-exposure airmass
         for the actual sky geometry.  Requires ``ra_deg`` and ``dec_deg``
@@ -527,9 +527,8 @@ def generate(config_path: str, overwrite: bool = False,
     paths     = cfg.get("paths",       {})
     inst_cfg  = cfg.get("instrument",  {})
 
-    # The same simulation JSON holds the SkyCalc interval under tellurics.
-    # Keep the old raw-JSON key readable for existing scripts, but do not expose
-    # it as an instrument setting in the current schema or examples.
+    # Read the download interval from tellurics. The instrument key is also
+    # accepted and produces a message directing users to the tellurics field.
     limits = tell.get("skycalc_wavelength_limits_um")
     if limits is None and inst_cfg.get("wavelength_limits_um") is not None:
         import warnings
@@ -616,7 +615,7 @@ def generate(config_path: str, overwrite: bool = False,
     if _specific and os.path.exists(_am_fits):
         # Observed night: the real per-exposure airmass is already known
         # (the simulator itself reads it from airmass_0.fits), so use it
-        # directly rather than recomputing the sky geometry. No astroplan
+        # directly. This branch reads the observing arrays from the input files. No astroplan
         # is needed in this case.
         from astropy.io import fits as _fits_am
         airmass = _fits_am.open(_am_fits)[0].data.astype(float)
@@ -625,7 +624,7 @@ def generate(config_path: str, overwrite: bool = False,
     elif _specific:
         # Observed night but no airmass_0.fits: recover the airmass from the
         # target coordinates and the real BJDs (julian_date_0.fits) via
-        # astroplan, rather than a synthetic model.
+        # astroplan using the target coordinates and observatory location.
         print("\n  Mode: specific_event (no airmass_0.fits; computing airmass "
               "from target + real BJDs via astroplan)")
         airmass = _build_airmass_astro(cfg, search_from,

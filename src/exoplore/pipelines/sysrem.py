@@ -7,15 +7,11 @@ time-series.
 
 SYSREM (Tamuz et al. 2005) iteratively fits and removes the dominant
 linear systematic component from a spectral matrix.  Each iteration
-removes one "mode"; the standard approach is to apply multiple
+removes one "mode". The standard approach is to apply multiple
 iterations in sequence.
 
-This implementation of the ``sysrem`` algorithm provides:
-
-- takes clearly named arguments,
-- is a standalone function (not a class method),
-- returns all intermediate products for diagnostic use, and
-- is tested independently.
+The ``sysrem`` function accepts a spectral matrix and its uncertainties.
+It returns the corrected spectra and intermediate components for diagnostics.
 
 References
 ----------
@@ -24,11 +20,10 @@ Tamuz, Mazeh & Zucker (2005), MNRAS, 356, 1466.
 
 from __future__ import annotations
 
-# Reading this file
-# SYSREM fits/removes weighted time-wavelength components; model-filtering
-# helpers account for that operation when comparing a proposed signal to prepared
-# data. Selection of how many passes to use is a separate decision. Follow the
-# returned components/projector as well as the residual matrix.
+# Role in the calculation
+# Fit and remove uncertainty-weighted time-wavelength components with SYSREM. Model-
+# filtering functions use the fitted components or projector when evaluating a trial
+# signal against the prepared data.
 
 
 from typing import List, Tuple
@@ -140,7 +135,7 @@ def apply_sysrem(
     ----------
     data:
         Spectral matrix, shape ``(n_spectra, n_pixels)``.
-    uncertainties:
+    Uncertainties:
         Per-pixel σ, same shape as ``data``.
     n_iterations:
         Number of SYSREM components to remove.
@@ -154,7 +149,7 @@ def apply_sysrem(
         Residual matrix after ``n_iterations`` components are removed,
         shape ``(n_spectra, n_good_pixels)``.
     corrections:
-        List of length ``n_iterations``; each element is the systematic
+        List of length ``n_iterations``. Each element is the systematic
         component removed in that iteration,
         shape ``(n_spectra, n_good_pixels)``.
     """
@@ -225,7 +220,7 @@ def SYSREM_filtering_projector(inp_dat, n_spectra, propag_noise, U):
         ``"Different_nights"``, ``"n_orders"``, ``"n_nights"``,
         ``"sysrem_its"``.
     n_spectra : int or array-like
-        Number of spectra.  Scalar for single-night; array of length
+        Number of spectra.  Scalar for single-night. array of length
         ``n_nights`` for multi-night.
     propag_noise : ndarray
         Propagated noise, shape
@@ -420,7 +415,7 @@ def get_SYSREM_its_ordbyord(
         Rest-frame velocity grid (km/s).
     with_signal : ndarray
         Indices of in-transit (signal) exposures.
-    phase : ndarray
+    Phase : ndarray
         Orbital phases of all exposures.
     berv : float
         BERV correction (km/s).
@@ -437,7 +432,7 @@ def get_SYSREM_its_ordbyord(
     -------
     sysrem_opt : ndarray, shape (n_orders, n_nights, 2)
         Optimal SYSREM iteration index for each order and night.
-        ``[:, :, 0]`` = index of maximum CCF peak;
+        ``[:, :, 0]`` = index of maximum CCF peak.
         ``[:, :, 1]`` = index of maximum CCF difference (with - without injection).
     """
     from exoplore.observation.velocity import get_V

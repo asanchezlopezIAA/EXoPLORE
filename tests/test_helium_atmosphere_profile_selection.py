@@ -1,4 +1,4 @@
-"""Retained mean-mass iterations must not obscure the final Parker profile."""
+"""Select the final Parker profile from the saved mean-mass iterations."""
 from types import SimpleNamespace
 
 import numpy as np

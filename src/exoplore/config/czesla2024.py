@@ -8,11 +8,10 @@ Exposure membership is computed from observing times and transit geometry.
 """
 from __future__ import annotations
 
-# Reading this file
-# This configuration records the direct-helium recipe's scientific choices.
-# The pipeline derives exposure membership from observation times and geometry.
-# Distinguish those derived indices from options a user supplies in JSON when
-# following reference-spectrum and in-transit selections.
+# Role in the calculation
+# Define the scientific settings for CRIRES+ direct-helium preparation. The pipeline
+# uses observation times and orbital geometry to select the reference and in-transit
+# exposures.
 
 
 from dataclasses import dataclass
@@ -26,7 +25,7 @@ class Czesla2024Config:
 
     ``input_path`` points to a validated per-exposure correction directory.
     Exposure selections are internal timing products, not required JSON inputs.
-    Wavelengths are native topocentric vacuum nm; velocities are km/s.
+    Wavelengths are native topocentric vacuum nm. Velocities are km/s.
     Continuum normalization is an explicit local implementation choice, since
     the paper does not specify a complete normalization recipe.
     """

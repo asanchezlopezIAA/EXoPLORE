@@ -28,7 +28,7 @@ Mode A, ETC-based (recommended for ANDES bands and CRIRES+)
 Mode B, Reference-night, synthetic spectra (recommended for CARMENES)
     A real reference night is used to extract the observing time-line (JD,
     airmass) and the per-pixel SNR from existing observations.  The stellar
-    and planetary spectra are still synthesised with petitRADTRANS; no real
+    and planetary spectra are still synthesised with petitRADTRANS. No real
     science spectra are loaded.  This mode reproduces the exact cadence and
     noise properties of a real observing campaign.
 
@@ -91,17 +91,15 @@ Adding a new instrument
 
 Registration provides the metadata lookup. Also inspect wavelength readers and
 runner branches for assumptions about instrument names, data layouts and noise
-inputs; a genuinely new format can require changes there. Validate a small run
+inputs. A genuinely new format can require changes there. Validate a small run
 before treating a registered instrument as supported end to end.
 """
 
 from __future__ import annotations
 
-# Reading this file
-# InstrumentInfo is the small, fixed record passed from a loader to the
-# runner. It describes resolution and input locations rather than containing
-# the observation calculation. Check wavegrid.py and runner branches as well as
-# registration when adding an instrument with a new data layout.
+# Role in the calculation
+# Define InstrumentInfo, which passes an instrument's resolution and input locations to
+# the runner. wavegrid.py reads the corresponding arrays.
 
 
 from typing import NamedTuple, Optional
