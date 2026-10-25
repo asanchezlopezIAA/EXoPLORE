@@ -16,6 +16,12 @@ Concepts primer.
 
 from __future__ import annotations
 
+# Where this script fits
+# This makes a schematic teaching figure about moving spectral lines.
+# The arrays are illustrative, unlike the numerical products of a real simulator
+# run. Use it to understand the concept, not to validate a measured detection.
+
+
 import argparse
 
 import matplotlib

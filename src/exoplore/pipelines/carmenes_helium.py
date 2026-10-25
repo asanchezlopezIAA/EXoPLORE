@@ -6,6 +6,13 @@ adapter excludes OH emission; this is not a complete CARACAL/sky reduction.
 Reference: https://doi.org/10.1051/0004-6361/202037719
 """
 from __future__ import annotations
+
+# Reading this file
+# This direct-transmission recipe normalizes spectra, forms the stellar
+# reference, then aligns/combines the selected planetary spectra. It is separate
+# from the molecular CCF pipeline. The reference membership and arithmetic
+# averaging choices are part of the calculation and must travel with its inputs.
+
 import numpy as np
 from exoplore.pipelines.czesla2024 import exposure_indices
 from exoplore.pipelines.helium_math import stellar_wavelength, planet_wavelength, window_mask, resample
@@ -62,6 +69,9 @@ def prepare_carmenes_transmission(waves_nm, flux, error, berv_kms, planet_rv_kms
         y, v = gap_resample(sw, row/continuum, (err/continuum)**2, grid)
         rows.append(y); variances.append(v)
     rows, variances = np.asarray(rows), np.asarray(variances)
+    # Use the configured reference exposures to form one common stellar
+    # reference. Every division below reuses it, so its noise is shared across
+    # exposures rather than being a fresh independent error each time.
     master, master_variance = arithmetic_mean(rows[refs], variances[refs])
     ratio = rows/master
     # Conditional reference-fixed errors retained separately for coaddition.
@@ -73,6 +83,9 @@ def prepare_carmenes_transmission(waves_nm, flux, error, berv_kms, planet_rv_kms
         y, v = gap_resample(planet_wavelength(grid, rv), row, var, grid)
         planet.append(y); pvar.append(v)
     planet, pvar = np.asarray(planet), np.asarray(pvar)
+    # Only after planetary alignment do the selected full-transit spectra
+    # enter the coadd. The separate covariance routines account for shared
+    # reference/interpolation effects beyond these conditional diagonal errors.
     coadd, variance = arithmetic_mean(planet[inside], pvar[inside])
     def curve(array, window):
         return np.mean(array[:, window_mask(grid, [window])], axis=1)

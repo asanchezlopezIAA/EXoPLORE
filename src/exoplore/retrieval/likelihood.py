@@ -5,7 +5,7 @@ exoplore.retrieval.likelihood
 Log-likelihood functions for atmospheric retrieval from high-resolution
 spectroscopic time series.
 
-Four log-likelihood formulations are implemented, selected by the
+Three log-likelihood formulations are implemented, selected by the
 ``logL_choice`` parameter:
 
 ``BL19``
@@ -26,6 +26,10 @@ Four log-likelihood formulations are implemented, selected by the
 
 All functions accept arrays of shape ``(n_in_transit, n_good_pixels)``
 and return a scalar log-likelihood value.
+
+These functions evaluate supplied arrays; they do not generate atmospheric
+models or run a sampler. Some runner-specific likelihood closures remain in
+core/simulator.py, so follow the actual caller when reviewing a retrieval.
 
 References
 ----------

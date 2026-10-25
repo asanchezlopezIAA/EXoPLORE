@@ -19,7 +19,8 @@ emcee (MCMC)
 Use :func:`run_emcee` to run affine-invariant MCMC.  Returns the
 ``EnsembleSampler`` object for direct access to the chain and flatchain.
 
-Both functions accept a ``log_posterior`` callable:
+MultiNest receives a log-likelihood and a separate prior transform. emcee
+receives a log-posterior callable that includes the prior, for example:
 
 .. code-block:: python
 
@@ -28,6 +29,9 @@ Both functions accept a ``log_posterior`` callable:
         if not np.isfinite(log_p):
             return -np.inf
         return log_p + compute_log_likelihood(...)
+
+These are public callable adapters. The standard molecular runner still has
+inline sampler setup in Block 9; it does not yet delegate all sampling here.
 
 Examples
 --------
@@ -63,6 +67,9 @@ from typing import Callable, Optional, Sequence
 
 import numpy as np
 
+# Canonical sampler adapters; exoplore.samplers is a compatibility reexport.
+# Keep optional imports inside the corresponding run function so inspecting
+# priors or posterior summaries does not require either sampler installation.
 
 # ---------------------------------------------------------------------------
 # MultiNest

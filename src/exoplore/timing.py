@@ -1,5 +1,5 @@
 """
-exoplore.observation.timing
+exoplore.timing
 ============================
 
 Orbital phase and in-transit timing utilities.
@@ -10,6 +10,11 @@ in days.
 
 from __future__ import annotations
 
+# Reading this file
+# This older top-level timing module still contains its own implementations.
+# The current runner uses observation/timing.py, which also includes event and
+# light-curve helpers. This is not a forwarding shim: follow the import in the
+# caller rather than assuming similarly named functions have been consolidated.
 from typing import Optional, Tuple
 
 import numpy as np

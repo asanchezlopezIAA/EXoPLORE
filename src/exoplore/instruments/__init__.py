@@ -65,6 +65,10 @@ from .wavegrid import (
 # ---------------------------------------------------------------------------
 # Instrument registry, add new instruments here (one line each)
 # ---------------------------------------------------------------------------
+# A dictionary is useful here because instrument names select loader functions.
+# The returned InstrumentInfo describes input locations/resolution; it does not
+# itself generate observations. The runner/wavegrid code consumes that metadata.
+# Registration alone does not remove instrument-specific branches elsewhere.
 _REGISTRY: dict[str, object] = {
     "ANDES_YJHK":   get_instrument_info_YJHK,
     "ANDES_YJH":    get_instrument_info_YJH,

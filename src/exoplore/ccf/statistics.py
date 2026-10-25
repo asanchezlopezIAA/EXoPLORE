@@ -16,6 +16,13 @@ statistical_study
 
 from __future__ import annotations
 
+# Reading this file
+# This module contains Welch-map calculations and night-combination
+# statistics. A CCF value, a map S/N and a Welch-derived value have different
+# definitions. Read the selected branch and the supplied in/out-of-trail samples
+# before comparing numbers or interpreting repeated night combinations.
+
+
 import random
 
 import numpy as np

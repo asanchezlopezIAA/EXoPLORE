@@ -22,6 +22,13 @@ Three observing patterns are supported:
 
 from __future__ import annotations
 
+# Reading this file
+# Airmass and water-vapour inputs describe how observing conditions vary
+# through the exposure sequence. Some functions construct synthetic curves;
+# others write SkyCalc inputs or PWV products. Check which one is called before
+# expecting a returned array versus files or an external-tool launcher.
+
+
 import random
 
 import numpy as np

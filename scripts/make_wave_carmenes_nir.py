@@ -15,6 +15,12 @@ Usage (from repo root, with venv active):
         --output src/exoplore/instruments/data/wave_CARMENES_NIR.fits
 """
 
+# Where this script fits
+# This converts an upstream time-dependent CARACAL wavelength array to
+# the reference order/pixel layout. Averaging those wavelength solutions is an
+# explicit preparation choice, separate from processing a planetary spectrum.
+
+
 import argparse
 import numpy as np
 from astropy.io import fits

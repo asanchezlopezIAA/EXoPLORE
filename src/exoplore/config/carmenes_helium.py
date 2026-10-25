@@ -4,6 +4,13 @@ The inherited fields describe shared transmission geometry, wavelengths and
 exposure selections. Normalization and averaging are implemented separately
 from the Czesla et al. (2024) CRIRES+ recipe.
 """
+
+# Reading this file
+# These settings describe the CARMENES direct-helium preparation branch.
+# They reuse shared geometry/selection fields while keeping that branch's
+# normalization and averaging choices separate from the CRIRES recipe. The
+# configuration states the choices; pipelines/carmenes_helium.py applies them.
+
 from dataclasses import dataclass
 from exoplore.config.czesla2024 import Czesla2024Config
 

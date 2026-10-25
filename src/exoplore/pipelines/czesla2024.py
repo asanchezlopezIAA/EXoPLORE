@@ -10,6 +10,13 @@ choices. This module neither detrends with SYSREM nor declares a detection.
 """
 from __future__ import annotations
 
+# Reading this file
+# This file contains the direct-helium recipe and its observed-data runner.
+# Exposure selections, reference division and frame changes precede the final
+# combined spectrum. Fit/plot helpers here are downstream diagnostics; inspect
+# their inputs rather than assuming every call repeats preparation.
+
+
 from dataclasses import asdict, replace
 import hashlib
 import json

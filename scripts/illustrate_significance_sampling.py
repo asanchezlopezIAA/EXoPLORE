@@ -26,6 +26,12 @@ Running this script
 
 from __future__ import annotations
 
+# Where this script fits
+# This teaching calculation explores how correlated velocity samples
+# affect a significance statistic. Its demonstration concerns statistical
+# sampling; interpreting a real dataset still requires its own validation.
+
+
 import argparse
 
 import matplotlib

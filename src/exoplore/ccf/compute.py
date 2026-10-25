@@ -12,9 +12,12 @@ It handles:
 - Looping over spectral orders and stacking CCF results.
 - Computing the Kp-Vsys map from per-frame CCFs.
 
-Scientific parameters come from a
-:class:`~exoplore.config.CrossCorrelationConfig` object, not from
-hard-coded constants.
+There are two interface families in this file. The descriptive helpers near
+the top accept explicit arrays/parameters. The standard simulator currently
+calls the older ``call_ccf_*``, ``get_shifted_ccf_matrix`` and
+``get_max_CCF_peak`` functions, using settings translated from typed config
+sections into small dictionaries. Similar names do not imply identical
+weighting, frame handling or normalization.
 """
 
 from __future__ import annotations
@@ -109,7 +112,11 @@ def compute_kp_vsys_map(
     """Collapse a CCF time series into a Kp-Vsys detection map.
 
     For each trial Kp, the planetary signal is shifted to the planet rest
-    frame and co-added over all in-transit frames.
+    frame and co-added over the supplied frames. The caller must select any
+    desired in-transit subset before calling this helper.
+
+    This helper is separate from the standard runner's get_shifted_ccf_matrix
+    and get_max_CCF_peak path. It has no BERV argument or map-S/N normalization.
 
     Parameters
     ----------
@@ -358,6 +365,11 @@ def get_shifted_ccf_matrix(inp_dat, with_signal, v_rest, v_erf, kp_range,
     """
     from exoplore.observation.velocity import get_V, get_V_eccentric
 
+    # Keep exposure information until after the orbital alignment. The output
+    # axes (velocity offset, selected exposure, trial Kp) make it possible for
+    # the caller to combine exposures along axis 1 afterward. Input CCF values
+    # are interpolated, not recalculated from spectra in this function.
+
     if not sysrem_opt:
         shape = (len(v_rest), len(with_signal), len(kp_range))
     else:
@@ -398,7 +410,11 @@ def get_shifted_ccf_matrix(inp_dat, with_signal, v_rest, v_erf, kp_range,
 
 def get_max_CCF_peak(inp_dat, ccf_tot, v_rest, kp_range,
                      b=None, stats=None, sysrem_opt=False, CCF_Noise=False):
-    """Find the maximum CCF peak and compute its S/N significance.
+    """Normalize the CCF map using the configured noise region and find its peak.
+
+    The returned S/N is the implemented map statistic, not automatically a
+    calibrated Gaussian false-alarm significance. Normalization choices below
+    include where to exclude signal and which Kp rows supply the noise.
 
     Parameters
     ----------
@@ -429,7 +445,7 @@ def get_max_CCF_peak(inp_dat, ccf_tot, v_rest, kp_range,
     max_sig : float or ndarray
         Maximum significance value.
     max_kp_idx : int or ndarray
-        Index of the Kp row with the maximum.
+        Index on the Kp axis at the maximum.
     max_v_rest : float or ndarray
         Rest-frame velocity at the maximum.
     cc_values_std : ndarray

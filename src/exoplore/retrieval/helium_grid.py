@@ -7,6 +7,13 @@ telluric fit is performed. Covariance is conditional on upstream corrections.
 """
 from __future__ import annotations
 
+# Reading this file
+# This inference runner consumes a prepared helium spectrum and evaluates
+# physical atmosphere points while retaining the supplied sampling/covariance
+# context. It does not generate a new noisy observation. Follow native-input
+# replay in _night_prediction when checking how model and data are compared.
+
+
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import asdict
 import hashlib
@@ -42,6 +49,9 @@ def _read_single_folder(folder: Path, choices: dict) -> dict:
     from exoplore.config.czesla2024 import Czesla2024Config
     from exoplore.config.carmenes_helium import CarmenesHeliumConfig
     from exoplore.pipelines.czesla2024 import read_corrected_night, resample
+    # The combined transmission alone is insufficient for model comparison.
+    # Recover its saved selections/configuration as well, so a proposed model
+    # can be sampled/prepared with the same observing and coaddition context.
     path=folder/'transmission.npz'
     data=_archive(path)
     sources=[path]

@@ -7,17 +7,22 @@ High-level simulation orchestrator.
 :class:`ExoploreSimulator` takes a :class:`~exoplore.config.SimulationConfig`
 and runs the full simulation workflow.
 
-Block status
+Workflow map
 ------------
-- Block 1  Setup & instrument loading        : implemented (clean)
-- Block 2  Event, timing, phase, airmass     : implemented (clean)
-- Block 3  Atmosphere forward model (pRT)    : implemented (clean)
-- Block 4  Stellar model & injection setup   : implemented (clean)
-- Block 5  Tellurics, noise & SYSREM pipeline : implemented (clean)
-- Block 6  CCF computation                   : implemented (clean)
-- Block 7  CCF statistics / Kp-Vsys maps     : implemented (clean)
-- Block 8  Save matrices & CCF products      : implemented (clean)
-- Block 9  Retrieval                         : implemented (clean)
+The numbered blocks below describe the standard molecular-spectroscopy route.
+Helium simulation, observed-data recipes and helium grids dispatch to their
+own runners at the beginning of :meth:`ExoploreSimulator.run`.
+
+1. Resolve inputs, planet parameters, instrument grids and stellar spectrum.
+2. Build exposure times, orbital phases, airmass and time-dependent inputs.
+3–6. For each selected order: atmosphere -> observation -> preparation -> CCF.
+7. Combine CCF information and construct orbital-velocity detection maps.
+8. Save the products selected by the output configuration.
+9. Run atmospheric retrieval when enabled.
+
+Blocks 3–6 share an order loop; they are not four complete passes over the
+dataset. The developer architecture guide in ``docs/architecture.md`` maps
+these stages to their owning packages and explains the compatibility imports.
 """
 
 from __future__ import annotations
@@ -31,10 +36,13 @@ import numpy as np
 
 from exoplore.config.models import SimulationConfig
 from exoplore.io.paths import build_output_tree
-
+from exoplore.results import CCFResult, DetectionMapResult
 
 # ---------------------------------------------------------------------------
-# Module imports
+# Scientific dependencies, grouped by the stage that owns the calculation.
+# This module coordinates them; numerical implementations belong in their
+# domain packages. Keep import order because some packages initialize state
+# at import time.
 # ---------------------------------------------------------------------------
 from exoplore.atmosphere.prt import call_pRT, call_pRT_limbs, convolve
 from exoplore.atmosphere.winds import (
@@ -64,6 +72,7 @@ from exoplore.io.stellar import LoadPhoenix, get_stellar_matrix, spec_to_mat_fra
 from exoplore.io.utils import find_nearest, format_number, save_compressed
 from exoplore.observation.airmass import PWV_handling, get_airmass
 from exoplore.observation.noise import add_throughput
+from exoplore.observation.randomness import apply_configured_throughput, gaussian_noise_seed
 from exoplore.observation.timing import (
     block_parameter,
     dayside_fraction,
@@ -79,7 +88,7 @@ from exoplore.pipelines.sysrem import (
     filter_model_singleorder,
     get_SYSREM_its_ordbyord,
 )
-from exoplore.pipelines.tellurics import Load_Telluric_Transmittances
+from exoplore.pipelines.tellurics import Load_Telluric_Transmittances, validate_telluric_file
 from exoplore.plotting.kpvsys import plot_1D_CCF, plot_Kp_Vrest
 from exoplore.plotting.matrices import CCF_matrix_ERF
 from exoplore.analysis.stats import statistical_study, plot_stats
@@ -89,18 +98,13 @@ from exoplore.analysis.stats import statistical_study, plot_stats
 # ---------------------------------------------------------------------------
 
 def _apply_throughput(flux, observation, order_index, night_index):
-    """Apply throughput with stable order/night streams, or leave flux intact."""
-    if observation.noiseless or not observation.add_throughput_variations:
-        return np.copy(flux)
-
-    seed = None
-    if observation.throughput_seed is not None:
-        # Physical order IDs keep streams stable under selection/reordering.
-        # The final tag separates this from a Gaussian RNG with the base seed.
-        seed = int(np.random.SeedSequence([
-            observation.throughput_seed, int(order_index), int(night_index), 1,
-        ]).generate_state(1)[0])
-    return add_throughput(F=flux, jitter_frac=0.02, seed=seed)
+    """Compatibility wrapper; observation.randomness owns the stream policy."""
+    # Forward this module's binding explicitly: existing tests/instrumentation
+    # patch add_throughput here. The numerical routine and 2% scale are unchanged.
+    return apply_configured_throughput(
+        flux, observation, order_index, night_index,
+        throughput_function=add_throughput,
+    )
 
 
 def _format_number(x: float) -> str:
@@ -293,6 +297,9 @@ class ExoploreSimulator:
 
     def __init__(self, config: SimulationConfig) -> None:
         self.config = config
+        # Publish access only after a successful standard run. Keep its context
+        # separate from a config the caller might edit for the next experiment.
+        self._completed_run = None
         self._validate()
 
     # ------------------------------------------------------------------
@@ -387,6 +394,65 @@ class ExoploreSimulator:
         )
 
     # ------------------------------------------------------------------
+    # Public access to existing results (no scientific recalculation)
+    # ------------------------------------------------------------------
+
+    def get_combined_ccf(self, *, night_index: int | None = None, copy: bool = True) -> CCFResult:
+        """Return a named CCFResult after a successful standard run.
+
+        Arrays retain axes (Earth-frame velocity, exposure). By default they
+        are detached copies; copy=False returns read-only views. Different
+        observing sequences require a night_index; shared-geometry nights have
+        already been coadded. Injection/iteration cubes require separate
+        selection and are not silently collapsed by this accessor.
+        """
+        from exoplore.io.results import _combined_ccf_from_state
+        state, orders, metadata = self._completed_result_context()
+        return _combined_ccf_from_state(
+            state, orders, metadata, night_index=night_index, copy=copy,
+        )
+
+    def get_detection_map(self, *, metric: str = "snr", night_index: int | None = None) -> DetectionMapResult:
+        """Load the explicitly saved S/N or Welch map as DetectionMapResult.
+
+        The file is authoritative: the old in-memory ccf_tot_sig field can
+        hold Welch values after an all-metrics run. Missing products raise an
+        error rather than substituting another statistic or recomputing it.
+        """
+        from exoplore.io.results import load_detection_map
+        if metric not in ("snr", "welch"):
+            raise ValueError("Detection-map metric must be 'snr' or 'welch'.")
+        state, _, metadata = self._completed_result_context()
+        # A reused output directory may contain maps from an older experiment.
+        # If this run did not calculate CCFs, those files are not its results.
+        if state.get("ccf_complete") is None:
+            raise RuntimeError("This run has no CCF products; an older saved map cannot be returned as its result.")
+        suffix = ""
+        if night_index is not None:
+            if (isinstance(night_index, bool)
+                    or not isinstance(night_index, (int, np.integer))
+                    or not 0 <= night_index < metadata["n_nights"]):
+                raise ValueError("night_index is outside the available nights.")
+            suffix = f"_night{night_index}"
+        stem = "ccf_tot_sn_map" if metric == "snr" else "ccf_tot_welch_map"
+        path = Path(state["dirs"]["matrices"]) / f"{stem}_{state['sim_name']}{suffix}.npz"
+        if not path.is_file():
+            raise FileNotFoundError(
+                f"No saved {metric} map at {path}. This route/metric/night may "
+                "not produce that archive; no replacement calculation was run."
+            )
+        return load_detection_map(path, metric=metric)
+
+    def _completed_result_context(self):
+        """Keep the old runner's dictionary layout behind one private boundary."""
+        if self._completed_run is None:
+            raise RuntimeError(
+                "No successful standard run is available. Run the simulator first; "
+                "helium workflows do not yet expose these result accessors."
+            )
+        return self._completed_run
+
+    # ------------------------------------------------------------------
     # Output paths
     # ------------------------------------------------------------------
 
@@ -401,31 +467,34 @@ class ExoploreSimulator:
         return build_output_tree(self.config, simulation_name, create=create)
 
     # ------------------------------------------------------------------
-    # run(), Block 1: Setup, directories, instrument loading
+    # run(): route dispatch and complete standard molecular workflow
     # ------------------------------------------------------------------
 
     def run(self) -> None:
         """Run the full simulation.
 
-        Currently implements Block 1 (setup and instrument loading).
-        Subsequent blocks will be added incrementally.
+        Dispatch to the configured spectroscopy route. The standard route
+        performs setup, per-order simulation/preparation, cross-correlation,
+        detection analysis and optional retrieval, as configured.
 
-        Block 1 covers:
-          - Build the simulation name
-          - Create all output directories
-          - Load planet parameters
-          - Call Load_Instrumental_Info → resolve, file paths, gaps
-          - Load wavelength grid (get_WaveGrid)
-          - Optionally average SNR over time (Use_Mean_SNR)
-          - Load PHOENIX stellar spectrum (LoadPhoenix)
+        Returns ``None``; persistent products are written under the configured
+        output tree. ``_state`` is an internal working store, not a stable
+        public result format. Output save flags control persistence rather
+        than defining separate public execution stages.
         """
 
         # ----------------------------------------------------------------
         # Block 1a, setup, simulation name, output directories
         # ----------------------------------------------------------------
         import time as _time
+        # If this attempt fails, readers must not accidentally return a previous
+        # run's products. This changes result availability, not the calculation.
+        self._completed_run = None
         cfg = self.config
         from exoplore.core.spectroscopy_mode import spectroscopy_route
+        # Select one complete workflow before loading molecular inputs. A
+        # helium grid or observed-data recipe must not accidentally run the
+        # standard synthetic molecular workflow as well.
         route = spectroscopy_route(cfg)
         if route=='helium_grid':
             from exoplore.retrieval.helium_grid import run_helium_grid
@@ -518,6 +587,25 @@ class ExoploreSimulator:
         _wg = get_WaveGrid_v2(cfg, inst, n_orders_total)
         _wg = _wg + (None,) * (7 - len(_wg))   # normalise to 7-tuple
         wave_star, n_pixels, sig_og, snr_og, JD_og, airmass_og, wave_mid_og = _wg
+
+        # Validate the reference against SELECTED orders before loading a star
+        # or calculating atmospheric spectra. Observed data do not consume
+        # synthetic tellurics unless a telluric CCF template is explicitly used.
+        if ((cfg.tellurics.include_tellurics
+             and not cfg.observation.use_real_data
+             and not cfg.tellurics.use_full_skycalc)
+                or cfg.cross_correlation.ccf_template_source == "telluric"):
+            _reference_path = (
+                cfg.tellurics.reference_telluric_file
+                or (f"{cfg.paths.inputs_dir}tellurics/"
+                    f"tell_ref_airmass_{cfg.tellurics.reference_airmass:.1f}.fits")
+            )
+            # CARMENES readers return (pixel, order) until Block 2 transposes
+            # them. Other standard readers return (order, pixel) at this stage.
+            _selected_wave = (wave_star[:, _order_sel_b1]
+                              if cfg.instrument.name in ("CARMENES_NIR", "CARMENES_VIS")
+                              else wave_star[_order_sel_b1, :])
+            validate_telluric_file(_reference_path, _selected_wave)
 
         # Average SNR over time if requested (non-ANDES instruments)
         _is_andes_any = cfg.instrument.name.startswith("ANDES")
@@ -1134,7 +1222,10 @@ class ExoploreSimulator:
             "Period":     planet.orbital_period_days,
         }
 
-        # Diagnostic: assert mini-dicts match inp_dat for every key
+        # _mini_* dictionaries adapt named config fields to older routines
+        # expecting inp_dat keys. They are not independent scientific configs:
+        # each value above comes from the current experiment or derived geometry.
+        # Keep translations visible when following a setting into a legacy call.
 
         # Limb scaling factors are computed once (h==0) and reused each order
         _sf_morning  = None
@@ -1205,7 +1296,6 @@ class ExoploreSimulator:
         # Accumulate fully-masked orders across the whole run so we can
         # report them all at once rather than stopping at the first one.
         _fully_masked_orders: list = []
-        _tel_coverage_checked = False  # run wavelength-coverage check once
 
         # Per-frame wavelength solution (solution-only secondary wavecal):
         # the flux is native (never resampled); the MODEL is interpolated onto
@@ -1235,6 +1325,10 @@ class ExoploreSimulator:
                 print("  [Nortmann26] molecfit telluric model loaded "
                       "(96% normalisation mask + 20% deep mask).")
 
+        # Follow one selected wavelength order through atmosphere -> observed
+        # time series -> preparation -> CCF before advancing to the next order.
+        # h indexes our selected list; order_selection[h] is the instrument ID.
+        # b in the inner observation loop indexes nights, not spectral orders.
         for h in range(n_orders):
             # ----------------------------------------------------------
             # 3c, per-order wavelength and SNR setup
@@ -1297,6 +1391,9 @@ class ExoploreSimulator:
             # ----------------------------------------------------------
             # 3d, atmospheric forward model
             # ----------------------------------------------------------
+            # This is the injected planet, described by atmosphere.planet_model
+            # or its limb regions. The search template is built separately;
+            # its composition need not match this simulated atmospheric truth.
             if cfg.observation.simulate_planet:
 
                 if not cfg.atmosphere.limb_asymmetries:
@@ -1551,6 +1648,9 @@ class ExoploreSimulator:
                 _order_result["ingress_idx"] = _ingress_idx
                 _order_result["egress_idx"]  = _egress_idx
 
+            # The list keeps this dictionary object, not a copy. Blocks 4–6
+            # attach observation/preparation/CCF products to that same object;
+            # Block 7 later reads the completed per-order entries to combine them.
             per_order_results.append(_order_result)
 
             # Mini-dict for spec_to_mat_fraction (6 keys only)
@@ -1814,46 +1914,6 @@ class ExoploreSimulator:
             tell_ref   = None
             tell_trans = None
 
-            # One-time check: does the telluric reference file cover
-            # the instrument wavelength range?
-            if (cfg.tellurics.include_tellurics
-                    and not cfg.tellurics.use_full_skycalc
-                    and not _tel_coverage_checked
-                    and _tell_ref_file):
-                _tel_coverage_checked = True
-                try:
-                    from astropy.io import fits as _fits_telcheck
-                    with _fits_telcheck.open(_tell_ref_file) as _th:
-                        _tel_lam = _th[1].data['lam'] * 1e-3  # nm → µm
-                    _inst_min = float(wave_star.min())
-                    _inst_max = float(wave_star.max())
-                    _tel_min  = float(_tel_lam.min())
-                    _tel_max  = float(_tel_lam.max())
-                    _overlap  = min(_inst_max, _tel_max) - max(_inst_min, _tel_min)
-                    if _overlap <= 0:
-                        print(
-                            f"\n  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
-                            f"  WARNING: telluric reference file covers\n"
-                            f"    {_tel_min:.3f} to {_tel_max:.3f} µm\n"
-                            f"  but the instrument covers\n"
-                            f"    {_inst_min:.3f} to {_inst_max:.3f} µm.\n"
-                            f"  There is NO wavelength overlap, all orders will\n"
-                            f"  likely be fully masked. Generate a telluric reference\n"
-                            f"  covering the instrument range:\n"
-                            f"    python scripts/generate_skycalc_inputs.py \\\n"
-                            f"        <your_config.json> --ref-only --mode synthetic\n"
-                            f"  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
-                        )
-                    elif _overlap < 0.5 * (_inst_max - _inst_min):
-                        print(
-                            f"\n  WARNING: telluric reference file covers "
-                            f"{_tel_min:.3f} to {_tel_max:.3f} µm but instrument "
-                            f"covers {_inst_min:.3f} to {_inst_max:.3f} µm, "
-                            f"partial overlap only. Some orders may be fully masked.\n"
-                        )
-                except Exception:
-                    pass  # non-fatal; do not interrupt the run
-
             if cfg.tellurics.include_tellurics and not cfg.observation.use_real_data:
                 # Real-data analysis substitutes the observed matrices before the
                 # preparing pipeline, so simulated telluric transmittances are
@@ -2010,6 +2070,9 @@ class ExoploreSimulator:
 
             # ----------------------------------------------------------
             # Block 5b, CCF template spectrum
+            # Build the spectrum we will search for, using ccf_template settings
+            # (or the configured alternative source). It is separate from the
+            # injected atmosphere above unless cc_with_true_model requests reuse.
             # ----------------------------------------------------------
             if cfg.cross_correlation.ccf_template_source == "telluric":
                 # Telluric-template CCF: use the Earth-transmittance
@@ -2226,16 +2289,15 @@ class ExoploreSimulator:
                     _std_noise_b5[b, :] = sig
 
                 # 5d.4, telluric scaling of noise + Gaussian noise draw
-                _nseed = cfg.noise.noise_seed if _nn == 1 else None
-                # Cheverall26 statistics route: make the multi-night noise
-                # realisations exactly reproducible from the (tiny) base seed
-                # while staying independent across orders (h) and nights (b).
-                # Gated to Cheverall26 so every other pipeline keeps its
-                # default behaviour (per-night seed=None when n_nights>1).
-                if (cfg.pipeline.name == "Cheverall26" and _nn != 1
-                        and cfg.noise.noise_seed is not None):
-                    _nseed = (int(cfg.noise.noise_seed) * 1_000_003
-                              + h * 10_007 + b)
+                # Seed selection belongs to the observation layer; the draw and
+                # uncertainty scaling below stay in their original order.
+                # h is deliberately a loop position here (legacy Gaussian
+                # policy), whereas throughput above uses order_selection[h].
+                _nseed = gaussian_noise_seed(
+                    cfg.noise.noise_seed, n_nights=_nn,
+                    pipeline_name=cfg.pipeline.name,
+                    selected_order_position=h, night_index=b,
+                )
                 if not _nl and not _dn:
                     if (cfg.tellurics.include_tellurics
                             and np.ndim(snr) == 1
@@ -2555,7 +2617,11 @@ class ExoploreSimulator:
                             _propag_noise_b5[b, :] = np.nan
                     continue
 
-                # Call preparing_pipeline
+                # Prepare data and propagate their uncertainties together, using
+                # this order/night's already selected columns. _sl excludes only
+                # exposure-storage padding when nights have different lengths.
+                # The dispatcher returns residuals, uncertainties, masks and
+                # detrending information needed later by CCFs and retrieval.
                 _sl = slice(None, n_spectra) if _dn else slice(None)
                 _pp_result = preparing_pipeline(
                     _mini_pp, _mat_noise_b5[b, _sl],
@@ -3719,6 +3785,9 @@ class ExoploreSimulator:
                     print(f"  [Cheverall26] timing map skipped: {_e}")
 
             # 7e, get_shifted_ccf_matrix (Kp-grid shift)
+            # CCFs are still exposure-by-exposure in the Earth velocity frame.
+            # Sample each exposure along trial orbital tracks before summing
+            # exposures. Summing first would discard the planet's changing RV.
             if not _dn:
                 ccf_values_shift = get_shifted_ccf_matrix(
                     _mini_b7, with_signal, v_rest, _v_ccf, _kp_range,
@@ -4584,6 +4653,11 @@ class ExoploreSimulator:
         parameters = _RET_PARAM_LABELS_B9.get(_ret_dim, ["param"])
         n_params = len(parameters)
 
+        # Detection above searches template similarity in velocity space.
+        # Retrieval below evaluates atmospheric/orbital parameter proposals
+        # against the prepared data, using the selected likelihood and priors.
+        # The enable flag gates expensive sampling; setup labels above it are
+        # also constructed when sampling is disabled.
         if cfg.retrieval.enabled:
             import copy as _copy_b9
             import json as _json_b9
@@ -7112,4 +7186,19 @@ class ExoploreSimulator:
                 print(f"  [timing] Report saved: {_doc_path}")
             except Exception as _te:
                 print(f"  [timing] Could not save report: {_te}")
+        # Capture provenance only after success. Do not construct/validate result
+        # containers here: unsupported optional array layouts must not turn an
+        # otherwise successful scientific run into a failure. Access is lazy.
+        self._completed_run = (
+            self._state, tuple(int(i) for i in order_selection),
+            {
+                "systemic_velocity_kms": float(planet.systemic_velocity_kms),
+                "significant_eccentricity": cfg.observation.significant_eccentricity,
+                "different_nights": cfg.observation.different_nights,
+                "n_nights": cfg.observation.n_nights,
+                "gaussian_noise_seed": cfg.noise.noise_seed,
+                "throughput_base_seed": cfg.observation.throughput_seed,
+                "snr_exclude_kms": cfg.cross_correlation.snr_exclude_kms,
+            },
+        )
         print("\n  === run() complete ===\n")

@@ -24,6 +24,12 @@ Usage
 
 from __future__ import annotations
 
+# Where this script fits
+# This plots statistics saved over repeated realizations. Identify which
+# metric and realization table are supplied before interpreting the cloud of
+# points; displaying the table does not generate another noise ensemble.
+
+
 import argparse
 import glob
 

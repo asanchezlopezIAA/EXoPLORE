@@ -9,6 +9,13 @@ not perform the paper's separate bootstrap analysis or add observation noise.
 """
 from __future__ import annotations
 
+# Reading this file
+# This measures a configured helium band relative to continuum-noise
+# behaviour. The bandwidth, continuum selections and binning are part of that
+# statistic. It is a separate calculation from the molecular CCF-map S/N and
+# from a statistical bootstrap experiment.
+
+
 from dataclasses import dataclass, asdict
 import numpy as np
 

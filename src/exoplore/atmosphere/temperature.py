@@ -28,6 +28,13 @@ Examples
 
 from __future__ import annotations
 
+# Reading this file
+# The atmosphere solver needs one temperature for each pressure level.
+# This file supplies the selected temperature profile; chemistry and radiative
+# transfer consume it afterward. Several older entry points remain, so follow
+# the actual caller rather than substituting a similarly named profile helper.
+
+
 import numpy as np
 
 

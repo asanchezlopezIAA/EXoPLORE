@@ -24,6 +24,12 @@ Units expected here:
     Temperatures : K
 """
 
+# Where this script fits
+# This writes a planetary-system input JSON after calculating derived
+# quantities from the user-input section. Check those physical inputs and units
+# before executing; the later simulator reads the resulting system description.
+
+
 import json
 import math
 import os

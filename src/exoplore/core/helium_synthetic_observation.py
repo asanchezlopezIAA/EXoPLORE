@@ -5,6 +5,13 @@ No nod subtraction, airglow emission, or wavelength error is fabricated.
 """
 from __future__ import annotations
 
+# Reading this file
+# This adapter packages synthetic extracted spectra for the existing
+# observed-spectrum molecfit path. It connects simulated exposure times/flux to
+# external telluric fitting. These are extracted spectral inputs, not fabricated
+# raw detector frames or a replacement for upstream raw-data reduction.
+
+
 from dataclasses import replace
 from concurrent.futures import ThreadPoolExecutor
 import hashlib

@@ -16,6 +16,13 @@ format_number
 
 from __future__ import annotations
 
+# Reading this file
+# These are shared file/array helpers, including saving and numerical
+# summaries. Check whether a particular helper writes files or samples/bootstrap
+# indices before calling it during inspection. Formatting and serialization
+# should not be confused with the scientific operation that produced an array.
+
+
 import os
 
 import numpy as np

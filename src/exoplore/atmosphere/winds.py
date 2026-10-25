@@ -16,6 +16,13 @@ convolve_spectrum_with_kernel
 get_sflimbs
 """
 
+# Reading this file
+# These functions describe broadening and the changing contributions of
+# planetary limbs. Broadening spreads a line over velocities; shifting a whole
+# exposure along an orbital track is a separate observation operation. The
+# runner combines these ingredients, so preserve their order and units.
+
+
 import numpy as np
 from scipy.interpolate import interp1d
 from petitRADTRANS import physical_constants as cst
@@ -143,6 +150,9 @@ def rotation_kernel_Maguire24(
     kernel_morning[x >= 0] = kernel[x >= 0]
     kernel_evening[x < 0] = kernel[x < 0]
 
+    # Normalize using the velocity-grid spacing, not just the number of bins.
+    # The full-mode halves retain their existing shared normalization below;
+    # normalizing each half independently to unity would change their sum.
     dv = np.diff(delta_v)[0]
 
     if mode == 'morning':

@@ -14,7 +14,16 @@ airmass
     Synthetic airmass curves for ETC-based simulations.
 noise
     Shot-noise and read-noise models, SNR estimation.
+randomness
+    Existing component seed policies; separate from numerical noise amplitudes.
 """
+
+# Reading these imports
+# This groups the observing ingredients used by runners: times, motion,
+# airmass and noise. They must refer to the same exposure sequence when combined.
+# The package exports the helpers; the runner determines when and with which
+# arrays each is called.
+
 
 from exoplore.observation.timing import (
     orbital_phase,
@@ -55,6 +64,11 @@ from exoplore.observation.noise import (
     compute_global_exposure_limit,
     add_throughput,
 )
+from exoplore.observation.randomness import (
+    throughput_child_seed,
+    apply_configured_throughput,
+    gaussian_noise_seed,
+)
 
 __all__ = [
     # timing (clean API)
@@ -91,4 +105,8 @@ __all__ = [
     "snr_per_pixel",
     "compute_global_exposure_limit",
     "add_throughput",
+    # Stream selection does not change noise amplitudes or the draw routines.
+    "throughput_child_seed",
+    "apply_configured_throughput",
+    "gaussian_noise_seed",
 ]

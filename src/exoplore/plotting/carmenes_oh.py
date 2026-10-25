@@ -5,6 +5,12 @@ Input correction products are read-only and the figure output must be new.
 """
 from __future__ import annotations
 
+# Reading this file
+# These plots explain the saved sky correction and its A/B calibration.
+# They consume correction products rather than refitting the atmosphere or
+# re-estimating a sky transfer factor as part of displaying a figure.
+
+
 import json
 from pathlib import Path
 

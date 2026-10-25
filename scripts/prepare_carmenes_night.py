@@ -45,6 +45,12 @@ Notes
   1e-7 are replaced with 800 (flagged as unreliable).
 """
 
+# Where this script fits
+# This converts extracted CARACAL observations into the reference-night
+# arrays consumed by the instrument loader. Keep exposure order and matching
+# wavelength/flux/error arrays together. Raw detector reduction is upstream.
+
+
 import argparse
 import glob
 import os

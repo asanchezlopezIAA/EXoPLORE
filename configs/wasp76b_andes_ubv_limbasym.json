@@ -326,6 +326,7 @@
     }
   },
   "tellurics": {
+    "skycalc_wavelength_limits_um": [0.34, 0.65],
     "include_tellurics": true,
     "use_full_skycalc": false,
     "use_accurate_airmass": false,

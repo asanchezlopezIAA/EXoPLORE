@@ -29,6 +29,12 @@ inp_dat conversion
 149.4...
 """
 
+# Reading these imports
+# Use load_planet to obtain the system-parameter object consumed by the
+# runner. Configuration selects the observation/analysis separately; the planet
+# object records the physical system and derived quantities used across stages.
+
+
 from exoplore.planets.models import PlanetParameters
 from exoplore.planets.catalog import load_planet
 

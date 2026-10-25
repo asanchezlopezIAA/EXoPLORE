@@ -21,6 +21,13 @@ Blain et al. 2024 (Blain24), improved CCF weighting scheme
 
 from __future__ import annotations
 
+# Reading this file
+# These are numerical inner loops: wrappers in compute.py choose inputs
+# and allocate results before entering them. At every boundary check exposure,
+# pixel and velocity axes plus the weighting choice. Numba acceleration changes
+# execution mechanics; it is not a reason to change normalization or arithmetic.
+
+
 import numpy as np
 
 try:

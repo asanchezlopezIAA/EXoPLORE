@@ -65,6 +65,13 @@ Reiners et al. 2018, A&A, CARMENES instrument paper
 
 from __future__ import annotations
 
+# Reading this file
+# This loader selects NIR input locations for the requested observing mode.
+# get_WaveGrid reads the arrays afterward. A user grid can take precedence over
+# the bundled reference; a fixed S/N can bypass an S/N file. Those choices must
+# be distinguished from generating or preparing the spectral time series.
+
+
 import os as _os
 from .base import InstrumentInfo
 

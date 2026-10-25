@@ -5,6 +5,13 @@ noise, reconstruct a blaze profile, or change the selected instrument orders.
 """
 from __future__ import annotations
 
+# Reading this file
+# The detector simulation needs noise amplitudes at actual pixels and a
+# selection covering the helium feature. These helpers check/convert those
+# inputs; drawing noise and generating an atmosphere happen elsewhere. A stated
+# S/N must be interpreted with its pixel/exposure convention.
+
+
 import warnings
 import numpy as np
 

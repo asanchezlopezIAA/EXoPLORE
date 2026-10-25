@@ -40,6 +40,13 @@ Brogi, M. et al. (2023), AJ, 165, 91, edge trimming convention.
 
 from __future__ import annotations
 
+# Reading this file
+# This file provides the individual preparation operations and timing
+# checks used by the Cheverall26 branch. The dispatcher/runner determines their
+# sequence and which data enter them. Normalization, outlier removal and a
+# signal-duration diagnostic are different tasks despite sharing this module.
+
+
 import numpy as np
 
 

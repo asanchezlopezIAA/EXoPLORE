@@ -33,6 +33,12 @@ Run::
 where step is one of {dark, flat, wave, nod, all} and <raw_dir> holds the raw
 FITS frames.  Products are written under <raw_dir>/../ in calib/ and reduced/.
 """
+
+# Where this script fits
+# This launches upstream ESO cr2res reduction of raw exposures and their
+# calibrations. Its extracted spectra are inputs to prepare_crires_night.py.
+# It is a different stage from later atmospheric preparation/cross-correlation.
+
 import argparse
 import glob
 import os

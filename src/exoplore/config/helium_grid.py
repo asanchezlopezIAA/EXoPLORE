@@ -5,6 +5,13 @@ It does not simulate noise, run molecfit or decide whether a signal is detected.
 """
 from __future__ import annotations
 
+# Reading this file
+# A grid fit starts with a measured, prepared helium spectrum and explores
+# explicit model axes. These settings specify that inference stage, not a new
+# noisy observation. axis_values expands the user's grid description before
+# retrieval/helium_grid.py evaluates its points.
+
+
 from dataclasses import dataclass
 import math
 

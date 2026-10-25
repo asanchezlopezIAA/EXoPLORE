@@ -57,6 +57,9 @@ def simulation_output_dir(cfg: SimulationConfig, simulation_name: str) -> Path:
     pathlib.Path
         Path to ``output_root/<planet>/<instrument>/<event>/<simulation_name>/``.
     """
+    # One root per experiment keeps figures, numerical products and warnings
+    # together. Constructing a Path does not create anything or run science;
+    # build_output_tree(create=True) is the explicit directory-creation step.
     return (
         Path(cfg.paths.output_root)
         / cfg.planet.name

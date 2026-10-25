@@ -162,17 +162,47 @@ If you leave `reference_telluric_file` unset in the config, the simulator auto-c
 ```
 This matches the standard `tellurics/` convention, so you can simply place your reference file there and omit the explicit config key.
 
-**Generating the reference file** using `scripts/generate_skycalc_inputs.py`
+(skycalc-reference-download)=
+#### Generating the reference file
+
+Use the **same simulation JSON**, not a separate SkyCalc configuration. Set
+`tellurics.skycalc_wavelength_limits_um` to cover all orders you will analyse, with
+some margin. For example, inside the existing `tellurics` block:
+
+```json
+"skycalc_wavelength_limits_um": [0.9, 2.5]
+```
+
+That interval is suitable for the full reference ANDES YJHK example. The
+existing ANDES UBV example instead uses `[0.34, 0.65]`. Values here are in
+**microns**; the generator converts them to SkyCalc's **nanometres**. This
+setting controls the download, not the instrument's wavelength grid.
+
+Generate the reference with `scripts/generate_skycalc_inputs.py`
 (see [Mode 2, Per-exposure telluric evolution](#mode-2-per-exposure-telluric-evolution-use_full_skycalc-true)
 for full script documentation):
 
 ```bash
 pip install skycalc_ipy
-python scripts/generate_skycalc_inputs.py configs/my_config.json
+python scripts/generate_skycalc_inputs.py configs/my_config.json --ref-only --mode synthetic
 ```
 
-The script generates `tell_ref_airmass_{X.X}.fits` automatically alongside
-the per-exposure files.  Alternatively use the
+The reference is written to
+`{paths.inputs_dir}/tellurics/tell_ref_airmass_{X.X}.fits`, where `X.X` is
+`tellurics.reference_airmass`. Without `--ref-only`, the script also generates
+per-exposure files. Existing files are skipped unless `--overwrite` is
+explicitly supplied. Back up an existing reference before replacing it with
+a download using a different wavelength interval.
+
+For a single reference, point `tellurics.reference_telluric_file` at that file.
+For per-exposure tellurics, use the directory convention below and set
+`use_full_skycalc: true`. EXoPLORE raises a coverage error rather than silently
+interpolating missing wavelengths as zero transmission. The check concerns
+selected orders; unused instrument orders need not be covered. Existing
+observed-data runs do not load synthetic tellurics merely because the
+preparation handles terrestrial absorption.
+
+Alternatively use the
 [ESO SkyCalc web tool](https://www.eso.org/observing/etc/bin/gen/form?INS.MODE=swspectr+INS.NAME=SKYCALC)
 and save the result as a FITS table with columns `lam` (nm) and `trans` (0 to 1).
 
@@ -206,8 +236,10 @@ Each `tell_spec_{n}.fits` must be a FITS file with at minimum two columns: `lam`
 
 EXoPLORE provides a ready-to-use script that queries the ESO SkyCalc REST
 API directly via the `skycalc_ipy` Python package (no CLI installation
-required).  All SkyCalc parameters are read from your config, no manual
-editing of parameter files.
+required). It reads the wavelength interval, observatory, PWV and observing
+choices from your simulation config. Other sky-model components and spectral
+sampling retain the defaults in `_query_skycalc()`; they are not all exposed as
+JSON options. No separate SkyCalc JSON is required.
 
 **Install the dependency once:**
 ```bash

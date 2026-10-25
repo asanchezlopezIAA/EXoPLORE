@@ -24,6 +24,12 @@ be called on any reduced night, and optionally save a figure.
 
 from __future__ import annotations
 
+# Reading this file
+# These figures inspect the relationship between extracted spectra,
+# telluric corrections and measured resolution. They help check an upstream
+# calibration stage; drawing the comparison is not a new external molecfit run.
+
+
 from typing import Optional, Sequence, Tuple
 
 import numpy as np

@@ -4,6 +4,13 @@ The regular simulator and CRIRES helium route retain their existing behavior.
 This route consumes full-channel per-pixel ETC arrays before order selection.
 """
 from __future__ import annotations
+
+# Reading this file
+# This runner connects the helium atmosphere to CARMENES detector inputs
+# and direct-transmission preparation. Full-channel ETC information is consumed
+# before selecting an order, so order selection must not relabel detector/noise
+# arrays. The ordinary molecular simulator remains a separate route.
+
 from dataclasses import asdict
 import hashlib
 import json

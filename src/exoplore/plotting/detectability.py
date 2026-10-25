@@ -14,6 +14,13 @@ filled-contour map for one molecule.
 
 from __future__ import annotations
 
+# Reading this file
+# The simulation sweep writes one statistic per atmospheric grid point;
+# this reader assembles those points into a figure. The plotted colour is the
+# chosen detection statistic, not a posterior abundance probability or a fresh
+# simulation performed by the plotting function.
+
+
 import glob
 import os
 from typing import Optional, Sequence, Tuple

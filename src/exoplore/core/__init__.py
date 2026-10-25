@@ -1,5 +1,11 @@
 """exoplore.core, simulation orchestration."""
 
+# Reading these imports
+# This exposes the user-facing simulator and forwards older observation
+# helper names on demand through __getattr__. Actual science belongs to the
+# selected runner/helper; the list of exported names is not an execution order.
+
+
 from exoplore.core.simulator import ExoploreSimulator, SimulationSummary
 
 # Observation matrix builders require scipy; import lazily so that the

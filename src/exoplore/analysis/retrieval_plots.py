@@ -5,6 +5,13 @@ exoplore.analysis.retrieval_plots
 Post-processing plots for Bayesian atmospheric retrievals (MultiNest output).
 """
 
+# Reading this file
+# These routines read retrieval products and compare samples, evidences
+# or derived abundance ratios. A ratio derived from sampled abundances is
+# postprocessing, not another forward atmospheric fit. Keep the source runs and
+# parameter conventions attached when comparing their figures.
+
+
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")

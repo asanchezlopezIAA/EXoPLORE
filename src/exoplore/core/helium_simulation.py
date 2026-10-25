@@ -7,6 +7,13 @@ from real ESO calibration products. Files are written only to a new directory.
 """
 from __future__ import annotations
 
+# Reading this file
+# Read this as the helium counterpart of the molecular run coordinator:
+# validate inputs, obtain an atmosphere/control, simulate detector exposures,
+# prepare the transmission spectrum, then save diagnostics. The physical
+# spectrum provider and the observing adapter have different responsibilities.
+
+
 from dataclasses import asdict
 import hashlib
 import json

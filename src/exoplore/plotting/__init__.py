@@ -16,6 +16,13 @@ calibration
     per-order effective (super-)resolution measurement.
 """
 
+# Reading these imports
+# These are convenient names for several figure families. Find the
+# individual function to check expected axes, units and whether it loads or
+# reconstructs data before drawing. The public import list is not a recipe
+# for deciding which scientific analysis to perform.
+
+
 from exoplore.plotting.kpvsys import (
     plot_kp_vsys_map,
     plot_1d_ccf,

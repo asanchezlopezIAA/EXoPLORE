@@ -29,6 +29,13 @@ Cheverall, Madhusudhan & Holmberg (2023), MNRAS, 522, 661.
 
 from __future__ import annotations
 
+# Reading this file
+# PCA removes selected singular components from the exposure/pixel matrix.
+# Its call signature resembles SYSREM so the dispatcher can choose either, but
+# PCA does not use the uncertainty array as inverse-variance weights. Interface
+# compatibility does not make their scientific operators identical.
+
+
 from typing import List, Tuple
 
 import numpy as np
@@ -127,6 +134,9 @@ def apply_pca(
 
     n_components = int(max(0, min(n_components, min(d.shape))))
 
+    # Factor the exposure-by-pixel matrix into time and wavelength patterns.
+    # This implementation does not mean-center d before the SVD; preserving
+    # that choice matters when comparing it with another PCA implementation.
     U, S, Vt = np.linalg.svd(d, full_matrices=False)
 
     corrections: List[np.ndarray] = []
@@ -135,6 +145,8 @@ def apply_pca(
         corrections.append(np.outer(U[:, i] * S[i], Vt[i]))
         basis[:, i] = U[:, i]
 
+    # Zeroing selected singular values removes those components; keeping U
+    # separately lets downstream model processing refer to the removed modes.
     s_kept = S.copy()
     s_kept[:n_components] = 0.0
     data_cleaned = (U * s_kept) @ Vt

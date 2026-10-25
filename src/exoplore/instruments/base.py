@@ -89,10 +89,20 @@ Adding a new instrument
 4.  Add a test in ``tests/test_instruments.py``.
 5.  Document the required input files in ``docs/input_files.md``.
 
-No other file needs to be modified.
+Registration provides the metadata lookup. Also inspect wavelength readers and
+runner branches for assumptions about instrument names, data layouts and noise
+inputs; a genuinely new format can require changes there. Validate a small run
+before treating a registered instrument as supported end to end.
 """
 
 from __future__ import annotations
+
+# Reading this file
+# InstrumentInfo is the small, fixed record passed from a loader to the
+# runner. It describes resolution and input locations rather than containing
+# the observation calculation. Check wavegrid.py and runner branches as well as
+# registration when adding an instrument with a new data layout.
+
 
 from typing import NamedTuple, Optional
 import numpy as np

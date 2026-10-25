@@ -1,4 +1,10 @@
 """Explicit settings for the Sunbather physical spectrum provider."""
+
+# Reading this file
+# This records installation and physical-solver choices for the optional
+# Sunbather backend. The selected backend consumes it through helium_provider;
+# ordinary molecular runs do not need a Sunbather calculation.
+
 from dataclasses import dataclass
 import math
 

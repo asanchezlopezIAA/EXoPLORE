@@ -25,6 +25,13 @@ prepare
     utilities.
 """
 
+# Reading these imports
+# These imports expose preparation building blocks. Selecting a pipeline
+# happens in prepare.py or a direct-helium runner, rather than by applying every
+# exported function. Keep masks, propagated uncertainties and any model-filtering
+# information connected to the selected preparation.
+
+
 from exoplore.pipelines.masking import (
     # clean API
     mask_telluric_columns,

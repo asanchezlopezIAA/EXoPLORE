@@ -39,6 +39,12 @@ References
 Nortmann et al. 2026, A&A (arXiv:2604.15292v1).
 Wright & Eastman 2014, PASP 126, 838 (barycentric correction).
 """
+
+# Where this script fits
+# This ingests externally extracted CRIRES+ exposures into EXoPLORE inputs,
+# with the configured wavelength/telluric preparation. It belongs after raw
+# reduction and before the reference-night simulation or observed-data analysis.
+
 import argparse
 import glob
 import os

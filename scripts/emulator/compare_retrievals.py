@@ -8,6 +8,12 @@ Usage
     python scripts/emulator/compare_retrievals.py
 """
 
+# Where this script fits
+# This compares saved emulator and physical-model retrieval results.
+# The emulator remains experimental; inspecting timings and corner plots here
+# is part of assessing its limitations, not switching the default solver.
+
+
 import os, sys, json, glob
 import numpy as np
 import matplotlib.pyplot as plt

@@ -56,6 +56,13 @@ Output
 
 from __future__ import annotations
 
+# Reading this file
+# This module connects extracted CRIRES+ spectra to external molecfit
+# recipes, wavelength checks and telluric models. It is downstream of raw-frame
+# reduction. Read the fit result/acceptance path as well as the launcher: an
+# external command returning does not by itself explain which correction is used.
+
+
 import glob
 import os
 import subprocess

@@ -10,6 +10,14 @@ in days.
 
 from __future__ import annotations
 
+# Reading this file
+# Choose the exposure times and identify which exposures contain the
+# planetary event before constructing spectra or combining CCFs. The selected
+# indices refer to exposures, not wavelengths. This file also retains light-curve
+# helpers used by the current runner; a timing selection and an absorption weight
+# are related inputs, not interchangeable arrays.
+
+
 from typing import Optional, Tuple
 
 import numpy as np

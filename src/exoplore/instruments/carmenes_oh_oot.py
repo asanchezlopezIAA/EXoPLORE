@@ -7,6 +7,13 @@ retained from the existing calibrated fibre-B model. Inputs are read-only.
 """
 from __future__ import annotations
 
+# Reading this file
+# This optional OH fit uses out-of-transit science information together
+# with the sky amplitudes. A common stellar spectrum and a varying sky component
+# are fitted in their respective frames. Acceptance thresholds are needed to
+# check whether that decomposition is constrained by the supplied data.
+
+
 from dataclasses import dataclass
 import numpy as np
 from scipy.optimize import least_squares

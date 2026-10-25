@@ -2,6 +2,14 @@
 
 from __future__ import annotations
 
+# Reading this file
+# This is an older loader implementation with field names predating the
+# current model schema. The current public exoplore.config.load_simulation_config
+# is defined in config/__init__.py and delegates to SimulationConfig.from_json.
+# Use that public route for current tutorials; this older file is not an
+# alternative current-schema recipe. Its behavior is left unchanged here.
+
+
 import json
 from pathlib import Path
 from typing import Any

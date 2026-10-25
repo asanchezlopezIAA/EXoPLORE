@@ -6,6 +6,13 @@ Cloudy iterations and their original energy files are retained in a new project.
 """
 from __future__ import annotations
 
+# Reading this file
+# This is the alternative helium provider selected by helium_provider.py.
+# It handles the external atmosphere solution and returns planet-frame spectra;
+# the observing runner subsequently shifts and samples them. Retained solver
+# files let a researcher inspect convergence rather than just the final figure.
+
+
 from contextlib import contextmanager
 from functools import partial
 from importlib.metadata import version

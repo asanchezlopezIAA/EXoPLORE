@@ -5,6 +5,13 @@ exoplore.analysis.stats
 Statistical analysis tools for high-resolution cross-correlation spectroscopy.
 """
 
+# Reading this file
+# Several statistics live here: night-stack summaries, correlations,
+# iteration selection and evidence conversions. Follow the specific statistic's
+# inputs instead of treating every output named significance as the same quantity.
+# Plotting and numerical postprocessing are still mixed in some functions.
+
+
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")

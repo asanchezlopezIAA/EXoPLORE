@@ -35,6 +35,12 @@ Usage::
 ``--plot`` also renders the maps at the end with
 ``exoplore.plotting.plot_detectability_map``.
 """
+
+# Where this script fits
+# This drives repeated simulations over atmospheric grid points. It can
+# therefore be substantially more expensive than one run. The plotted grid is a
+# sweep of recovered statistics, not an atmosphere posterior from one sampler.
+
 import argparse
 import copy
 import glob

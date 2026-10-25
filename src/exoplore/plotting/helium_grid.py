@@ -1,4 +1,10 @@
 """Standard viridis grid-fit and atmosphere-temperature figures for He I."""
+
+# Reading this file
+# The grid runner has already evaluated model points. This file displays
+# those fit results and temperature information; it does not infer a detection
+# from the colour scale or silently run an extra physical grid.
+
 from pathlib import Path
 import numpy as np
 

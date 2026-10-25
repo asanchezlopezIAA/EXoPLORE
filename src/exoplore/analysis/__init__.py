@@ -15,6 +15,13 @@ ccf_time         Time-resolved 1D CCF analysis.
 utils            Miscellaneous helpers.
 """
 
+# Reading these imports
+# These imports provide convenient analysis names, not a required sequence
+# of analysis steps. This package currently imports plotting-oriented modules
+# as well as numerical routines; follow the selected function into its module
+# when checking inputs, plotting configuration or saved-file handling.
+
+
 # ---- stats ---------------------------------------------------------------
 from exoplore.analysis.stats import (
     plot_stats,

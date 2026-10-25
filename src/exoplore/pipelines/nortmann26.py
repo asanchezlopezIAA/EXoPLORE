@@ -44,6 +44,13 @@ Tamuz, Mazeh & Zucker 2005, MNRAS 356, 1466 (SYSREM).
 
 from __future__ import annotations
 
+# Reading this file
+# These are the Nortmann-specific preparation/model-filtering operations.
+# The driving branch is in prepare.py; wavelength/telluric inputs can come from
+# the CRIRES preparation adapters. Inspect whether a call acts on observations,
+# a model, or already calculated CCFs before interpreting its output.
+
+
 from typing import List, Tuple
 
 import numpy as np

@@ -1,5 +1,12 @@
 """exoplore.ccf, cross-correlation function analysis."""
 
+# Reading these imports
+# These imports expose kernels, wrappers and statistics in one place.
+# They have different jobs: wrappers prepare arguments, kernels evaluate
+# correlations, and statistics combine/interpret the resulting CCF values.
+# Importing all names does not mean a run uses every available statistic.
+
+
 from exoplore.ccf.kernels import (
     compute_inverse_variance_weighted_ccf,
     ccf_numba_par_weighted,

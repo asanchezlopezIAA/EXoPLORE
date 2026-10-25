@@ -543,6 +543,11 @@ def call_pRT(inp_dat, pressures, prt_object, species, vmr, MMW, p0,
     spec_star_conv : array  Convolved stellar spectrum (zeros for transit).
     t : array  Temperature profile used.
     """
+    # The runner calls this for injected atmospheres and for separate search or
+    # retrieval models. The passed settings/species determine which role this
+    # call serves; do not assume all calls represent the same atmosphere.
+    # prt_object owns the loaded opacity tables. This function supplies the
+    # temperature/chemistry and requests a spectrum for those conditions.
     from petitRADTRANS import physical_constants as cst
     from exoplore.atmosphere.temperature import calculate_temperature_structure
 

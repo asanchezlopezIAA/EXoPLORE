@@ -19,6 +19,13 @@ stellar spectrum is assumed to be unity at the continuum).
 
 from __future__ import annotations
 
+# Reading this file
+# This file contains numerical noise/amplitude helpers and the actual
+# multiplicative throughput draw. randomness.py separately chooses the existing
+# seeds. The standard runner also has its own Gaussian draw/scaling branches;
+# these convenience helpers do not silently replace every one of those calls.
+
+
 from typing import Optional, Tuple
 
 import numpy as np

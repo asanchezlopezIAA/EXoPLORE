@@ -17,6 +17,9 @@ import math
 
 import numpy as np
 
+# Canonical implementation for the descriptive velocity API. The historical
+# exoplore.velocity module reexports these same objects so older scripts retain
+# their signatures and conventions without a second copy of the equations.
 
 def planet_radial_velocity(
     phases: np.ndarray,
@@ -166,7 +169,11 @@ def stellar_radial_velocity(
 
 
 # ---------------------------------------------------------------------------
-# Functions
+# Legacy configuration-facing functions
+# Keep these signatures and conventions until their callers are migrated and
+# independently checked. In particular, get_V_eccentric takes omega in degrees
+# and uses a different phase-anchor implementation from the descriptive API
+# above; similar names alone are not sufficient grounds to merge them.
 # ---------------------------------------------------------------------------
 
 def get_V(sem_amp, phase, berv, v_sys, v_wind):

@@ -102,6 +102,12 @@ Wright & Eastman 2014, BERV computation algorithm (implemented in
 
 from __future__ import annotations
 
+# Where this script fits
+# This reads upstream PLP H/K products and writes the reference-night
+# layout used by the IGRINS loader. The conversion must keep time, order and
+# pixel axes aligned across all saved inputs; it does not reduce raw frames.
+
+
 import argparse
 import bz2
 import glob

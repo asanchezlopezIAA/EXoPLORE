@@ -25,6 +25,13 @@ dayside_fraction
 
 from __future__ import annotations
 
+# Reading this file
+# These are observation-building functions retained under core by older
+# interfaces. In particular, spec_to_mat_fraction is still reached through the
+# io.stellar forwarding function. Follow the supplied velocity, event fraction
+# and model flags to distinguish injected spectra from templates/retrieval models.
+
+
 import numpy as np
 import scipy.ndimage
 

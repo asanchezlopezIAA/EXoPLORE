@@ -10,6 +10,13 @@ and telluric parameters.
 """
 from __future__ import annotations
 
+# Reading this file
+# This runner coordinates separate synthetic helium nights and then
+# combines their prepared products. Each night retains its own observation noise,
+# telluric fit and reference spectrum. Read the covariance propagation alongside
+# the mean: reusing a reference creates correlations that averaging alone misses.
+
+
 from dataclasses import asdict, replace
 import hashlib
 import json

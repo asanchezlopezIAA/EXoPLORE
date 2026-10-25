@@ -25,6 +25,12 @@ Output
     metadata.json
 """
 
+# Where this script fits
+# This generates physical spectra used to train the experimental emulator.
+# Its sampling, batches and stored coefficients define the training set. It is
+# a model-generation job, not a light plotting-only command.
+
+
 import argparse, json, multiprocessing, os, sys, time
 import numpy as np
 from scipy.stats.qmc import LatinHypercube

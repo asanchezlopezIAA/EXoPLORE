@@ -49,6 +49,12 @@ Notes
 - Use --snr_column max  to use the maximum per-order SNR instead of median.
 """
 
+# Where this script fits
+# This converts an ETC table into the S/N FITS input expected by EXoPLORE.
+# It prepares an input noise description; it does not simulate the transit or
+# measure a planet from spectra. Channel/order layout must match the later loader.
+
+
 import argparse
 import os
 import sys

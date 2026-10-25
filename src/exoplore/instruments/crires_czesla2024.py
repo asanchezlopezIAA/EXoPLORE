@@ -8,6 +8,13 @@ upstream. Every output must be new; rejected fits never become unity models.
 """
 from __future__ import annotations
 
+# Reading this file
+# Upstream cr2res extraction has already happened before this adapter.
+# Here the selected segment's telluric anchors are protected against predicted
+# helium absorption, then external fits are checked. The resulting corrections
+# feed the direct-helium recipe rather than the raw-frame reduction.
+
+
 from dataclasses import asdict,dataclass
 import hashlib
 import json

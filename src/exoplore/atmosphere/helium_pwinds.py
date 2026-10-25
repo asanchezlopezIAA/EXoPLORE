@@ -6,6 +6,13 @@ Atmospheric absorption follows projected overlap, including outside optical cont
 """
 from __future__ import annotations
 
+# Reading this file
+# This backend solves a physical outflow and evaluates how it absorbs
+# stellar light during transit. The transit object caches expensive optical-depth
+# information for repeated phases. Detector sampling, observational noise and
+# transmission preparation belong to the observing runner, not this solver.
+
+
 from importlib.metadata import version
 import warnings
 

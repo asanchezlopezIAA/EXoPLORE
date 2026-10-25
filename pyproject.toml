@@ -46,6 +46,12 @@ exoplore = "exoplore.core.cli:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+# Instrument loaders fall back to these small bundled reference grids. Include
+# the existing files in wheels as well as source checkouts; opacity databases
+# and generated observations remain external inputs.
+"exoplore.instruments" = ["data/*.fits"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-v"

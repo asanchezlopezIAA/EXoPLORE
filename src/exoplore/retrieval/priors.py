@@ -28,12 +28,23 @@ Typical usage (MultiNest)
 
 from __future__ import annotations
 
+# Reading this file
+# Prior transforms and prior-density evaluation serve different samplers.
+# The ordered parameter names connect sampler coordinates to physical model
+# arguments; reordering them without changing the consumer changes the experiment.
+# This file defines distributions, not atmospheric spectra or data likelihoods.
+
+
 import math
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Tuple
 
 import numpy as np
 
+# Canonical prior definitions. exoplore.priors retains the old import names by
+# reexporting these objects, including for older serialized prior instances.
+# Insertion order in PriorSet is part of the sampler/forward-model contract:
+# changing that order can change which physical quantity a coordinate means.
 
 # ---------------------------------------------------------------------------
 # Base protocol

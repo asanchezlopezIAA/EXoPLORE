@@ -48,6 +48,10 @@ def LoadPhoenix(file, wave, res):
     if file is None:
         raise Exception("No stellar model")
 
+    # This reader also performs convolution/interpolation: it supplies the
+    # instrument-sampled stellar spectrum used later to construct exposures.
+    # The PHOENIX wavelength file is in Angstrom; wave uses microns, so convert
+    # once here before combining the two wavelength grids.
     spec_og = fits.open(file[1])[0].data
     wave_og = 1.0e-4 * fits.open(file[0])[0].data   # Å → µm
 

@@ -10,6 +10,13 @@ different pipeline stages.
 
 from __future__ import annotations
 
+# Reading this file
+# These functions display wavelength/exposure or velocity/exposure arrays.
+# Axis orientation, masks and colour scaling determine what a panel means;
+# check the call's actual arrays and display options. A displayed residual is
+# not automatically a clean planetary spectrum.
+
+
 from typing import Optional, Tuple
 
 import numpy as np

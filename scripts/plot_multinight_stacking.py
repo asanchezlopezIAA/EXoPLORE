@@ -17,6 +17,12 @@ Usage
 Each ``--run`` is the ``matrices`` directory of one simulation. Panels are drawn
 in the order the ``--run`` flags are given.
 """
+
+# Where this script fits
+# This reads per-night and combined maps already produced by a run.
+# Slices are taken at each map's chosen Kp, so the figure is a comparison of saved
+# profiles rather than an additional simulation or a new posterior fit.
+
 import argparse
 import glob
 import os

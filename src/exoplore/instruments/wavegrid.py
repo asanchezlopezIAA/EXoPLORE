@@ -46,6 +46,14 @@ ESO ETC outputs for ANDES
 
 from __future__ import annotations
 
+# Reading this file
+# Metadata loaders identify files; get_WaveGrid turns those inputs into
+# arrays, and the ANDES helpers construct order grids from ETC information.
+# Pay attention to each instrument branch's axis order and unit conversions.
+# The runner has compatibility transposes, so changing an orientation here can
+# silently relabel pixels/orders even when array sizes look plausible.
+
+
 import glob as _glob
 import os as _os
 

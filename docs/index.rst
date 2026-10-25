@@ -49,5 +49,8 @@ current and next-generation ground-based spectrographs.
    :maxdepth: 1
    :caption: Development
 
+   architecture
+   code_reading_guide
+   module_guide
    changelog
    citations

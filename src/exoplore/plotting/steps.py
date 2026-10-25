@@ -12,6 +12,13 @@ steps for a single spectral order, following Fig. 5 of Sánchez-López et al.
              set to NaN so they appear white).
 """
 
+# Reading this file
+# These diagnostics connect the simulated spectra to prepared residuals.
+# Some helpers reconstruct intermediate SYSREM stages from stored components:
+# that is deliberate numerical reconstruction, unlike loading a saved PDF.
+# Display-only options must be distinguished from the arrays used for analysis.
+
+
 import numpy as np
 
 

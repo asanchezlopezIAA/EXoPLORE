@@ -15,6 +15,13 @@ samplers
     Wrappers for pymultinest (nested sampling) and emcee (MCMC).
 """
 
+# Reading these imports
+# This exposes likelihoods, priors and sampler adapters. A likelihood
+# evaluates a supplied model against data; a prior supplies parameter support
+# or a coordinate transform; a sampler explores proposals. Importing these
+# objects is separate from enabling and executing a retrieval.
+
+
 from exoplore.retrieval.likelihood import (
     log_likelihood_bl19,
     log_likelihood_blain24,

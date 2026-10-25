@@ -10,6 +10,13 @@ must also account for shared reference noise and interpolation covariance.
 """
 from __future__ import annotations
 
+# Reading this file
+# These small numerical helpers keep direct-helium wavelength-frame and
+# resampling conventions together. Wavelengths are vacuum nm and velocities
+# km/s here; molecular routines may use microns. Preserve valid-pixel/gap masks
+# when interpolating rather than inventing data across detector gaps.
+
+
 import numpy as np
 from scipy.optimize import least_squares
 
@@ -51,14 +58,19 @@ def window_mask(wavelength_nm: np.ndarray, windows_nm: list[list[float]]) -> np.
 
 def resample(wave: np.ndarray, flux: np.ndarray, variance: np.ndarray,
              destination: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """Linear interpolation with squared variance weights and no gap bridging."""
+    """Linear interpolation with squared variance weights and valid endpoints."""
     if np.any(np.diff(wave) <= 0):
         raise ValueError("wavelength grid must strictly increase")
     index = np.searchsorted(wave, destination, side="right") - 1
     index = np.clip(index, 0, len(wave) - 2)
+    # t gives the fractional position between two original pixels. The same
+    # endpoints interpolate the flux; their squared coefficients propagate the
+    # diagonal variances. This helper does not return full pixel covariance.
     t = (destination - wave[index]) / (wave[index + 1] - wave[index])
     good = ((t >= 0) & (t <= 1) & np.isfinite(flux[index]) & np.isfinite(flux[index + 1])
             & np.isfinite(variance[index]) & np.isfinite(variance[index + 1]))
+    # Valid endpoints alone do not identify a physical detector gap. The
+    # CARMENES gap_resample wrapper additionally excludes such gap intervals.
     y = np.where(good, (1 - t) * flux[index] + t * flux[index + 1], np.nan)
     v = np.where(good, (1 - t) ** 2 * variance[index] + t ** 2 * variance[index + 1], np.nan)
     return y, v

@@ -8,6 +8,13 @@ Exposure membership is computed from observing times and transit geometry.
 """
 from __future__ import annotations
 
+# Reading this file
+# This configuration records the direct-helium recipe's scientific choices.
+# The pipeline derives exposure membership from observation times and geometry.
+# Distinguish those derived indices from options a user supplies in JSON when
+# following reference-spectrum and in-transit selections.
+
+
 from dataclasses import dataclass
 import math
 from typing import ClassVar

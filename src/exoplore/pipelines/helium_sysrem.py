@@ -6,6 +6,13 @@ The output is differential transmission, not a fitted telluric transmittance.
 Wavelengths are vacuum nm. No wavelength refinement is performed.
 """
 from __future__ import annotations
+
+# Reading this file
+# This is an optional alternative preparation for synthetic helium data.
+# It removes components in the Earth frame before later transmission analysis.
+# Its differential residuals are not a theoretical telluric transmittance, so
+# read which product a caller consumes before using it as a correction.
+
 import numpy as np
 from exoplore.pipelines.helium_math import window_mask, resample
 from exoplore.pipelines.sysrem import apply_sysrem

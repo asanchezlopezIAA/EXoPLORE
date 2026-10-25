@@ -14,11 +14,19 @@ This module provides:
 - :func:`plot_kp_vsys_map`, colourmap with optional SNR contours.
 - :func:`plot_1d_ccf`, collapsed 1-D CCF at the peak Kp.
 
-All functions return the Matplotlib ``Figure`` object so callers can
-save or further customise the figure.
+The descriptive helpers return Matplotlib figures. Older runner-facing
+functions also manage plotting/saving themselves; inspect the selected
+function's return behavior before trying to customize its result.
 """
 
 from __future__ import annotations
+
+# Reading this file
+# This file contains both descriptive plot helpers and older runner-facing
+# plot functions. Check each function's expected map orientation and its supplied
+# velocity convention: a systemic velocity and a residual Vrest offset are not
+# interchangeable labels. The map statistic is calculated upstream.
+
 
 from typing import Optional, Sequence, Tuple
 

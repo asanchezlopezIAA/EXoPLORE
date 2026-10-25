@@ -17,7 +17,57 @@ This module provides:
 
 from __future__ import annotations
 
+# Reading this file
+# Telluric transmittance is an input to synthetic observations, while
+# pipeline_fixedTellurics is a preparation path for the configured fixed case.
+# Loading a theoretical atmosphere and removing structure from observed spectra
+# are different operations, even though both concern terrestrial absorption.
+
+
 import numpy as np
+
+
+def validate_telluric_coverage(wavelength_um, required_wave_um, *, source):
+    """Reject insufficient coverage before interpolation can invent zero flux.
+
+    Both arguments are in microns. The required array may contain several
+    selected orders. Ascending and descending input grids remain supported by
+    the existing interpolator; a malformed/duplicate grid is rejected.
+    """
+    wave = np.asarray(wavelength_um, dtype=float)
+    required = np.asarray(required_wave_um, dtype=float)
+    if (wave.ndim != 1 or wave.size < 2 or not np.isfinite(wave).all()
+            or np.any(wave <= 0)
+            or not (np.all(np.diff(wave) > 0) or np.all(np.diff(wave) < 0))):
+        raise ValueError(f"Invalid telluric wavelength grid in {source}: expected finite, positive, strictly monotonic wavelengths.")
+    if required.size == 0 or not np.isfinite(required).all():
+        raise ValueError("Cannot check telluric coverage against an empty or non-finite instrument grid.")
+    available_min, available_max = float(wave.min()), float(wave.max())
+    needed_min, needed_max = float(required.min()), float(required.max())
+    # Allow floating-point roundoff at identical endpoints, not missing pixels.
+    tolerance = 64 * np.finfo(float).eps * max(1., abs(needed_min), abs(needed_max))
+    if needed_min < available_min - tolerance or needed_max > available_max + tolerance:
+        raise ValueError(
+            f"Telluric wavelength coverage is insufficient in {source}. "
+            f"File covers {available_min:.9g}–{available_max:.9g} microns; "
+            f"selected instrument wavelengths require {needed_min:.9g}–{needed_max:.9g} microns. "
+            "Set tellurics.skycalc_wavelength_limits_um in your simulation JSON to cover the selected orders "
+            "with margin, then generate suitable inputs with scripts/generate_skycalc_inputs.py "
+            "(--ref-only for a reference file; per-exposure files for use_full_skycalc=true). "
+            "Point tellurics.reference_telluric_file/paths.inputs_dir at those files. "
+            "Existing downloads are skipped unless explicitly replaced; out-of-range transmission will not be filled with zeros."
+        )
+
+
+def validate_telluric_file(path, required_wave_um):
+    """Check a reference FITS table before expensive observation calculations."""
+    from astropy.io import fits
+    with fits.open(path) as hdul:
+        names = (hdul[1].columns.names if len(hdul) > 1
+                 and isinstance(hdul[1], (fits.BinTableHDU, fits.TableHDU)) else [])
+        if not {"lam", "trans"}.issubset(names or []):
+            raise ValueError(f"Telluric file {path} must contain a FITS table with lam (nm) and trans columns.")
+        validate_telluric_coverage(hdul[1].data["lam"] * 1e-3, required_wave_um, source=path)
 
 
 # ---------------------------------------------------------------------------
@@ -81,6 +131,7 @@ def Load_Telluric_Transmittances(snr, telluric_variation,
         with fits.open(tell_ref_file) as file:
             wvl_ref = file[1].data['lam'] * 1e-3
             tell_ref = file[1].data['trans']
+        validate_telluric_coverage(wvl_ref, wave_ins, source=tell_ref_file)
         tell_ref = interpolate.interp1d(
             wvl_ref, tell_ref, bounds_error=False, fill_value=0.
         )(wave_ins)
@@ -96,10 +147,17 @@ def Load_Telluric_Transmittances(snr, telluric_variation,
                     with fits.open(file_path) as file:
                         dummy = file[1].data['trans']
                         wvl_trans = file[1].data['lam'] * 1e-3
+                    validate_telluric_coverage(wvl_trans, wave_ins, source=file_path)
                     tell_trans_temp = np.zeros((len(syn_jd), len(wvl_trans)))
                     tell_trans_temp[n, :] = dummy
                 else:
                     with fits.open(file_path) as file:
+                        current_wave = file[1].data['lam'] * 1e-3
+                        validate_telluric_coverage(current_wave, wave_ins, source=file_path)
+                        # The array interpolation below uses a common grid.
+                        # A different exposure grid cannot silently reuse it.
+                        if not np.array_equal(current_wave, wvl_trans):
+                            raise ValueError(f"Telluric wavelength grid in {file_path} differs from tell_spec_0.fits; per-exposure files must share one grid.")
                         tell_trans_temp[n, :] = file[1].data['trans']
 
             tell_trans = np.zeros((len(syn_jd), len(wave_ins)))

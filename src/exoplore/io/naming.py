@@ -8,6 +8,13 @@ so analysis modules can import it without creating circular dependencies.
 
 from __future__ import annotations
 
+# Reading this file
+# This naming helper is available to postprocessing without importing the
+# simulator. The standard runner still has its own name builder in core/simulator.
+# Trace which one a caller uses; matching function names do not establish that
+# all naming behavior has already been consolidated.
+
+
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:

@@ -31,6 +31,13 @@ the built-in offline site registry.
 
 from __future__ import annotations
 
+# Reading this file
+# Different observing dates have different sky geometry and Earth motion.
+# These helpers calculate dates, airmass and BERV from target/site information
+# for synthetic different-night observations. Returned velocities must retain
+# the same BERV sign convention used by observation.velocity.
+
+
 import numpy as np
 
 # Config observatory name -> astropy site-registry name.  Unknown names

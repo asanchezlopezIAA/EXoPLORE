@@ -43,6 +43,13 @@ Examples
 
 from __future__ import annotations
 
+# Reading this file
+# Temperature and pressure alone do not specify a spectrum: the opacity
+# calculation also needs abundances at every atmospheric layer. These helpers
+# produce those abundance arrays. Keep volume and mass fractions distinct, and
+# check the selected chemistry path before interpreting an abundance parameter.
+
+
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
@@ -113,6 +120,8 @@ def compute_equilibrium_chemistry(
     pressures = np.asarray(pressures, dtype=float)
     temperatures = np.asarray(temperatures, dtype=float)
 
+    # The two arrays describe the same atmospheric layers. Matching lengths
+    # prevent assigning a chemistry solution to the wrong pressure/temperature.
     if pressures.shape != temperatures.shape:
         raise ValueError(
             f"pressures and temperatures must have the same shape; "
@@ -171,6 +180,9 @@ def manual_mass_fractions(
         raise ValueError(
             f"len(vmr)={len(vmr)} must equal len(species)={len(species)}."
         )
+    # This manual helper broadcasts the supplied numerical values unchanged
+    # across layers; it performs no species-mass conversion here. Check what
+    # the caller supplies rather than inferring a conversion from the name.
     mass_fracs = {
         sp: float(vmr[i]) * np.ones(n_layers)
         for i, sp in enumerate(species)

@@ -1,4 +1,11 @@
 """Physical atmosphere diagnostics for Sunbather helium simulations."""
+
+# Reading this file
+# These diagnostics let a researcher inspect the actual solved atmospheric
+# profiles rather than only the observed line. They accompany the optional
+# Sunbather result; their quantities are atmosphere profiles, not detector counts
+# or a measured transmission spectrum.
+
 from pathlib import Path
 import json
 

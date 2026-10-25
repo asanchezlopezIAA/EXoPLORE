@@ -3,6 +3,12 @@
 
 Each output must be new. Observed FITS files and saved arrays are read-only.
 """
+
+# Where this script fits
+# This reads saved correction/transmission products to make diagnostic
+# figures. It is downstream of preparation; using it does not run another
+# atmosphere solver or refit each exposure with molecfit.
+
 from pathlib import Path
 import argparse
 import json

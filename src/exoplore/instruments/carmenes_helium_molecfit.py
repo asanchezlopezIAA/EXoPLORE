@@ -5,6 +5,13 @@ fabricate CRIRES nods or detector products. Fit each native detector section
 separately, using only the configured helium-order telluric anchors.
 """
 from __future__ import annotations
+
+# Reading this file
+# This is the external-tool bridge for telluric fitting of synthetic
+# CARMENES sections. Fitting sections separately respects detector boundaries.
+# Configured fit gates determine whether a correction is accepted; a failed fit
+# must not be interpreted as a successful unity-transmission atmosphere.
+
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 import hashlib

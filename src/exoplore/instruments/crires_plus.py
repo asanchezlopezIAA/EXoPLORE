@@ -49,6 +49,13 @@ ESO CRIRES+ ETC, https://etc.eso.org
 
 from __future__ import annotations
 
+# Reading this file
+# A CRIRES+ observation depends on its selected wavelength setting, not
+# one universal full-band grid. This loader resolves the corresponding inputs
+# and resolution/order information. Reduction and molecfit preparation live in
+# separate modules/scripts and are not performed merely by loading metadata.
+
+
 import os as _os
 from .base import InstrumentInfo
 

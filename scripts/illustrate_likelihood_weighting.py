@@ -42,6 +42,12 @@ widths are printed and annotated.
 
 from __future__ import annotations
 
+# Where this script fits
+# This controlled teaching example compares likelihood behaviour on a toy
+# spectrum. It helps explain a statistical choice; it is not a replacement for
+# running a real-data preparation and atmospheric retrieval.
+
+
 import argparse
 
 import matplotlib

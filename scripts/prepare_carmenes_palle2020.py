@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
 """Preview a CARMENES helium night or fit its first exposure with Palle2020."""
+
+# Where this script fits
+# This is a command-line entry for the observed CARMENES helium input/fit
+# workflow. Preview and execution choices differ; follow the requested action
+# before expecting either an inspection summary or external fitting products.
+
 from pathlib import Path
 import argparse
 import sys

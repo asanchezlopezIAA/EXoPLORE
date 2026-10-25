@@ -6,6 +6,13 @@ The existing arithmetic-reference CARMENES transmission implementation is
 reused. No SYSREM or uncertainty resampling is applied.
 """
 from __future__ import annotations
+
+# Reading this file
+# This is the observed-CARMENES workflow around the direct-transmission
+# recipe. It resolves exposure membership and OH treatment, reads correction
+# products, and then uses the shared CARMENES preparation. Sky-fibre data locate
+# contamination; they are not substituted for the science flux.
+
 from dataclasses import asdict, replace
 import json
 from pathlib import Path

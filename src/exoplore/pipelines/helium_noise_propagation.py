@@ -5,6 +5,14 @@ observations. Continuum and molecfit fit parameters remain fixed. Shared
 reference noise and interpolation correlations are retained in linear operators.
 """
 from __future__ import annotations
+
+# Reading this file
+# Preparation reuses a reference spectrum and interpolates pixels, so
+# errors become correlated. These routines propagate the supplied variances
+# through those operations without drawing new noise. They hold fitted continuum
+# and telluric parameters fixed; the covariance does not include all possible
+# calibration-parameter uncertainties.
+
 import numpy as np
 from scipy.sparse import csr_matrix, diags, vstack
 from exoplore.pipelines.helium_math import stellar_wavelength, planet_wavelength, window_mask
@@ -41,6 +49,9 @@ def carmenes_coadd_covariance(waves_nm, flux, error, berv_kms, rv_kms, config, r
         operators.append(interpolation_operator(stellar_wavelength(w,b,config.gamma_kms),grid,good))
         normalized_variance.append(np.where(good,(e/continuum)**2,0.))
     covariance=csr_matrix((len(grid),len(grid)),dtype=float)
+    # Accumulate how each transit spectrum depends on the SAME master. Its
+    # reference-exposure noise must then be propagated once through that summed
+    # dependence, not added as though a new master were drawn for every row.
     reference_operator=csr_matrix(covariance.shape,dtype=float)
     for i in inside:
         f=result['normalized_stellar_flux'][i]

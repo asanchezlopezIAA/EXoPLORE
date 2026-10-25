@@ -32,6 +32,13 @@ T₁₄ = 1.94 h
 
 from __future__ import annotations
 
+# Reading this file
+# This reader converts a planet JSON into PlanetParameters, including
+# conversion from the supported older file convention. It loads system facts;
+# the simulation JSON separately selects how to observe and analyse that system.
+# Read the relevant format branch before interpreting a short legacy field name.
+
+
 import json
 import math
 from pathlib import Path

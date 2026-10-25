@@ -24,7 +24,8 @@ Furthermore, the PHOENIX stellar model files must be placed on disk and the path
 > **Want to follow this example interactively?**
 > {download}`Download the fully executable Jupyter notebook <../notebooks/01_first_ANDES_simulation.ipynb>`,
 > which reproduces this tutorial with commented code, intermediate diagnostics
-> and additional visualisations.
+> and additional visualisations, and use the [code reading guide](code_reading_guide.md)
+> to follow the calculation through the source files and understand why each step is called.
 
 > **Run time:** the updated full 76-order reference run took **28.9 min** on an **Apple Mac Studio (M2 Ultra, 64 GB RAM)** while the notebook was running concurrently. Runtime depends on hardware and competing workloads. With `timing: true`, each run writes its per-block timings and total to its output directory.
 
@@ -80,6 +81,22 @@ As discussed in the [Concepts primer, Section 3](concepts.md#3-the-preparation-p
 The preparing pipeline acts on the data matrix in a way that also affects the buried planet signal. For retrieval to be unbiased, the forward model must undergo the same transformation as the data at every likelihood evaluation. For polynomial-based pipelines (BL19, Blain24), the preparation operator is linear and analytically known, so the same polynomial can be applied directly to the Doppler-shifted model; Blain, Sánchez-López & Mollière (2024) formally prove unbiasedness under this condition. For SYSREM-based pipelines (ASL19, Gibson22), [Gibson et al. (2022)](https://doi.org/10.1093/mnras/stac091) showed that SYSREM can be represented as a linear projection using the eigenvectors of the data matrix, so the filtered model is obtained efficiently by a single matrix multiplication (M_filt = M - P · M) rather than by iterating SYSREM on every likelihood call.
 :::
 
+The same JSON also tells the SkyCalc downloader which wavelength interval to
+request: `tellurics.skycalc_wavelength_limits_um: [0.9, 2.5]` covers the full reference
+YJHK grid with margin. This does not change the instrument grid. If you already
+have a suitable telluric reference at `tellurics.reference_telluric_file`, reuse
+it; EXoPLORE checks its coverage. To generate your own reference after setting
+`paths.inputs_dir`, run:
+
+```bash
+python scripts/generate_skycalc_inputs.py configs/hd189733b_andes_transit_clean.json --ref-only --mode synthetic
+```
+
+The result is `{paths.inputs_dir}/tellurics/tell_ref_airmass_1.0.fits` for the
+example's reference airmass. Existing files are skipped by default. See the
+{ref}`input guide <skycalc-reference-download>` for dependencies,
+per-exposure generation and overwriting existing files.
+
 ### Step 2: Update your machine-specific paths
 
 The only fields that need to change on a given machine are under `paths`. Edit these:
@@ -122,9 +139,9 @@ tail -f run_log.txt
 :::{note}
 **Monitoring and warnings**
 
-petitRADTRANS prints many lines of opacity-loading text at the start of the run, which can push important warnings off the screen. EXoPLORE emits two types of warnings inline during the run:
+petitRADTRANS prints many lines of opacity-loading text at the start of the run. Check input errors and masking messages in the log:
 
-- A `!!!` block if the telluric reference file does not cover the instrument wavelength range (fires within the first order, before any CCF computation).
+- Insufficient telluric reference coverage raises a `ValueError` after the selected wavelength grid is loaded, before stellar/atmospheric calculations. The message gives the available and required intervals. Per-exposure files are also checked when loaded.
 - A `[mask]` line each time an order is fully masked (no usable pixels after telluric and SNR masking), with a pointer to the warnings folder on the first occurrence.
 
 If running in the background and not watching the terminal, the safest practice after the run completes is to grep the log:
@@ -225,7 +242,10 @@ ANDES UBV covers the optical range (0.35 to 0.63 µm). This range is not include
 :::{important}
 **Why a new telluric file is needed**
 
-The bundled telluric reference covers the NIR (∼0.95 to 2.5 µm). When the simulator loads it for an optical instrument it finds no data at those wavelengths, causing all orders to appear fully masked and the simulation to complete without producing any signal. Whenever you use an instrument arm outside the NIR (such as ANDES UBV, RIZ, or CARMENES VIS) you must generate a telluric reference file covering the appropriate wavelength range.
+The NIR telluric reference does not cover the UBV wavelengths. EXoPLORE now
+stops with an error identifying the file's available interval and the interval
+needed by the selected orders. Whenever you change instrument arm, check the
+actual reference-file coverage and generate a suitable file if needed.
 
 In the optical (0.35 to 0.63 µm), the dominant telluric absorption is from broad O₃ Chappuis bands (smooth, broadband, mostly removed by the polynomial preparation pipeline) and from weak O₂ features near the band edges. With `mask_threshold: 0.2`, no pixels are masked in this range under typical Paranal conditions.
 :::
@@ -236,6 +256,12 @@ If you do not need to tune the precipitable water vapour, the observatory site, 
 
 Generate the optical reference file with the `--ref-only` flag, which queries SkyCalc once at the reference airmass (1.0 by default) and writes `tell_ref_airmass_1.0.fits` without generating per-exposure files:
 
+In the **same** `configs/wasp76b_andes_ubv_limbasym.json`, the `tellurics` block
+contains `"skycalc_wavelength_limits_um": [0.34, 0.65]`. Keep this optical interval when
+adapting Tutorial 1: the reference UBV grid spans approximately 0.3494–0.6331 µm.
+The downloader reads the JSON interval explicitly; it does not derive it from
+the ETC file.
+
 ```bash
 python scripts/generate_skycalc_inputs.py \
     configs/wasp76b_andes_ubv_limbasym.json \
@@ -243,7 +269,12 @@ python scripts/generate_skycalc_inputs.py \
     --mode synthetic
 ```
 
-This requires an internet connection and the `skycalc_ipy` package (`pip install skycalc_ipy`). The file is written to `inputs/ANDES/WASP76b/tellurics/tell_ref_airmass_1.0.fits`. For the wavelength range to be recognised correctly, the instrument config reads it from `paths.inputs_dir`; the script derives the wavelength limits automatically from the ANDES UBV ETC file.
+This requires an internet connection and the `skycalc_ipy` package (`pip install skycalc_ipy`). The file is written to `inputs/ANDES/WASP76b/tellurics/tell_ref_airmass_1.0.fits`, matching `tellurics.reference_telluric_file`. If a file already exists, the script skips it; changing the interval alone does not replace it. See the {ref}`input guide <skycalc-reference-download>` before deliberately using `--overwrite`.
+
+A reference starting at 0.350 µm misses the blue edge of order 0
+(approximately 0.349393 µm). If an existing file does not cover the selected
+orders, back it up and repeat the command above with `--overwrite` to generate
+it using the configured `[0.34, 0.65]` interval.
 
 ### Step 3: Run
 

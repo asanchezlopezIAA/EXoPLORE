@@ -10,6 +10,12 @@ Usage
 The first form validates the config and prints a simulation summary.
 Pass ``--run`` to execute the full simulation (requires all dependencies).
 """
+
+# Where this script fits
+# This source-checkout launcher delegates to the shared command-line
+# interface. Without --run it previews the configuration; with --run it starts
+# the same simulator used by the notebook. Keep scientific logic in the package.
+
 import sys
 import warnings
 from pathlib import Path

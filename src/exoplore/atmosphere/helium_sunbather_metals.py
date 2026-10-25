@@ -5,6 +5,13 @@ save_cloudy_parker_profile, retaining each iteration at a unique path. No
 temporary files are deleted or overwritten. Failure to converge is explicit.
 """
 from __future__ import annotations
+
+# Reading this file
+# These helpers belong to the metal-bearing Sunbather atmosphere path.
+# They keep the configured composition and the solver's mean-mass iteration
+# together. A failed convergence is an atmosphere failure, not a missing plot;
+# changing the iteration or abundances would be a scientific change.
+
 from pathlib import Path
 import json
 import warnings

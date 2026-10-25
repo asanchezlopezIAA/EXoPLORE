@@ -24,6 +24,13 @@ Tamuz, Mazeh & Zucker (2005), MNRAS, 356, 1466.
 
 from __future__ import annotations
 
+# Reading this file
+# SYSREM fits/removes weighted time-wavelength components; model-filtering
+# helpers account for that operation when comparing a proposed signal to prepared
+# data. Selection of how many passes to use is a separate decision. Follow the
+# returned components/projector as well as the residual matrix.
+
+
 from typing import List, Tuple
 
 import numpy as np

@@ -21,6 +21,12 @@ then computed from the same Radtrans object.
 
 from __future__ import annotations
 
+# Where this script fits
+# This runs atmospheric-model calculations to make documentation figures.
+# It is more than a viewer of existing PNG files: the configured inputs determine
+# the physical spectra generated when the script is executed.
+
+
 import argparse
 import os
 import sys

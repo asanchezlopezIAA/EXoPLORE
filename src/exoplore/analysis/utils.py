@@ -5,6 +5,13 @@ exoplore.analysis.utils
 Miscellaneous helper utilities for analysis workflows.
 """
 
+# Reading this file
+# The cleanup function below actually deletes directory contents. It is
+# not a spectrum-processing operation or a harmless path constructor. Read its
+# caller and target path before using it: existing files are not recoverable
+# through this function.
+
+
 import os, shutil
 
 def remove_all_elements(folder_path):

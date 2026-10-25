@@ -51,6 +51,13 @@ Usage
     wave, spec = emulator.predict(T_eq=1200.0, log10_x_h2o=-3.0)
 """
 
+# Reading this file
+# This is an explicitly experimental spectrum surrogate, not the default
+# physical solver. Training/prediction accuracy and retrieval accuracy are
+# different checks. The warning above remains applicable; moving or documenting
+# this file does not validate it for scientific retrievals.
+
+
 import os
 import numpy as np
 

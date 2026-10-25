@@ -1,5 +1,12 @@
 """exoplore.config, typed simulation configuration objects."""
 
+# Reading these imports
+# This is the current public configuration entry point. Its loader below
+# delegates to SimulationConfig.from_json. An older file named config/load.py
+# also exists; do not infer that it is the implementation behind this public
+# function merely because it has a similar filename.
+
+
 from exoplore.config.models import (
     PlanetConfig,
     InstrumentConfig,

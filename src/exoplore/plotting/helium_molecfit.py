@@ -6,6 +6,13 @@ reported in the fitting grid's pixels, with fitted/fixed status from the recipe.
 """
 from __future__ import annotations
 
+# Reading this file
+# These routines read saved per-exposure fit reports to show accepted
+# correction/kernel behaviour. Distinguish a fitted kernel width from a fixed
+# configured width, and keep detector-section/nod membership when comparing
+# exposures. Reading reports does not repeat external fits.
+
+
 import json
 from pathlib import Path
 import re

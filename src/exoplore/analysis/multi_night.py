@@ -5,6 +5,13 @@ exoplore.analysis.multi_night
 Multi-night / multi-instrument combination and comparison plots.
 """
 
+# Reading this file
+# This file combines/comparisons retrieval posteriors across nights or
+# instruments and makes plots. That is different from adding exposure CCFs in
+# the simulator. Check which posterior parameters/priors and input runs are
+# being combined before treating the resulting distribution as a joint inference.
+
+
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")

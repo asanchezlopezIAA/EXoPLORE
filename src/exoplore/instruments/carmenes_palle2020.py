@@ -5,6 +5,13 @@ for the masked alternative of Pallé et al. (2020), doi:10.1051/0004-6361/202037
 All source files are read-only; all correction products must be new.
 """
 from __future__ import annotations
+
+# Reading this file
+# This is the CARACAL ingestion/telluric-fitting adapter for observed
+# CARMENES helium work. Keep native pixel orientation and matched fibre/exposure
+# membership before correction. The later transmission recipe is a separate
+# stage from reading extracted spectra and fitting tellurics.
+
 import hashlib
 import json
 from pathlib import Path

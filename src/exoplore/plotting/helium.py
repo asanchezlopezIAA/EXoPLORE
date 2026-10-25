@@ -8,6 +8,13 @@ does not smooth, detrend, fit or change the saved scientific arrays.
 """
 from __future__ import annotations
 
+# Reading this file
+# These functions show prepared helium observations and their model
+# comparisons with consistent axes. Identify the wavelength frame and the
+# prepared model used for residuals. The figure renderer is separate from
+# physical atmosphere generation and direct-transmission preparation.
+
+
 import json
 from pathlib import Path
 from types import SimpleNamespace

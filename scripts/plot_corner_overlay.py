@@ -35,6 +35,12 @@ Arguments
 
 from __future__ import annotations
 
+# Where this script fits
+# This compares saved posterior samples from selected retrievals. Check
+# which parameters and source runs are overlaid; plotting a distribution does
+# not launch a sampler or make different priors equivalent.
+
+
 import argparse
 import sys
 

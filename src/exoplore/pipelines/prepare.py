@@ -107,6 +107,11 @@ def preparing_pipeline(
     -------
     Varies by branch (see the per-branch code for the full return signature).
     """
+    # This dispatcher is shared by data preparation and the configured model
+    # reprocessing paths. A prepared-data/model comparison needs compatible
+    # masks and processing; retrieval-specific flags below carry that context.
+    # Do not replace a branch with another normalization because names look
+    # similar: the operators and uncertainty treatment can differ scientifically.
     # Lazy imports to avoid circular dependencies
     if inp_dat['preparing_pipeline'] == 'Palle2020':
         from exoplore.pipelines.palle2020 import preparing_pipeline_adapter
@@ -150,6 +155,10 @@ def preparing_pipeline(
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
 
+    # A call handles one order/night: rows are exposures, columns are wavelength
+    # channels. mask/useful_spectral_points are integer column indices, whereas
+    # some intermediate routines construct boolean selections. Check each
+    # boundary rather than assuming every variable named mask is boolean.
     n_spectra, n_pixels = data.shape
     data_prepared = np.ones_like(data)
     propag_noise = np.ones_like(data)
@@ -249,6 +258,8 @@ def preparing_pipeline(
             if mask.shape != (0,):
                 data_prepared[:, mask] = 1
 
+            # Values written into excluded columns above are placeholders, not
+            # measured flux. The mask/useful-column indices determine validity.
             # Blain24 has a single combined masking step, the intermediate
             # and final masks are identical.
             inter_mask   = np.copy(mask)

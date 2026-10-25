@@ -22,6 +22,13 @@ Brogi, M. & Line, M. R. (2019), AJ, 157, 114.
 
 from __future__ import annotations
 
+# Reading this file
+# These are preparation operations selected by pipelines/prepare.py.
+# Normalization and the subsequent telluric fits act in a particular sequence;
+# the output of one becomes the input of the next. Preserve that sequence when
+# following data, uncertainties and excluded wavelength columns.
+
+
 from typing import Tuple
 
 import numpy as np

@@ -19,6 +19,8 @@ Design rules
 from __future__ import annotations
 
 import json
+import math
+from numbers import Real
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -432,6 +434,10 @@ class TelluricConfig:
     reference_telluric_file:
         Path to the reference telluric FITS file (used when
         ``use_full_skycalc=False``).
+    skycalc_wavelength_limits_um:
+        SkyCalc download interval [minimum, maximum], in microns. This does
+        not alter the instrument grid or resolving power. None preserves the
+        downloader's older fallback; the full example specifies its interval.
     mask_threshold:
         Telluric flux below this fraction is masked (e.g. 0.2 = 20 %).
     safety_window_pixels:
@@ -450,6 +456,22 @@ class TelluricConfig:
     reference_telluric_file: str = ""
     mask_threshold: float = 0.2
     safety_window_pixels: int = 7
+    skycalc_wavelength_limits_um: Optional[List[float]] = None
+
+    def __post_init__(self) -> None:
+        # Download settings belong to terrestrial absorption inputs, not to
+        # the instrument's resolution/convolution or wavelength-grid definition.
+        limits = self.skycalc_wavelength_limits_um
+        if limits is None:
+            return
+        if (not isinstance(limits, (list, tuple)) or len(limits) != 2
+                or any(isinstance(v, bool) or not isinstance(v, Real)
+                       or not math.isfinite(v) for v in limits)
+                or not 0 < limits[0] < limits[1]):
+            raise ValueError(
+                "tellurics.skycalc_wavelength_limits_um must be null or two finite "
+                "positive numbers [minimum, maximum] in microns, with minimum < maximum."
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -1112,6 +1134,8 @@ class SimulationConfig:
 
     def to_dict(self) -> dict:
         """Return a plain-dict representation suitable for JSON."""
+        # Configuration is small and has named sections, so recursive dataclass
+        # conversion is appropriate here. Do not reuse this on large run arrays.
         return asdict(self)
 
     def to_json(self, path: str | Path) -> None:
@@ -1122,6 +1146,12 @@ class SimulationConfig:
     @classmethod
     def from_dict(cls, d: dict) -> "SimulationConfig":
         """Reconstruct from a plain dict (as loaded from JSON)."""
+
+        # JSON supplies dictionaries; the rest of the code expects named config
+        # objects such as cfg.observation and cfg.atmosphere.planet_model.
+        # Convert known nested sections explicitly, including optional regions.
+        # Current compatibility behavior drops unknown keys: this is not strict
+        # typo validation. Preserve that behavior during structural refactoring.
 
         def _region(sub: dict) -> AtmosphereRegionConfig:
             return AtmosphereRegionConfig(**{
@@ -1170,6 +1200,7 @@ class SimulationConfig:
 
         def _safe(cls_, sub: dict):
             """Construct dataclass ignoring unknown keys (forward compat)."""
+            # This filters field names; it does not enforce every annotated type.
             return cls_(**{
                 k: v for k, v in sub.items()
                 if k in cls_.__dataclass_fields__
@@ -1199,6 +1230,9 @@ class SimulationConfig:
     @classmethod
     def from_json(cls, path: str | Path) -> "SimulationConfig":
         """Load a :class:`SimulationConfig` from a JSON file."""
+        # File loading delegates construction to from_dict, then applies the
+        # per-night cadence checks below. Those checks currently live only here;
+        # keep that distinction visible until a separate validation review.
         with open(path) as fh:
             cfg = cls.from_dict(json.load(fh))
         obs = cfg.observation

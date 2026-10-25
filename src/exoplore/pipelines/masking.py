@@ -4,8 +4,9 @@ exoplore.pipelines.masking
 
 Spectral masking utilities for high-resolution time-series data.
 
-Three mask sources are combined into a single boolean array of
-*good* (unmasked) pixel indices:
+Mask sources identify unusable wavelength columns. The public helpers below
+return integer column indices; temporary boolean selections inside functions
+are converted to those indices. Good-pixel lists describe the retained columns.
 
 Telluric mask
     Pixels where the telluric template transmittance falls below a

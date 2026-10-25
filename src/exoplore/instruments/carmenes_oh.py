@@ -7,6 +7,13 @@ All wavelengths are topocentric vacuum nm. Source arrays are never modified.
 """
 from __future__ import annotations
 
+# Reading this file
+# Fibre B measures the sky contribution; fibre A contains the science
+# spectrum. These routines fit/transfer that sky contribution with explicit
+# calibration. A sky amplitude and an inter-fibre flux conversion are different
+# quantities; inspect their units before applying a subtraction.
+
+
 from dataclasses import dataclass
 import numpy as np
 from scipy.optimize import least_squares

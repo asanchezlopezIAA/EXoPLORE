@@ -305,6 +305,7 @@ All six atmosphere sub-blocks share the same structure:
 
 ```json
 "tellurics": {
+  "skycalc_wavelength_limits_um": [0.9, 2.5],
   "include_tellurics": true,
   "use_full_skycalc": false,
   "use_accurate_airmass": true,
@@ -319,6 +320,17 @@ All six atmosphere sub-blocks share the same structure:
   "safety_window_pixels": 7
 }
 ```
+
+`tellurics.skycalc_wavelength_limits_um` sets the **SkyCalc download range**
+in microns, inside this same simulation JSON. It is unrelated to instrument
+convolution and does not change the instrument wavelength grid. Use a finite
+positive pair `[minimum, maximum]` covering all selected orders with margin.
+The full YJHK example uses `[0.9, 2.5]`; the UBV example uses `[0.34, 0.65]`.
+Missing or `null` uses `[0.95, 2.45]`, which may be too narrow for your
+instrument. The field survives configuration
+loading/saving. The downloader reads it explicitly rather than inferring it
+from the ETC file. EXoPLORE rejects a telluric file that does not cover the
+selected wavelengths. See the {ref}`input guide <skycalc-reference-download>`.
 
 ### Three telluric modes
 

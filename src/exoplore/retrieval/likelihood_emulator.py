@@ -65,6 +65,13 @@ Configuration
 
 from __future__ import annotations
 
+# Reading this file
+# This experimental surrogate predicts likelihood values rather than
+# running every atmospheric calculation. That can alter an inferred posterior
+# if approximation errors matter. Read its existing validation warning before
+# considering it as a substitute for the actual likelihood.
+
+
 import os
 import json
 import numpy as np

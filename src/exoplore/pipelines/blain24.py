@@ -22,6 +22,14 @@ Blain, D., Sánchez-López, A. & Mollière, P. (2024), AJ.
 
 from __future__ import annotations
 
+# Reading this file
+# The preparation dispatcher calls these polynomial corrections in order:
+# throughput over wavelength, then telluric behaviour against airmass. The
+# corrected data and propagated uncertainties travel together. Model-processing
+# calls can use different flags, so inspect arguments before assuming data and
+# model are being treated identically in every branch.
+
+
 import os
 from typing import Optional, Tuple
 

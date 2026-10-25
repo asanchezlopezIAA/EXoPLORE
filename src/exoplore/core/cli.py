@@ -62,10 +62,14 @@ def main(argv=None) -> int:
         return 1
 
     print(f"\nLoading config: {args.config}")
+    # The CLI and notebook use the same config loader and simulator. Keep
+    # scientific setup in those shared interfaces, not a second CLI-only path.
     cfg = SimulationConfig.from_json(args.config)
     sim = ExoploreSimulator(cfg)
     print(sim.summary())
 
+    # Reading a config and showing its summary should not launch an expensive
+    # observation. --run is the explicit switch from preview to calculation.
     if args.run:
         sim.run()
     else:

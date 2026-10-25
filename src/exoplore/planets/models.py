@@ -22,6 +22,13 @@ simulator.
 
 from __future__ import annotations
 
+# Reading this file
+# A planet object keeps system parameters and derived orbital quantities
+# together so the atmosphere and timing code use the same system. Public fields
+# with unit suffixes are the clearest starting point. Compatibility properties
+# convert values for older routines; they are not new independent measurements.
+
+
 import math
 from dataclasses import dataclass, field
 from typing import List, Optional

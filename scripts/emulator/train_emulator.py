@@ -23,6 +23,12 @@ Output (all saved to data_dir/)
     training_log.json                       loss curves and metrics
 """
 
+# Where this script fits
+# This fits the experimental surrogate to its supplied training products.
+# Training changes the approximation, not the physical opacity model itself.
+# Use separate validation/retrieval checks before drawing scientific conclusions.
+
+
 import argparse, json, os, sys, time
 import numpy as np
 

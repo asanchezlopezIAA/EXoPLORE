@@ -5,6 +5,13 @@ exoplore.analysis.diagnostics
 Diagnostic and model-comparison plots for high-resolution spectroscopy.
 """
 
+# Reading this file
+# These functions compare already available models, matrices or retrieval
+# products. Some also calculate summaries or generate illustrative examples.
+# Check the function's input/source before treating a figure as a diagnostic of
+# your actual simulation rather than a separate demonstration.
+
+
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")

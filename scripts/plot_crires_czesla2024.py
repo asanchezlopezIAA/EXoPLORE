@@ -7,6 +7,12 @@ Every output is created exclusively. Source corrections remain unchanged.
 """
 from __future__ import annotations
 
+# Where this script fits
+# This displays saved telluric-correction and helium-preparation products.
+# The fitting/acceptance decisions happened upstream. Display scaling in a panel
+# must be distinguished from the correction applied to scientific flux.
+
+
 import argparse
 import json
 from pathlib import Path

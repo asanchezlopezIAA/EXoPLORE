@@ -29,8 +29,9 @@ The output files are written into the directory that the simulator expects::
         tell_spec_0.fits
         tell_spec_1.fits
         ...
+        airmass.fits
+    {inputs_dir}/tellurics/
         tell_ref_airmass_{X.X}.fits
-        pwv_values.fits
 
 Outputs
 -------
@@ -43,16 +44,16 @@ tell_ref_airmass_{X.X}.fits
     ``tellurics.use_full_skycalc = false`` for a single-airmass reference).
     Same format as the per-exposure files.
 
-pwv_values.fits
-    1-D FITS array of PWV values (mm) assigned to each exposure.
-    Written only when ``constant_pwv = false``.
+airmass.fits
+    The rounded/clipped airmass values used for the exposure queries.
 
 Notes
 -----
-- All SkyCalc parameters (resolution, wavelength grid, moon/star/zodiacal
-  components, etc.) are set to match the ``skycalc_model()`` defaults.
+- The wavelength interval is read from tellurics.skycalc_wavelength_limits_um
+  in the simulation JSON. Other sky-model defaults are defined in _query_skycalc.
 - The wavelength grid is queried at R = 150 000 (fixed_spectral_resolution)
-  to ensure the simulator can interpolate onto any instrument wavelength grid.
+  before interpolation/convolution onto the selected instrument grid. Wavelength
+  coverage is checked separately; high resolving power cannot supply missing bands.
 - ``vacair = vac``, vacuum wavelengths, consistent with petitRADTRANS output.
 - The observatory code is read from the instrument config
   (e.g. ``lasilla`` for CARMENES, ``paranal`` for CRIRES+, ANDES).
@@ -60,16 +61,27 @@ Notes
 
 from __future__ import annotations
 
+# Where this script fits
+# This prepares telluric input spectra through the SkyCalc service. It is
+# an input-generation step before the simulation reads transmittances, not a
+# fit to the observed planetary signal. Read its observing/PWV choices first.
+
+
 import argparse
 import io
 import json
 import os
 import sys
 import time
+from pathlib import Path
 
 import numpy as np
 from astropy.io import fits
 
+# Use the same field validation as the simulation JSON, including when this
+# script is run directly from a source checkout rather than an installed wheel.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+from exoplore.config.models import TelluricConfig
 
 # ---------------------------------------------------------------------------
 # SkyCalc query
@@ -515,6 +527,19 @@ def generate(config_path: str, overwrite: bool = False,
     paths     = cfg.get("paths",       {})
     inst_cfg  = cfg.get("instrument",  {})
 
+    # The same simulation JSON holds the SkyCalc interval under tellurics.
+    # Keep the old raw-JSON key readable for existing scripts, but do not expose
+    # it as an instrument setting in the current schema or examples.
+    limits = tell.get("skycalc_wavelength_limits_um")
+    if limits is None and inst_cfg.get("wavelength_limits_um") is not None:
+        import warnings
+        warnings.warn(
+            "Move instrument.wavelength_limits_um to tellurics.skycalc_wavelength_limits_um "
+            "in the same simulation JSON.", FutureWarning,
+        )
+        limits = inst_cfg["wavelength_limits_um"]
+    wave_limits = TelluricConfig(skycalc_wavelength_limits_um=limits).skycalc_wavelength_limits_um
+
     inputs_dir   = paths.get("inputs_dir", "inputs/")
     flag_event   = obs.get("flag_event", "full_event")
     # Number of exposures the simulator will build: from the transit duration
@@ -569,8 +594,7 @@ def generate(config_path: str, overwrite: bool = False,
     # Wavelength limits
     wmin_um = 0.95
     wmax_um = 2.45
-    wave_limits = inst_cfg.get("wavelength_limits_um", None)
-    if wave_limits:
+    if wave_limits is not None:
         wmin_um, wmax_um = wave_limits
     wmin_nm = wmin_um * 1000.0
     wmax_nm = wmax_um * 1000.0
@@ -682,6 +706,11 @@ def generate(config_path: str, overwrite: bool = False,
             t0   = time.time()
             hdul = _query_skycalc(ref_airmass, pwv_mm, observatory,
                                    wmin_nm, wmax_nm)
+            if hdul is None:
+                raise RuntimeError(
+                    f"SkyCalc returned no reference spectrum for {wmin_nm:g}–{wmax_nm:g} nm. "
+                    "No reference file was written; check the service response and your simulation JSON."
+                )
             _save_hdul(hdul, ref_path)
             hdul.close()
             print(f"{time.time()-t0:.1f}s")

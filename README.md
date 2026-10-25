@@ -196,6 +196,12 @@ Runtime for the reference HD 189733 b ANDES simulation (76 orders, 1 night) is a
 
 ## Package structure
 
+To follow the calculation through the code, start with the
+[code reading guide](docs/code_reading_guide.md). The
+[file-by-file guide](docs/module_guide.md) explains what each maintained module
+and script is for; the [architecture overview](docs/architecture.md) shows how
+the parts connect.
+
 ```
 src/exoplore/
 ├── config/         SimulationConfig and all sub-configs (typed dataclasses)

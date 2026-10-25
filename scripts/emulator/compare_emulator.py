@@ -10,6 +10,12 @@ Usage
         --emulator_dir emulators/carmenes_nir/order_23
 """
 
+# Where this script fits
+# This compares predicted spectra against actual atmospheric-model
+# calculations. Spectral agreement is one diagnostic; it does not establish that
+# the experimental emulator yields an accurate retrieval posterior.
+
+
 import argparse, os, sys
 import numpy as np
 import matplotlib.pyplot as plt
