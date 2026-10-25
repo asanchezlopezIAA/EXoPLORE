@@ -11,7 +11,7 @@ raw frames ──▶ reduce_crires_night.py ──▶ crires_molecfit ──▶ 
 ```
 
 EXoPLORE calls the ESO tools for extraction and telluric correction.
-Install the ESO pipelines before running these steps; their documentation
+Install the ESO pipelines before running these steps. Their documentation
 is linked below.
 
 ## Prerequisites: install the ESO tools
@@ -28,7 +28,7 @@ wrappers call `esorex`):
 
 The easiest way to obtain both is the ESO pipeline installer (`esoreflex` /
 `install_esoreflex`), which places `esorex` and all recipe data on your system.
-Refer to the ESO pages above for the current instructions; they are the source
+Refer to the ESO pages above for the current instructions. They are the source
 of truth for the reduction itself.
 
 ## Getting the raw data from the ESO archive
@@ -42,11 +42,11 @@ points that otherwise cause silent failures:
 - **Frames arrive `.fits.Z`-compressed.** Decompress them (e.g. `uncompress` or
   `gunzip`) before reducing.
 - **One delivery can bundle several nights.** Sort the frames so that **each
-  night sits in its own directory** with its own calibrations; the driver reduces
+  night sits in its own directory** with its own calibrations. The driver reduces
   one directory at a time.
 - **The static `M.CRIRES.*.fits` tables must be in the frame directory.**
   `cr2res_cal_wave` needs the per-setting emission-line catalog (`EMISSION_LINES`)
-  and initial trace-wave (`UTIL_WAVE_TW`); these ship with the download as
+  and initial trace-wave (`UTIL_WAVE_TW`). These ship with the download as
   `M.CRIRES.*.fits` files. If they are not alongside the frames the wavelength
   step fails with *"the emission lines catalog is needed"*, and the extraction
   silently falls back to the (less accurate) flat trace-wave guess. Copy them in.
@@ -80,9 +80,8 @@ Output (written next to the raw directory):
 `exoplore.instruments.crires_molecfit` runs molecfit on a reference spectrum per
 nodding position to (a) refine the wavelength solution per detector segment and
 (b) produce a theoretical telluric transmittance for the normalisation masks
-(Nortmann Appendix A.1 and Sec 3.1). **You do not usually call this stage
-directly**: `prepare_crires_night.py` (Stage 3) runs it automatically and caches
-the result. To run it on its own:
+(Nortmann Appendix A.1 and Sec 3.1). `prepare_crires_night.py` (Stage 3)
+runs it automatically and caches the result. To run it on its own:
 
 ```bash
 python -m exoplore.instruments.crires_molecfit /path/to/reduced A
@@ -92,24 +91,24 @@ What it does automatically:
 
 - **Reads the setting and slit width from the header** and selects the telluric
   molecules relevant to the band. Only water is fitted (it anchors the
-  wavelength solution across the near infrared); the other band molecules are
+  wavelength solution across the near infrared). The other band molecules are
   included at climatological abundance. The molecule lists per band are in
   `BAND_MOLECULES` and can be overridden.
 - **Picks the highest signal to noise exposure** as the reference (all exposures
   share the same Fabry Perot solution, which does not drift over the night).
 - **Runs molecfit in the configuration validated for CRIRES+**: a vacuum
-  wavelength frame (cr2res delivers vacuum wavelengths; running in air offsets
+  wavelength frame (cr2res delivers vacuum wavelengths, running in air offsets
   the solution by of order 80 km/s at 2 micron) and the reflex line spread
   function (a single fitted Gaussian). The optimiser tolerance is molecfit's
-  documented default (`FTOL = XTOL = 1e-2` order; the wrapper uses `1e-4`), not a
+  documented default (`FTOL = XTOL = 1e-2` order, the wrapper uses `1e-4`), not a
   far tighter value: on telluric-poor segments (e.g. between the water bands in
   Y) a tolerance well below the noise floor never converges. A per-segment
-  wall-clock timeout bounds any segment that still fails to converge; it then
+  wall-clock timeout bounds any segment that still fails to converge. It then
   falls back to the per-order median shift (below).
 - **Gates the refinement.** molecfit only constrains the wavelength where a
   segment carries usable telluric structure. Segments that are telluric
   saturated (deep band heads, no continuum to anchor) or telluric poor (almost
-  no lines) are under constrained; they inherit the median shift of the
+  no lines) are under constrained. They inherit the median shift of the
   constrained detectors of the same echelle order (consistent to well under
   1 km/s), or keep the Fabry Perot solution if no detector of the order is
   constrained.
@@ -118,7 +117,7 @@ What it does automatically:
   the same conclusion Nortmann reaches from a telluric template cross
   correlation.
 
-This generalises to any CRIRES+ Y, J, H, K, L or M setting; only the molecule
+This generalises to any CRIRES+ Y, J, H, K, L or M setting. Only the molecule
 list and the slit width are setting dependent, and both are handled from the
 header.
 
@@ -133,7 +132,7 @@ molecfit on a band other than K, you should state the fit species explicitly and
 check them against your data.
 
 Pass them with `--species` (to `prepare_crires_night.py` or to the wrapper). The
-value is a comma separated list; append `:1`/`:0` to control which are fitted,
+value is a comma separated list. Append `:1`/`:0` to control which are fitted,
 otherwise water is fitted as the wavelength anchor:
 
 | Band | Approx. range | Example `--species` |
@@ -150,7 +149,7 @@ python scripts/prepare_crires_night.py /path/to/reduction_dir /path/to/output_di
     --species "H2O,CO2,CH4"
 ```
 
-Only species with structured lines across the segment should be fitted; the rest
+Only species with structured lines across the segment should be fitted. The rest
 are included at climatological abundance so their column does not run away where
 their lines are absent.
 
@@ -170,8 +169,8 @@ python scripts/prepare_crires_night.py /path/to/reduction_dir /path/to/output_di
 `reduction_dir` is the directory containing the `reduced/` and `molecfit/`
 subdirectories from Stages 1 and 2. If the molecfit products are missing, this
 script runs Stage 2 automatically (so a first run includes the slow molecfit
-step; later runs reuse the cached npz). Flux is kept in native pixel space and
-never resampled; the per exposure wavelength solution is stored in
+step. Later runs reuse the cached npz). Flux is kept in native pixel space and
+never resampled. The per exposure wavelength solution is stored in
 `wave_perframe_0.fits` so the analysis pipeline aligns the nodding positions and
 shifts to the stellar rest frame itself.
 

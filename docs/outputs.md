@@ -49,7 +49,7 @@ Shape: `(n_spectra,)`, synthetic BJD timestamps for each exposure, computed from
 
 Shape: `(n_spectra,)`, orbital phase for each exposure.
 
-Phase = (BJD - T₀) / Period. Values near 0 are at transit centre, with ingress and egress at ±T₁₄ / (2 × Period). The exposures that carry the planet signal are what EXoPLORE calls the `with_signal` set: for a transit these are the in-transit exposures (`|phase| < T₁₄ / (2 × Period)`); for an emission or phase-curve event they are instead the out-of-eclipse exposures. EXoPLORE builds this set from the transit duration and `observation.event_type`, not from a fixed phase cut. The example below reconstructs it for a transit using the same transit duration the simulator computes:
+Phase = (BJD - T₀) / Period. Values near 0 are at transit centre, with ingress and egress at ±T₁₄ / (2 × Period). The exposures that carry the planet signal are what EXoPLORE calls the `with_signal` set: for a transit these are the in-transit exposures (`|phase| < T₁₄ / (2 × Period)`). For an emission or phase-curve event they are instead the out-of-eclipse exposures. EXoPLORE builds this set from the transit duration and `observation.event_type`, not from a fixed phase cut. The example below reconstructs it for a transit using the same transit duration the simulator computes:
 
 ```python
 from astropy.io import fits
@@ -96,7 +96,7 @@ For each order with absolute index `K` (from the instrument's `order_selection` 
 | `mat_cc_order_{K}_{run_name}.npz` | `(n_spectra, n_pixels)` | CCF-ready matrix (BL19/Blain24 pipelines only). The matrix as passed to the CCF kernel. |
 | `ccf_store_order_{K}_{run_name}.npz` | `(n_nights, n_vel, n_spectra)` | Per-order CCF: CCF value at each velocity lag and each exposure, for all nights. |
 
-**Controlling which matrices are written.** Almost all of a run's disk footprint is these per-order matrices, so the `output` block in the config selects which ones to write. The global masks, velocity grids, Kp-Vsys map, phase, and Julian dates are always written. The calculation uses the matrices in memory; these flags select the arrays saved for later analysis.
+**Controlling which matrices are written.** Almost all of a run's disk footprint is these per-order matrices, so the `output` block in the config selects which ones to write. The global masks, velocity grids, Kp-Vsys map, phase, and Julian dates are always written. The calculation uses the matrices in memory. These flags select the arrays saved for later analysis.
 
 | `output` flag | Default | Needed for | Size (76-order run) |
 |---|---|---|---|
@@ -178,7 +178,7 @@ Every run saves PDF figures to `<run_name>/plots/`. The key files are:
 
 | File | Description |
 |---|---|
-| `pipeline_steps_<run_name>.pdf` | **Pipeline-steps figure** (see below; four-panel for BL19/Blain24, a SYSREM iteration waterfall for ASL19/Gibson22). Generated for the first processed order on every run. |
+| `pipeline_steps_<run_name>.pdf` | **Pipeline-steps figure** (see below, four-panel for BL19/Blain24, a SYSREM iteration waterfall for ASL19/Gibson22). Generated for the first processed order on every run. |
 | `sn_map_<run_name>_SNR.pdf` | Kp-Vsys S/N map in colour with contours. |
 | `1D_CCF_<run_name>.pdf` | 1-D CCF at the best-fit Kp vs rest-frame velocity. |
 | `CC_ERF_<run_name>.pdf` | CCF trail as a function of orbital phase (the "butterfly" plot). |
@@ -186,7 +186,7 @@ Every run saves PDF figures to `<run_name>/plots/`. The key files are:
 
 ### Pipeline-steps figure
 
-`pipeline_steps_<run_name>.pdf` shows the data-simulation and preparation steps for the displayed order (`plotting.pipeline_steps_order`, default first order), mirroring Fig. 5 of Sánchez-López et al. (2022). It is a stacked grey-scale figure: the top panel is the 1-D in-silico flux at mid-transit, noiseless (black) and noisy (red), in the window `plotting.pipeline_steps_xlim_um` (default ~1.487 µm water band); below it are time-series matrices (wavelength horizontal, spectrum number vertical), with masked channels as uniform grey and ingress/egress as red dashed lines. The number of matrix panels depends on the pipeline:
+`pipeline_steps_<run_name>.pdf` shows the data-simulation and preparation steps for the displayed order (`plotting.pipeline_steps_order`, default first order), mirroring Fig. 5 of Sánchez-López et al. (2022). It is a stacked grey-scale figure: the top panel is the 1-D in-silico flux at mid-transit, noiseless (black) and noisy (red), in the window `plotting.pipeline_steps_xlim_um` (default ~1.487 µm water band). Below it are time-series matrices (wavelength horizontal, spectrum number vertical), with masked channels as uniform grey and ingress/egress as red dashed lines. The number of matrix panels depends on the pipeline:
 
 - **Polynomial pipelines (BL19, Blain24)**, no iterations, so two matrix panels: the **raw** matrix (throughput + tellurics) and the **corrected (residual)** matrix after `preparing_pipeline`. Raw → corrected.
 - **SYSREM pipelines (ASL19, Gibson22)**, a waterfall: the **raw** matrix, then one panel for each iteration in `plotting.pipeline_steps_sysrem_iterations` (default `[1, 5]`), so the common-mode systematics are seen peeling away from one panel to the next.
@@ -238,7 +238,7 @@ ax.set_xlabel('$v_{rest}$ (km/s)')
 ax.set_ylabel('$K_p$ (km/s)')
 ax.set_title('HD 189733 b, ANDES 1 transit')
 
-# Mark the expected position (no wind injected → peak at v_rest = 0; literature Kp = 152.5 km/s)
+# Mark the expected position (no wind injected → peak at v_rest = 0, literature Kp = 152.5 km/s)
 ax.axvline(0, color='white', ls='--', lw=1, label='Expected $v_{rest}$ (no wind)')
 ax.axhline(152.5, color='white', ls=':',  lw=1, label='Literature $K_p$')
 ax.legend()
@@ -318,7 +318,7 @@ plt.tight_layout()
 
 ## Understanding the Kp-Vsys map
 
-The Kp-Vsys map is built by shifting the time-series CCF trail at each orbital phase by the expected planet velocity `Kp × sin(2π × phase)`, then co-adding. At the true `(Kp, Vsys)`, the planet signal adds coherently; everywhere else it averages to zero. This allows us to simultaneously constrain the orbital velocity semi-amplitude and the systemic rest-frame velocity of the planet.
+The Kp-Vsys map is built by shifting the time-series CCF trail at each orbital phase by the expected planet velocity `Kp × sin(2π × phase)`, then co-adding. At the true `(Kp, Vsys)`, the planet signal adds coherently. Everywhere else it averages to zero. This allows us to simultaneously constrain the orbital velocity semi-amplitude and the systemic rest-frame velocity of the planet.
 
 **What to look for:**
 

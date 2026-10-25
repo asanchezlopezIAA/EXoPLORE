@@ -72,20 +72,20 @@ The atmosphere block defines **two separate petitRADTRANS models**: the injected
 The `"pipeline": "Blain24"` entry selects the Blain24 preparation pipeline ([Blain, Sánchez-López & Mollière 2024](https://doi.org/10.3847/1538-3881/ad2c8b)). Blain24 first removes the instrumental throughput and blaze by dividing each exposure by a second-order polynomial fit over wavelength, and then removes the telluric absorption by fitting a second-order polynomial to the logarithm of the flux as a function of airmass (the log-transmittance of the Earth's atmosphere is, to first order, linear in airmass) and dividing by the resulting fit. Wavelength channels where the fitted telluric transmittance falls below 0.8 are masked, to exclude regions too strongly affected by telluric absorption.
 
 :::{caution}
-As discussed in the [Concepts primer, Section 3](concepts.md#3-the-preparation-pipeline-removing-the-contaminants-and-its-cost), some individual steps of these preparation methods generalise well, while others are tied to the specifics of a given dataset and do not transfer blindly. The pipeline choice, the SYSREM component count, and the masking thresholds should be studied and, where necessary, adapted for the data at hand, and verified on that data rather than applied blindly. Every night carries its own tellurics, systematics, and stellar behaviour.
+As discussed in the [Concepts primer, Section 3](concepts.md#3-the-preparation-pipeline-removing-the-contaminants-and-its-cost), some individual steps of these preparation methods generalise well, while others are tied to the specifics of a given dataset and do not transfer blindly. The pipeline choice, the SYSREM component count, and the masking thresholds should be studied and, where necessary, adapted for the data at hand, and verified on that data. Every night carries its own tellurics, systematics, and stellar behaviour.
 :::
 
 :::{important}
 **Preparing pipeline and retrieval consistency**
 
-The preparing pipeline acts on the data matrix in a way that also affects the buried planet signal. For retrieval to be unbiased, the forward model must undergo the same transformation as the data at every likelihood evaluation. For polynomial-based pipelines (BL19, Blain24), the preparation operator is linear and analytically known, so the same polynomial can be applied directly to the Doppler-shifted model; Blain, Sánchez-López & Mollière (2024) formally prove unbiasedness under this condition. For SYSREM-based pipelines (ASL19, Gibson22), [Gibson et al. (2022)](https://doi.org/10.1093/mnras/stac091) showed that SYSREM can be represented as a linear projection using the eigenvectors of the data matrix, so the filtered model is obtained efficiently by a single matrix multiplication (M_filt = M - P · M) rather than by iterating SYSREM on every likelihood call.
+The preparing pipeline acts on the data matrix in a way that also affects the buried planet signal. For retrieval to be unbiased, the forward model must undergo the same transformation as the data at every likelihood evaluation. For polynomial-based pipelines (BL19, Blain24), the preparation operator is linear and analytically known, so the same polynomial can be applied directly to the Doppler-shifted model. Blain, Sánchez-López & Mollière (2024) formally prove unbiasedness under this condition. For SYSREM-based pipelines (ASL19, Gibson22), [Gibson et al. (2022)](https://doi.org/10.1093/mnras/stac091) showed that SYSREM can be represented as a linear projection using the eigenvectors of the data matrix, so the filtered model is obtained efficiently by a single matrix multiplication (M_filt = M - P · M) at each likelihood evaluation.
 :::
 
 The same JSON also tells the SkyCalc downloader which wavelength interval to
 request: `tellurics.skycalc_wavelength_limits_um: [0.9, 2.5]` covers the full reference
-YJHK grid with margin. This does not change the instrument grid. If you already
+YJHK grid with margin. The instrument input files define the observing grid. If you already
 have a suitable telluric reference at `tellurics.reference_telluric_file`, reuse
-it; EXoPLORE checks its coverage. To generate your own reference after setting
+it. EXoPLORE checks its coverage. To generate your own reference after setting
 `paths.inputs_dir`, run:
 
 ```bash
@@ -130,7 +130,7 @@ Add `--run` to actually execute:
 python -u scripts/run_exoplore.py configs/hd189733b_andes_transit_clean.json --run 2>&1 | tee run_log.txt
 ```
 
-The `-u` flag disables Python's output buffering so every line is flushed immediately; `tee` writes it to both the terminal and `run_log.txt` simultaneously. If you send the process to the background (`... &`), monitor the log with:
+The `-u` flag disables Python's output buffering so every line is flushed immediately. `tee` writes it to both the terminal and `run_log.txt` simultaneously. If you send the process to the background (`... &`), monitor the log with:
 
 ```bash
 tail -f run_log.txt
@@ -157,7 +157,7 @@ Consecutively, the simulator will:
 
 1. Load planet parameters from `planet_params/HD189733b.json`
 2. Build the ANDES wavelength grid (76 spectral orders: 55 YJH + 21 K, R = 100,000, 2048 px/order)
-3. Compute equilibrium chemistry with [EasyChem](https://easychem.readthedocs.io) (C/O = 0.41, Z = 0.53 dex) for the active morning and evening models (`morning_day` and `evening_day` in this `gradual` setup; the `_night` blocks are unused)
+3. Compute equilibrium chemistry with [EasyChem](https://easychem.readthedocs.io) (C/O = 0.41, Z = 0.53 dex) for the active morning and evening models (`morning_day` and `evening_day` in this `gradual` setup, the `_night` blocks are unused)
 4. Run petitRADTRANS for each of the six atmospheric models (planet, CCF template, four limb regions)
 5. Build the stellar continuum matrix from the PHOENIX model
 6. Simulate the full observing sequence (~390 exposures at 30 s, ~3.3 h baseline + 1.94 h transit)
@@ -176,7 +176,7 @@ CCF matrix in the Earth rest frame, co-added over all 76 ANDES YJHK orders. The 
 :::{figure} figures/tutorial1_kpvsys_andes.png
 :width: 80%
 :align: center
-Cross-correlation map as a function of the trial planetary orbital velocity amplitude K<sub>P</sub> and rest-frame velocity offset v<sub>rest</sub>, from the updated 76-order Tutorial 1 simulation. The active morning and evening limb models use EasyChem equilibrium chemistry. In this `gradual` configuration they are read from `morning_day` and `evening_day`; the `_night` blocks are unused. The peak map S/N is **43.17** at K<sub>P</sub> = **143 km s<sup>-1</sup>** and v<sub>rest</sub> = **-4 km s<sup>-1</sup>**. The reference lines mark the configured orbital amplitude (149.44 km s<sup>-1</sup>) and nominal zero rest-frame offset. Map S/N uses EXoPLORE's off-peak normalisation; it is not automatically a calibrated Gaussian significance. The injected limb regions have different velocities, so the recovered offset combines their contributions rather than measuring a single wind.
+Cross-correlation map as a function of the trial planetary orbital velocity amplitude K<sub>P</sub> and rest-frame velocity offset v<sub>rest</sub>, from the updated 76-order Tutorial 1 simulation. The active morning and evening limb models use EasyChem equilibrium chemistry. In this `gradual` configuration they are read from `morning_day` and `evening_day`. The `_night` blocks are unused. The peak map S/N is **43.17** at K<sub>P</sub> = **143 km s<sup>-1</sup>** and v<sub>rest</sub> = **-4 km s<sup>-1</sup>**. The reference lines mark the configured orbital amplitude (149.44 km s<sup>-1</sup>) and nominal zero rest-frame offset. Map S/N uses EXoPLORE's off-peak normalisation. It is not automatically a calibrated Gaussian significance. The injected limb regions have different velocities, so the recovered offset combines their contributions.
 :::
 
 :::{note}
@@ -184,11 +184,11 @@ Cross-correlation map as a function of the trial planetary orbital velocity ampl
 
 The map is constructed by co-adding the cross-correlation function (CCF) over all in-transit exposures for each assumed value of K<sub>P</sub>. At the correct K<sub>P</sub>, the planet signal stacks coherently and a peak emerges at the planet's rest-frame velocity. Away from the correct K<sub>P</sub>, the co-addition is incoherent and the signal washes out.
 
-The characteristic elongated shape (a vertical streak rather than a point) reflects a partial degeneracy between K<sub>P</sub> and v<sub>rest</sub> over a single transit: a slightly wrong K<sub>P</sub> shifts the peak in v<sub>rest</sub> rather than completely destroying it. This degeneracy can in principle be lifted by combining multiple transits at different orbital phases.
+The characteristic elongated shape (a vertical streak) reflects a partial degeneracy between K<sub>P</sub> and v<sub>rest</sub> over a single transit: a slightly wrong K<sub>P</sub> can shift the peak in v<sub>rest</sub> while retaining a detectable signal. This degeneracy can in principle be lifted by combining multiple transits at different orbital phases.
 
-A non-zero v<sub>rest</sub> at the peak indicates that the absorbing gas has a net velocity relative to the planet's Keplerian rest frame. In tidally locked hot Jupiters, a **blueshift** (negative v<sub>rest</sub>) is commonly observed and attributed to day-to-nightside winds: high-altitude gas flows from the hot dayside towards the cooler nightside, and at the terminator this flow has a line-of-sight component pointing towards the observer on both the leading and trailing limbs. For HD 189733 b, multiple studies consistently measure a blueshift of -3.9 to -5.5 km s<sup>-1</sup> ([Alonso-Floriano et al. 2019](https://doi.org/10.1051/0004-6361/201834339); [Sánchez-López et al. 2019](https://doi.org/10.1051/0004-6361/201936084); Blain et al. 2024).
+A non-zero v<sub>rest</sub> at the peak indicates that the absorbing gas has a net velocity relative to the planet's Keplerian rest frame. In tidally locked hot Jupiters, a **blueshift** (negative v<sub>rest</sub>) is commonly observed and attributed to day-to-nightside winds: high-altitude gas flows from the hot dayside towards the cooler nightside, and at the terminator this flow has a line-of-sight component pointing towards the observer on both the leading and trailing limbs. For HD 189733 b, multiple studies consistently measure a blueshift of -3.9 to -5.5 km s<sup>-1</sup> ([Alonso-Floriano et al. 2019](https://doi.org/10.1051/0004-6361/201834339), [Sánchez-López et al. 2019](https://doi.org/10.1051/0004-6361/201936084), Blain et al. 2024).
 
-A measured v<sub>rest</sub> offset is most commonly interpreted as a day-to-nightside wind, but it is not uniquely diagnostic. Planetary rotation, an offset dayside hotspot, or species-dependent dynamics can produce comparable shifts ([Brogi et al. 2023](https://doi.org/10.3847/1538-3881/acaf5c); [Smith et al. 2024](https://doi.org/10.3847/1538-3881/ad8574)), as can residual uncertainties in the velocity solution or the wavelength calibration. Such an offset should therefore always be cross-checked against independent indicators before being attributed to winds.
+A measured v<sub>rest</sub> offset is most commonly interpreted as a day-to-nightside wind, but it is not uniquely diagnostic. Planetary rotation, an offset dayside hotspot, or species-dependent dynamics can produce comparable shifts ([Brogi et al. 2023](https://doi.org/10.3847/1538-3881/acaf5c), [Smith et al. 2024](https://doi.org/10.3847/1538-3881/ad8574)), as can residual uncertainties in the velocity solution or the wavelength calibration. Such an offset should therefore always be cross-checked against independent indicators before being attributed to winds.
 :::
 
 The reference fixes `noise.noise_seed` and `observation.throughput_seed` to `12345`. With both the Gaussian-noise and throughput seeds fixed, the stochastic realisation is reproducible. End-to-end floating-point results may still differ at machine-precision level, so bitwise-identical output is not guaranteed. Changing either seed changes its corresponding random component. Fully-masked orders (deep telluric bands) are skipped and reported in `<run_name>/warnings/fully_masked_orders_<run_name>.txt`.
@@ -205,7 +205,7 @@ Everything for this run lives in that single folder:
 - `plots/`, diagnostic PDFs
 - `warnings/`, masked-order reports
 
-**Disk footprint:** with the default output settings this run writes about **1.2 GB**, almost all of it the per-order spectral matrices in `matrices/` (one compressed NumPy `.npz` per matrix per order, across the 76 ANDES orders); the diagnostic PDFs in `plots/` add ~40 MB. Which matrices are written is your choice, via the `output` block in the config (see [Outputs](outputs.md)). The defaults keep what is needed to re-run cross-correlations with other templates, run retrievals, and use the Gibson22 likelihood, and drop the pure-diagnostic matrices; saving every matrix would be ~2.2 GB, while a minimal run (just the Kp-Vsys map and metadata) is a few MB.
+**Disk footprint:** with the default output settings this run writes about **1.2 GB**, almost all of it the per-order spectral matrices in `matrices/` (one compressed NumPy `.npz` per matrix per order, across the 76 ANDES orders). The diagnostic PDFs in `plots/` add ~40 MB. Which matrices are written is your choice, via the `output` block in the config (see [Outputs](outputs.md)). The defaults keep what is needed to re-run cross-correlations with other templates, run retrievals, and use the Gibson22 likelihood, and drop the pure-diagnostic matrices. Saving every matrix would be ~2.2 GB, while a minimal run (just the Kp-Vsys map and metadata) is a few MB.
 
 See [docs/outputs.md](outputs.md) for a complete guide to every output file and code examples to read the Kp-Vsys map.
 
@@ -213,7 +213,7 @@ See [docs/outputs.md](outputs.md) for a complete guide to every output file and 
 
 ## Tutorial 2: Simulate a different planet (WASP-76 b)
 
-> **Approximate run time:** ~61 min on an Apple Mac Studio M2 Ultra (64 GB RAM), running `configs/wasp76b_andes_ubv_limbasym.json` (Blain24 pipeline, asymmetric limbs, all 62 ANDES UBV orders, one night, no retrieval). The petitRADTRANS forward model dominates: it is run for the four limb atmospheres and convolved with the per-limb wind and rotation kernels, so this case is slower than the single-atmosphere Tutorial 1. Times are approximate and machine-dependent; with `timing: true` the run writes a `timing_report_<date>.txt` with the exact per-block breakdown and total.
+> **Approximate run time:** ~61 min on an Apple Mac Studio M2 Ultra (64 GB RAM), running `configs/wasp76b_andes_ubv_limbasym.json` (Blain24 pipeline, asymmetric limbs, all 62 ANDES UBV orders, one night, no retrieval). The petitRADTRANS forward model dominates: it is run for the four limb atmospheres and convolved with the per-limb wind and rotation kernels, so this case is slower than the single-atmosphere Tutorial 1. Times are approximate and machine-dependent. With `timing: true` the run writes a `timing_report_<date>.txt` with the exact per-block breakdown and total.
 
 WASP-76 b is an ultra-hot Jupiter where the extreme day-to-night temperature contrast produces strong chemical asymmetries between the morning and evening limbs. The key observational signature is a neutral iron signal that strengthens from ingress to egress and progressively blueshifts. At ingress the morning (leading) terminator is in view, where its rotation and the day-to-nightside wind partly compensate and contribute a component near zero rest-frame velocity. As the morning terminator rotates out of view, it stops contributing, because iron has condensed out of the cooler nightside. The near-zero velocity component then vanishes, leaving only the hotter evening (trailing) terminator. There, rotation and wind add towards the observer, giving the net blueshift ([Ehrenreich et al. 2020](https://doi.org/10.1038/s41586-020-2107-1)). This tutorial runs the reference WASP-76 b simulation: ANDES UBV (0.35 to 0.63 µm, 62 orders, R = 100,000) with limb asymmetries enabled and a Fe-only CCF template.
 
@@ -259,8 +259,8 @@ Generate the optical reference file with the `--ref-only` flag, which queries Sk
 In the **same** `configs/wasp76b_andes_ubv_limbasym.json`, the `tellurics` block
 contains `"skycalc_wavelength_limits_um": [0.34, 0.65]`. Keep this optical interval when
 adapting Tutorial 1: the reference UBV grid spans approximately 0.3494–0.6331 µm.
-The downloader reads the JSON interval explicitly; it does not derive it from
-the ETC file.
+The downloader uses `tellurics.skycalc_wavelength_limits_um` for the SkyCalc
+request.
 
 ```bash
 python scripts/generate_skycalc_inputs.py \
@@ -269,7 +269,7 @@ python scripts/generate_skycalc_inputs.py \
     --mode synthetic
 ```
 
-This requires an internet connection and the `skycalc_ipy` package (`pip install skycalc_ipy`). The file is written to `inputs/ANDES/WASP76b/tellurics/tell_ref_airmass_1.0.fits`, matching `tellurics.reference_telluric_file`. If a file already exists, the script skips it; changing the interval alone does not replace it. See the {ref}`input guide <skycalc-reference-download>` before deliberately using `--overwrite`.
+This requires an internet connection and the `skycalc_ipy` package (`pip install skycalc_ipy`). The file is written to `inputs/ANDES/WASP76b/tellurics/tell_ref_airmass_1.0.fits`, matching `tellurics.reference_telluric_file`. If a file already exists, the script skips it. Changing the interval alone does not replace it. See the {ref}`input guide <skycalc-reference-download>` before deliberately using `--overwrite`.
 
 A reference starting at 0.350 µm misses the blue edge of order 0
 (approximately 0.349393 µm). If an existing file does not cover the selected
@@ -282,7 +282,7 @@ it using the configured `[0.34, 0.65]` interval.
 python -u scripts/run_exoplore.py configs/wasp76b_andes_ubv_limbasym.json --run
 ```
 
-The simulation uses 62 UBV orders and a Fe-only CCF template, prepared with the same Blain24 polynomial pipeline as Tutorial 1. Limb asymmetries are enabled with `limb_divisions: asymmetric`, appropriate for the extreme day-to-night contrast of WASP-76 b: the morning limb is modelled at T = 2800 K (isothermal) and the evening limb at T = 3500 K (isothermal), with a day-to-nightside wind of -8 km s<sup>-1</sup> at both limbs (following Ehrenreich et al. 2020; [Wardenier et al. 2021](https://doi.org/10.1093/mnras/stab1797); [Beltz et al. 2023](https://doi.org/10.3847/1538-3881/acd24d)). Exposure time is 90 s (matching the ANDES ETC files provided). Since telluric features in the optical are broadband and weak, no pixels are expected to be fully masked by the telluric threshold.
+The simulation uses 62 UBV orders and a Fe-only CCF template, prepared with the same Blain24 polynomial pipeline as Tutorial 1. Limb asymmetries are enabled with `limb_divisions: asymmetric`, appropriate for the extreme day-to-night contrast of WASP-76 b: the morning limb is modelled at T = 2800 K (isothermal) and the evening limb at T = 3500 K (isothermal), with a day-to-nightside wind of -8 km s<sup>-1</sup> at both limbs (following Ehrenreich et al. 2020, [Wardenier et al. 2021](https://doi.org/10.1093/mnras/stab1797), [Beltz et al. 2023](https://doi.org/10.3847/1538-3881/acd24d)). Exposure time is 90 s (matching the ANDES ETC files provided). Since telluric features in the optical are broadband and weak, no pixels are expected to be fully masked by the telluric threshold.
 
 :::{figure} figures/tutorial2_ccf_erf_wasp76b.png
 :width: 80%
@@ -293,16 +293,16 @@ CCF matrix in the Earth rest frame for the WASP-76 b ANDES UBV simulation (Tutor
 :::{figure} figures/tutorial2_kpvsys_wasp76b.png
 :width: 80%
 :align: center
-Cross-correlation S/N map as a function of the assumed orbital velocity semi-amplitude K<sub>P</sub> and rest-frame planet velocity v<sub>rest</sub>, obtained from the WASP-76 b ANDES UBV simulation (Tutorial 2). The Fe-only CCF template traces neutral iron in the optical (0.35 to 0.63 µm, 62 orders). The red dashed lines mark the expected position for a circular orbit and injected wind velocity (K<sub>P</sub> = 198.3 km s<sup>-1</sup>, v<sub>rest</sub> = -8 km s<sup>-1</sup>). The peak significance of ~29σ is recovered at K<sub>P</sub> = 181 km s<sup>-1</sup>, v<sub>rest</sub> = -9 km s<sup>-1</sup>. The rest-frame velocity matches the injected wind, while the recovered K<sub>P</sub> sits ~17 km s<sup>-1</sup> below the orbital value. This K<sub>P</sub> offset is a physical consequence of the limb asymmetry rather than a fitting error: the time-varying limb weighting and the different net velocities at the leading and trailing terminators (v<sub>rot</sub> + v<sub>wind</sub> at each limb) make the Doppler trail depart from a single sinusoid, biasing the apparent semi-amplitude as the iron-bearing evening terminator comes to dominate towards egress.
+Cross-correlation S/N map as a function of the assumed orbital velocity semi-amplitude K<sub>P</sub> and rest-frame planet velocity v<sub>rest</sub>, obtained from the WASP-76 b ANDES UBV simulation (Tutorial 2). The Fe-only CCF template traces neutral iron in the optical (0.35 to 0.63 µm, 62 orders). The red dashed lines mark the expected position for a circular orbit and injected wind velocity (K<sub>P</sub> = 198.3 km s<sup>-1</sup>, v<sub>rest</sub> = -8 km s<sup>-1</sup>). The peak significance of ~29σ is recovered at K<sub>P</sub> = 181 km s<sup>-1</sup>, v<sub>rest</sub> = -9 km s<sup>-1</sup>. The rest-frame velocity matches the injected wind, while the recovered K<sub>P</sub> sits ~17 km s<sup>-1</sup> below the orbital value. The limb asymmetry contributes to this K<sub>P</sub> offset: the time-varying limb weighting and the different net velocities at the leading and trailing terminators (v<sub>rot</sub> + v<sub>wind</sub> at each limb) make the Doppler trail depart from a single sinusoid, biasing the apparent semi-amplitude as the iron-bearing evening terminator comes to dominate towards egress.
 :::
 
-Outputs are written under `output_root/WASP76b/ANDES_UBV/transit/Blain24_withsignal_1nights_SNR_comb1_simdata_noisy_stdnoisex1/`, with the same `matrices/`, `plots/`, and `warnings/` subfolders as Tutorial 1. **Disk footprint:** with the default output settings this run writes about **0.7 GB** (smaller than Tutorial 1: UBV covers 62 orders and the transit is sampled by fewer exposures), again almost entirely the per-order spectral matrices in `matrices/`. As in Tutorial 1, the set of matrices written is controlled by the `output` block (saving every matrix would be ~1.2 GB; a minimal run is a few MB). See [docs/outputs.md](outputs.md) for the full output guide.
+Outputs are written under `output_root/WASP76b/ANDES_UBV/transit/Blain24_withsignal_1nights_SNR_comb1_simdata_noisy_stdnoisex1/`, with the same `matrices/`, `plots/`, and `warnings/` subfolders as Tutorial 1. **Disk footprint:** with the default output settings this run writes about **0.7 GB** (smaller than Tutorial 1: UBV covers 62 orders and the transit is sampled by fewer exposures), again almost entirely the per-order spectral matrices in `matrices/`. As in Tutorial 1, the set of matrices written is controlled by the `output` block (saving every matrix would be ~1.2 GB, a minimal run is a few MB). See [docs/outputs.md](outputs.md) for the full output guide.
 
 ---
 
 ## Tutorial 3: Configure the forward model: chemistry, temperature, clouds, and limb structure
 
-> **Approximate run time:** the examples are configuration changes; a full simulation matches Tutorial 1 (~30 min), or ~2 min if restricted to a single order for a quick test.
+> **Approximate run time:** the examples are configuration changes. A full simulation matches Tutorial 1 (~30 min), or ~2 min if restricted to a single order for a quick test.
 
 The forward model is the high-resolution atmospheric transmission spectrum that EXoPLORE injects as the planet signal and cross-correlates against the data. This tutorial is a reference for configuring it. The planet model and the CCF template are two independent blocks in the config and can be set to different compositions. Five examples cover the main configuration options: C/O ratio and chemical composition, temperature structure, cloud deck, limb asymmetry modes, and manual mass fractions.
 
@@ -384,7 +384,7 @@ For ultra-hot Jupiters, dayside temperatures can exceed ∼2000 to 3000 K, suffi
 
 In transmission spectroscopy, the leading limb dominates during ingress and the trailing limb during egress. A 1D model that averages over both limbs can bias retrieved molecular abundances and temperatures when significant asymmetry is present.
 
-The **morning limb** is the leading limb (first to cross the stellar disk); the **evening limb** is the trailing limb (last to exit). These terms are used interchangeably throughout the literature and in this documentation.
+The **morning limb** is the leading limb (first to cross the stellar disk). The **evening limb** is the trailing limb (last to exit). These terms are used interchangeably throughout the literature and in this documentation.
 :::
 
 Three `limb_divisions` modes are available when `limb_asymmetries: true`.
@@ -418,7 +418,7 @@ In this case only the `planet_model` sub-block is used, and the morning/evening 
 :::{figure} figures/limb_scaling_factors.png
 :width: 80%
 :align: center
-Time-dependent scaling factors for the leading (morning, red) and trailing (evening, blue) limbs as a function of orbital phase, for the three available <code>limb_divisions</code> modes. The BATMAN transit light curve is shown in black for reference. Vertical dashed lines mark the first and second contacts (T<sub>1</sub>, T<sub>2</sub>), mid-transit (T<sub>c</sub>), third and fourth contacts (T<sub>3</sub>, T<sub>4</sub>). <b>Top:</b> <code>simplified_step</code> mode (the leading limb contributes exclusively during ingress and the trailing limb during egress, with an equal 50/50 mix at full transit and no smooth transition). <b>Middle:</b> <code>gradual</code> mode (smooth cubic transition appropriate for warm and hot Jupiters with partial heat redistribution). <b>Bottom:</b> <code>asymmetric</code> mode (the leading limb dominates the first quarter of full transit before a rapid sigmoid handover to the trailing limb; calibrated for ultra-hot Jupiters such as WASP-76 b where extreme day-to-night temperature contrast produces a strongly asymmetric signal, Ehrenreich et al. 2020).
+Time-dependent scaling factors for the leading (morning, red) and trailing (evening, blue) limbs as a function of orbital phase, for the three available <code>limb_divisions</code> modes. The BATMAN transit light curve is shown in black for reference. Vertical dashed lines mark the first and second contacts (T<sub>1</sub>, T<sub>2</sub>), mid-transit (T<sub>c</sub>), third and fourth contacts (T<sub>3</sub>, T<sub>4</sub>). <b>Top:</b> <code>simplified_step</code> mode (the leading limb contributes exclusively during ingress and the trailing limb during egress, with an equal 50/50 mix at full transit and no smooth transition). <b>Middle:</b> <code>gradual</code> mode (smooth cubic transition appropriate for warm and hot Jupiters with partial heat redistribution). <b>Bottom:</b> <code>asymmetric</code> mode (the leading limb dominates the first quarter of full transit before a rapid sigmoid handover to the trailing limb, calibrated for ultra-hot Jupiters such as WASP-76 b where extreme day-to-night temperature contrast produces a strongly asymmetric signal, Ehrenreich et al. 2020).
 :::
 
 These weighting curves leave a direct imprint on the data. The figure below shows the time-resolved cross-correlation signal that results, as EXoPLORE simulates it for ANDES.
@@ -426,7 +426,7 @@ These weighting curves leave a direct imprint on the data. The figure below show
 :::{figure} figures/limb_asymmetry_ccf.png
 :width: 100%
 :align: center
-Time-resolved cross-correlation signal of pseudo-2D atmospheres, simulated for ANDES. <b>Top row:</b> cross-correlation maps in Earth's rest-frame velocity against orbital phase (dashed lines mark the transit contacts T<sub>1</sub>, T<sub>4</sub>). <b>Bottom row:</b> the corresponding 1D cross-correlation functions averaged over ingress (blue) and egress (red), which isolate the leading and trailing limbs respectively. <b>Left:</b> a H₂O signal from HD 189733 b with a modest day-to-nightside wind; the two limbs share nearly the same velocity and merge into a single, slightly asymmetric trail (the leading and trailing limbs enter and leave transit at slightly different times), and the ingress and egress CCFs peak close together. <b>Middle:</b> neutral iron in the ultra-hot Jupiter WASP-76 b, where a day-to-nightside wind and a time-varying limb contribution shift the CCF peak progressively bluewards from ingress to egress (Ehrenreich et al. 2020). <b>Right:</b> a hot Jupiter with a jet-like wind (≈ 7.7 km s<sup>-1</sup> towards the observer on the trailing limb and away from it on the leading limb), of the kind resolved in WASP-127 b by [Nortmann et al. (2025)](https://doi.org/10.1051/0004-6361/202450438). The velocity offset between the limbs now exceeds a resolution element, so the signal splits into two components (a morning component dominating from ingress to mid-transit and an evening component from mid-transit to egress) that cross near the centre of the transit and appear as two separate peaks in the ingress and egress CCFs. This is the observable consequence of the time-dependent weighting shown above, combined with the per-limb winds.
+Time-resolved cross-correlation signal of pseudo-2D atmospheres, simulated for ANDES. <b>Top row:</b> cross-correlation maps in Earth's rest-frame velocity against orbital phase (dashed lines mark the transit contacts T<sub>1</sub>, T<sub>4</sub>). <b>Bottom row:</b> the corresponding 1D cross-correlation functions averaged over ingress (blue) and egress (red), which isolate the leading and trailing limbs respectively. <b>Left:</b> a H₂O signal from HD 189733 b with a modest day-to-nightside wind. The two limbs share nearly the same velocity and merge into a single, slightly asymmetric trail (the leading and trailing limbs enter and leave transit at slightly different times), and the ingress and egress CCFs peak close together. <b>Middle:</b> neutral iron in the ultra-hot Jupiter WASP-76 b, where a day-to-nightside wind and a time-varying limb contribution shift the CCF peak progressively bluewards from ingress to egress (Ehrenreich et al. 2020). <b>Right:</b> a hot Jupiter with a jet-like wind (≈ 7.7 km s<sup>-1</sup> towards the observer on the trailing limb and away from it on the leading limb), of the kind resolved in WASP-127 b by [Nortmann et al. (2025)](https://doi.org/10.1051/0004-6361/202450438). The velocity offset between the limbs now exceeds a resolution element, so the signal splits into two components (a morning component dominating from ingress to mid-transit and an evening component from mid-transit to egress) that cross near the centre of the transit and appear as two separate peaks in the ingress and egress CCFs. This is the observable consequence of the time-dependent weighting shown above, combined with the per-limb winds.
 :::
 
 ### Example E: manual mass fractions (no EasyChem)
@@ -438,7 +438,7 @@ To use fixed mass fractions for all species without calling EasyChem:
 "mass_fractions": [0.74, 0.24, 3e-4, 5e-4, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 ```
 
-The list order must exactly match the `species` list. H₂ and He dominate; trace species have small values. This manual mode is only needed when `use_easychem: false`; when EasyChem is active (the default), it computes mass fractions that automatically sum to 1 and include H₂ and He ([EasyChem docs](https://easychem.readthedocs.io/en/latest/content/notebooks/getting_started.html)), so the user does not need to manage this. With manual fractions, the values must sum to 1: the `Radtrans` class used internally does not normalise or fill the remainder ([petitRADTRANS docs](https://petitradtrans.readthedocs.io/en/latest/content/notebooks/spectral_model.html#Mass-fractions-and-mean-molar-masses)), so fractions that do not sum to 1 will produce incorrect atmospheric opacities without raising an error. Always include H₂ and He explicitly.
+The list order must exactly match the `species` list. H₂ and He dominate. Trace species have small values. This manual mode is only needed when `use_easychem: false`. When EasyChem is active (the default), it computes mass fractions that automatically sum to 1 and include H₂ and He ([EasyChem docs](https://easychem.readthedocs.io/en/latest/content/notebooks/getting_started.html)), so the user does not need to manage this. With manual fractions, the values must sum to 1: the `Radtrans` class used internally does not normalise or fill the remainder ([petitRADTRANS docs](https://petitradtrans.readthedocs.io/en/latest/content/notebooks/spectral_model.html#Mass-fractions-and-mean-molar-masses)), so fractions that do not sum to 1 will produce incorrect atmospheric opacities without raising an error. Always include H₂ and He explicitly.
 
 ---
 
@@ -471,7 +471,7 @@ cp configs/hd189733b_andes_transit_clean.json configs/hd189733b_carmenes_transit
 
 The critical change is `"name": "CARMENES_NIR"`. The instrument reader locates the bundled wavelength grid (`wave_CARMENES_NIR.fits`) automatically.
 
-**Excluded orders (9, 10, 18, 19, 20):** this selection follows Alonso-Floriano et al. (2019) for this specific dataset and observing conditions. Orders 18 to 20 (~1.9 µm water band) are consistently opaque from Calar Alto and safely discarded. Orders 9 and 10 (~1.4 µm water band) are more PWV-dependent (under dry conditions they can retain usable signal and may be worth keeping). In general, the optimal selection requires inspecting the telluric transmission in the data being analysed; the 23-order list here is a conservative starting point. All 28 orders can be restored by setting `"order_indices": []`.
+**Excluded orders (9, 10, 18, 19, 20):** this selection follows Alonso-Floriano et al. (2019) for this specific dataset and observing conditions. Orders 18 to 20 (~1.9 µm water band) are consistently opaque from Calar Alto and safely discarded. Orders 9 and 10 (~1.4 µm water band) are more PWV-dependent (under dry conditions they can retain usable signal and may be worth keeping). In general, the optimal selection requires inspecting the telluric transmission in the data being analysed. The 23-order list here is a conservative starting point. All 28 orders can be restored by setting `"order_indices": []`.
 
 ### Step 3: Disable limb asymmetries and point to CARMENES inputs
 
@@ -573,9 +573,9 @@ To co-add N consecutive transits observed under the same conditions:
 }
 ```
 
-All nights share the same airmass profile, SNR, and telluric model; the only thing that changes between them is the noise realisation (the noise is drawn independently per night when `n_nights > 1`). The per-night CCF matrices are then co-added. When the per-exposure noise is dominated by uncorrelated (for example photon) noise, the combined detection S/N is expected to grow roughly as √N.
+All nights share the same airmass profile, SNR, and telluric model. The only thing that changes between them is the noise realisation (the noise is drawn independently per night when `n_nights > 1`). The per-night CCF matrices are then co-added. When the per-exposure noise is dominated by uncorrelated (for example photon) noise, the combined detection S/N is expected to grow roughly as √N.
 
-We illustrate this with a three-night CARMENES NIR run of HD 189733 b (figure below). The individual nights reach S/N ≈ 8, 6, and 10, and their combination reaches ≈ 15, close to the √3 improvement expected for three independent noise realisations. Because the noise is drawn independently each run, the exact values vary from run to run; the figure shows one representative realisation.
+We illustrate this with a three-night CARMENES NIR run of HD 189733 b (figure below). The individual nights reach S/N ≈ 8, 6, and 10, and their combination reaches ≈ 15, close to the √3 improvement expected for three independent noise realisations. Because the noise is drawn independently each run, the exact values vary from run to run. The figure shows one representative realisation.
 
 **Run it.** Starting from the Tutorial 4 CARMENES config, set `n_nights: 3` and `different_nights: false`, then:
 
@@ -597,7 +597,7 @@ python scripts/plot_multinight_stacking.py \
 Per-night and combined 1D CCFs (in units of S/N) at the K<sub>P</sub> of maximum significance, for a three-night HD 189733 b co-add with CARMENES NIR (23 orders) in which the nights differ only in their noise realisation. The three nights (colours) reach S/N ≈ 6 to 10 and their co-addition (black) rises to ≈ 15, close to the √3 gain expected when the noise between nights is uncorrelated. The dashed line marks v<sub>rest</sub> = 0.
 :::
 
-How much co-adding helps depends on how independent the nights really are. Repeating the same conditions only averages down the part of the noise that is uncorrelated between nights; the more the observing conditions differ (airmass, PWV, cadence), the more of the residual structure decorrelates as well. That distinct-nights case is covered next.
+How much co-adding helps depends on how independent the nights really are. Repeating the same conditions only averages down the part of the noise that is uncorrelated between nights. The more the observing conditions differ (airmass, PWV, cadence), the more of the residual structure decorrelates as well. That distinct-nights case is covered next.
 
 ### 5b: Distinct nights with CARMENES_NIR (real data)
 
@@ -640,7 +640,7 @@ Set `specific_event: true` so that per-night Julian dates from the files are use
 
 ### 5c: Distinct nights with ANDES (fully synthetic)
 
-`different_nights: true` is fully supported for ANDES. Because ANDES uses a theoretical ETC for the SNR model, no JD or airmass files are needed. With `use_accurate_airmass: true` (the default), the simulator places each night at a real observable transit of the target from the site (target above 30 degrees with the Sun below the horizon, searched from the reference epoch), and computes the actual airmass evolution from the sky coordinates at those times. With `use_accurate_berv: true` (also the default), each night additionally receives its own Barycentric Earth Radial Velocity from the same geometry, so the stellar and planetary lines shift against the telluric rest frame from night to night, as they do between real epochs. To control the airmass manually instead (for hypothetical scheduling studies), set `use_accurate_airmass: false` and adjust `airmass_limits` or `airmass_limits_per_night`; the nights then fall on consecutive orbits at T₀ + n × P and follow the parabolic `airmass_evolution` shape.
+`different_nights: true` is fully supported for ANDES. Because ANDES uses a theoretical ETC for the SNR model, no JD or airmass files are needed. With `use_accurate_airmass: true` (the default), the simulator places each night at a real observable transit of the target from the site (target above 30 degrees with the Sun below the horizon, searched from the reference epoch), and computes the actual airmass evolution from the sky coordinates at those times. With `use_accurate_berv: true` (also the default), each night additionally receives its own Barycentric Earth Radial Velocity from the same geometry, so the stellar and planetary lines shift against the telluric rest frame from night to night, as they do between real epochs. To control the airmass manually instead (for hypothetical scheduling studies), set `use_accurate_airmass: false` and adjust `airmass_limits` or `airmass_limits_per_night`. The nights then fall on consecutive orbits at T₀ + n × P and follow the parabolic `airmass_evolution` shape.
 
 **What makes each simulated night different:**
 
@@ -652,11 +652,11 @@ Set `specific_event: true` so that per-night Julian dates from the files are use
 ::::{caution}
 **Two conditions for multi-night stacking at ELT-like S/N.** In these simulations the co-added peak significance grows as √N only when both of the following hold.
 
-1. **The nights must differ genuinely.** If the per-night telluric inputs describe near-identical nights (same airmass evolution, only rescaled depths), the preparation leaves the same residual floor in every night's Kp-V<sub>rest</sub> map. For N nights whose off-peak floors correlate at r, the co-added peak S/N grows only as √(N / (1 + (N − 1) r)); with r ≈ 0.6-0.9, as measured for near-clone nights, the combination gains almost nothing, and no choice of noise region repairs it. Generating the SkyCalc inputs at different observable transits (different airmass evolution, different PWV) decorrelates the floors (r ≈ 0 in the runs below). At lower S/N the floor is photon-dominated and stacking approaches √N even for identical nights, which is why the CARMENES demonstration of Section 5a gains the full √3 without any of this.
+1. **The nights must differ genuinely.** If the per-night telluric inputs describe near-identical nights (same airmass evolution, only rescaled depths), the preparation leaves the same residual floor in every night's Kp-V<sub>rest</sub> map. For N nights whose off-peak floors correlate at r, the co-added peak S/N grows only as √(N / (1 + (N − 1) r)). With r ≈ 0.6-0.9, as measured for near-clone nights, the combination gains almost nothing, and no choice of noise region repairs it. Generating the SkyCalc inputs at different observable transits (different airmass evolution, different PWV) decorrelates the floors (r ≈ 0 in the runs below). At lower S/N the floor is photon-dominated and stacking approaches √N even for identical nights, which is why the CARMENES demonstration of Section 5a gains the full √3 without any of this.
 
-2. **The noise must be estimated away from the signal.** For strong detections, the signal's own correlation structure (its wings along the velocity axis and its aliases across K<sub>P</sub>) contaminates the same-row region the default S/N normalisation uses for the noise std. That structure repeats identically in every night, so the quoted S/N saturates even when the true noise averages down. Setting `cross_correlation.snr_noise_source: "signal_free_rows"` measures the std in rows far from the detected peak's K<sub>P</sub> (`snr_noise_kp_exclude_kms`, default 120), a region with similar noise statistics but no signal-locked structure; the co-added significance then recovers the expected √N scaling, and single-night values rise as well, since the planet's own wings no longer count as noise.
+2. **The noise must be estimated away from the signal.** For strong detections, the signal's own correlation structure (its wings along the velocity axis and its aliases across K<sub>P</sub>) contaminates the same-row region the default S/N normalisation uses for the noise std. That structure repeats identically in every night, so the quoted S/N saturates even when the true noise averages down. Setting `cross_correlation.snr_noise_source: "signal_free_rows"` measures the std in rows far from the detected peak's K<sub>P</sub> (`snr_noise_kp_exclude_kms`, default 120), a region with similar noise statistics but no signal-locked structure. The co-added significance then recovers the expected √N scaling, and single-night values rise as well, since the planet's own wings no longer count as noise.
 
-**Pipeline dependence.** Preparations that preserve more of the planet signal (under the constraints of our controlled simulations, not in general) leave more signal-locked structure across the whole map. At the S/N of this 76-order simulation, the Blain24 polynomial detrending preserves so much signal that its self-correlation becomes the map floor everywhere, and the peak-S/N metric saturates near the single-night level regardless of the noise region; Gibson22 with SYSREM sits in between, and in these runs its recovered K<sub>P</sub> peaked about 40 km/s above the injected value. These are properties of the significance metric at very high S/N, not a ranking of preparations (BL19 originates in CRIRES emission work). The co-added data keeps gaining information in all cases; likelihood-based analyses (Tutorials 6-7) might be the most robust way to exploit it.
+**Pipeline dependence.** Preparations that preserve more of the planet signal (in these controlled simulations) leave more signal-locked structure across the whole map. At the S/N of this 76-order simulation, the Blain24 polynomial detrending preserves so much signal that its self-correlation becomes the map floor everywhere, and the peak-S/N metric saturates near the single-night level regardless of the noise region. Gibson22 with SYSREM sits in between, and in these runs its recovered K<sub>P</sub> peaked about 40 km/s above the injected value. These results describe the significance metric at very high S/N for the tested preparations (BL19 originates in CRIRES emission work). The co-added data keeps gaining information in all cases. Likelihood-based analyses (Tutorials 6-7) might be the most robust way to exploit it.
 ::::
 
 **Step 1, Prepare per-night SkyCalc files**
@@ -669,7 +669,7 @@ python scripts/generate_skycalc_inputs.py configs/hd189733b_andes_dn_run2.json -
 python scripts/generate_skycalc_inputs.py configs/hd189733b_andes_dn_run2.json --night 1 --search-from 2026-06-08
 ```
 
-The script finds the next observable transits from Paranal (skipping one more per night index), builds the exposure JD grids using the config's cadence (per night, when `exposure_time_seconds_per_night` is set), and queries ESO SkyCalc for each exposure. Pinning the search date with `--search-from` makes the generated inputs reproducible; the date above selects the transits of 2026-06-14 and 2026-06-23, whose airmass evolutions differ strongly (1.5 to 2.1 versus 1.5 to 3.0), which is what makes them worth combining (see the caution box above). The script also writes an `airmass.fits` per night with the exact airmass values the telluric spectra were generated with; the simulator uses it automatically, so pipelines that regress against airmass see a regressor consistent with the applied tellurics. (The simulator searches its own epochs deterministically from the planet's reference epoch, so the calendar dates in the run log and in the SkyCalc query may differ; the SkyCalc files provide the telluric spectrum and airmass per exposure for each night.) Files are written to:
+The script finds the next observable transits from Paranal (skipping one more per night index), builds the exposure JD grids using the config's cadence (per night, when `exposure_time_seconds_per_night` is set), and queries ESO SkyCalc for each exposure. Pinning the search date with `--search-from` makes the generated inputs reproducible. The date above selects the transits of 2026-06-14 and 2026-06-23, whose airmass evolutions differ strongly (1.5 to 2.1 versus 1.5 to 3.0), which is what makes them worth combining (see the caution box above). The script also writes an `airmass.fits` per night with the exact airmass values the telluric spectra were generated with. The simulator uses it automatically, so pipelines that regress against airmass see a regressor consistent with the applied tellurics. (The simulator searches its own epochs deterministically from the planet's reference epoch, so the calendar dates in the run log and in the SkyCalc query may differ, the SkyCalc files provide the telluric spectrum and airmass per exposure for each night.) Files are written to:
 
 ```
 inputs/ANDES/HD189733b/Skycalc_full_event/
@@ -714,7 +714,7 @@ The simulator constructs the per-night telluric path automatically as `{inputs_d
 python -u scripts/run_exoplore.py configs/hd189733b_andes_dn_run2.json --run 2>&1 | tee run_log.txt
 ```
 
-> **Validated result:** Night 0 (airmass 1.5 to 2.1, PWV 2.5 mm, BERV +11.4 km/s) gives 57.6σ; night 1 (airmass 1.5 to 3.0, PWV 3.5 mm, BERV +7.4 km/s) gives 45.4σ; combined 76.3σ (76 orders, BL19 pipeline, H₂O template, `snr_noise_source: "signal_free_rows"`). Night 1 is lower because its higher airmass and PWV deepen the telluric absorption and mask more of the spectrum. The combination gains a factor 1.48 ≈ √2: the two nights' map floors are essentially uncorrelated (r ≈ 0.1), as the caution box above requires. Because the noise realisation is drawn independently per night, the exact values vary from run to run; the gain is the stable quantity. For a single-order test use `instrument.order_indices: [35]`.
+> **Validated result:** Night 0 (airmass 1.5 to 2.1, PWV 2.5 mm, BERV +11.4 km/s) gives 57.6σ. Night 1 (airmass 1.5 to 3.0, PWV 3.5 mm, BERV +7.4 km/s) gives 45.4σ. Combined 76.3σ (76 orders, BL19 pipeline, H₂O template, `snr_noise_source: "signal_free_rows"`). Night 1 is lower because its higher airmass and PWV deepen the telluric absorption and mask more of the spectrum. The combination gains a factor 1.48 ≈ √2: the two nights' map floors are essentially uncorrelated (r ≈ 0.1), as the caution box above requires. Because the noise realisation is drawn independently per night, the exact values vary from run to run. The gain is the stable quantity. For a single-order test use `instrument.order_indices: [35]`.
 
 For a one-transit reference run (single night), use `configs/hd189733b_andes_dn_run1.json`.
 
@@ -723,14 +723,14 @@ The simulator writes diagnostic products both per individual night and for the c
 :::{figure} figures/tutorial5c_1dccf_twonights.png
 :width: 90%
 :align: center
-1D CCFs (in units of S/N) at the K<sub>P</sub> of maximum significance in their respective maps, co-added over 76 ANDES YJHK spectral orders and the full in-transit sequence, for the two-night HD 189733 b simulation (Tutorial 5c). Night 0 (blue, airmass 1.5 to 2.1, PWV 2.5 mm) and night 1 (red, airmass 1.5 to 3.0, PWV 3.5 mm) use the SkyCalc tellurics of two real transits with strongly different airmass evolutions, and each night carries its own BERV. The dashed line marks v<sub>rest</sub> = 0. Night 1 is lower in S/N because its deeper telluric absorption masks more of the spectrum. The off-peak structure differs visibly between the two nights, so it averages down in the combination (black), and the co-added significance grows by the expected √2 (57.6σ and 45.4σ combine to 76.3σ, with the noise std measured in signal-free rows; see the caution box above).
+1D CCFs (in units of S/N) at the K<sub>P</sub> of maximum significance in their respective maps, co-added over 76 ANDES YJHK spectral orders and the full in-transit sequence, for the two-night HD 189733 b simulation (Tutorial 5c). Night 0 (blue, airmass 1.5 to 2.1, PWV 2.5 mm) and night 1 (red, airmass 1.5 to 3.0, PWV 3.5 mm) use the SkyCalc tellurics of two real transits with strongly different airmass evolutions, and each night carries its own BERV. The dashed line marks v<sub>rest</sub> = 0. Night 1 is lower in S/N because its deeper telluric absorption masks more of the spectrum. The off-peak structure differs visibly between the two nights, so it averages down in the combination (black), and the co-added significance grows by the expected √2 (57.6σ and 45.4σ combine to 76.3σ, with the noise std measured in signal-free rows, see the caution box above).
 :::
 
 ---
 
 ## Tutorial 6: Enable Bayesian retrieval
 
-> **Approximate run time:** ~28 min on an Apple Mac Studio M2 Ultra (64 GB RAM), running `configs/hd189733b_carmenes_retrieval_blain24_noiseless.json` (CARMENES NIR, order 23, noiseless, Blain24 pipeline and log-likelihood, nested sampling at 200 live points). The retrieval dominates the total; the forward-model blocks that precede it are fast for a single order.
+> **Approximate run time:** ~28 min on an Apple Mac Studio M2 Ultra (64 GB RAM), running `configs/hd189733b_carmenes_retrieval_blain24_noiseless.json` (CARMENES NIR, order 23, noiseless, Blain24 pipeline and log-likelihood, nested sampling at 200 live points). The retrieval dominates the total. The forward-model blocks that precede it are fast for a single order.
 
 :::{note}
 **From detection to atmospheric constraints**
@@ -767,7 +767,7 @@ The `dimensionality` field selects the free parameters, and the `log_likelihood`
 | `"1D_extended_fast"` | `"BL19"` or `"Blain24"` | log(VMR) × 6 species, T_eq (Kp/v_rest fixed) |
 | `"2D"` | `"BL19"` or `"Blain24"` | morning/evening VMR + T_eq |
 
-Pair `1D_Gibson22` with the `Gibson22` likelihood. The β parameter is the noise-scaling degree of freedom that makes the Gibson22 formulation self-consistent; pairing it with Blain24 or BL19 would sample β without ever using it, yielding a meaningless posterior. The simulator raises a `ValueError` on any invalid combination.
+Pair `1D_Gibson22` with the `Gibson22` likelihood. The β parameter is the noise-scaling degree of freedom that makes the Gibson22 formulation self-consistent. Pairing it with Blain24 or BL19 would sample β without ever using it, yielding a meaningless posterior. The simulator raises a `ValueError` on any invalid combination.
 
 The ASL19 preparation pipeline (Sánchez-López et al. 2019) was introduced as a detection method and does not define a retrieval likelihood of its own. Because it is SYSREM-based, retrievals that use the ASL19 preparation fall back to the Gibson22 framework: the forward model is filtered with the same linear projection and evaluated with the Gibson22 log-likelihood (with the β noise scaling). In practice this means pairing `pipeline.name: ASL19` with `dimensionality: 1D_Gibson22` and `log_likelihood: Gibson22`.
 
@@ -800,7 +800,7 @@ Posterior distributions from a `1D` Blain24 retrieval of a single noiseless CARM
 
 ## Tutorial 7: Assessing retrieval pipeline bias
 
-> **Approximate run time:** the illustrative scripts run in seconds; each single-order retrieval takes ~20 to 80 min, so the full set of four (two noiseless, two noisy) is ~2 to 4 hours.
+> **Approximate run time:** the illustrative scripts run in seconds. Each single-order retrieval takes ~20 to 80 min, so the full set of four (two noiseless, two noisy) is ~2 to 4 hours.
 
 Before trusting retrieved atmospheric parameters from real data, it is essential to verify that the pipeline itself does not introduce systematic offsets in the posterior. This is commonly referred to as a **pipeline bias test**, or **unbiasedness test**. EXoPLORE supports a clean, fast version of this test using noiseless simulated data.
 
@@ -808,7 +808,7 @@ Before trusting retrieved atmospheric parameters from real data, it is essential
 
 A retrieval pipeline is *unbiased* if, when the forward model used in the likelihood is the same model used to generate the simulated data, the posterior recovers the injected truth values within the expected uncertainty.
 
-The preparation is unavoidable: the telluric and stellar lines dominate the spectrum and must be removed before the planet signal can be accessed. But every normalisation, telluric-correction, and stellar-correction step also acts on the buried planet signal and distorts it. For the retrieval to be trustworthy, these distortions must be small enough, and must be reproduced on the forward model at each likelihood evaluation, that the truth is still recovered. If instead any of these steps imprints a systematic shift on the retrieved abundances, velocities, or temperature, the result is biased even with perfect noiseless data, and no amount of signal-to-noise can undo it. This is precisely what the test checks: whether the normalisation, the telluric and stellar corrections, or any intermediate operation, biases the inference unwittingly. We caution that such a bias does not show up in the cross-correlation detection map, since a detection can be perfectly significant while the retrieved parameters are wrong; it becomes apparent only once the likelihood is evaluated. The runs below confirm that, for this case, the Blain24 and Gibson22 preparations recover the injected truth and are therefore unbiased.
+The preparation is unavoidable: the telluric and stellar lines dominate the spectrum and must be removed before the planet signal can be accessed. But every normalisation, telluric-correction, and stellar-correction step also acts on the buried planet signal and distorts it. For the retrieval to be trustworthy, these distortions must be small enough, and must be reproduced on the forward model at each likelihood evaluation, that the truth is still recovered. If instead any of these steps imprints a systematic shift on the retrieved abundances, velocities, or temperature, the result is biased even with perfect noiseless data, and no amount of signal-to-noise can undo it. This is precisely what the test checks: whether the normalisation, the telluric and stellar corrections, or any intermediate operation, biases the inference unwittingly. We caution that such a bias does not show up in the cross-correlation detection map, since a detection can be perfectly significant while the retrieved parameters are wrong. It becomes apparent only once the likelihood is evaluated. The runs below confirm that, for this case, the Blain24 and Gibson22 preparations recover the injected truth and are therefore unbiased.
 
 ### Why noiseless data?
 
@@ -911,7 +911,7 @@ confirms no pipeline bias on the dynamical parameters.
 :::{figure} figures/tutorial_retrieval_bias_corner.png
 :width: 90%
 :align: center
-Posterior probability distributions for the retrieved atmospheric parameters of HD 189733 b (CARMENES NIR, order 23, noiseless simulation), obtained with the log-likelihood formulations of Blain et al. (2024; red) and Gibson et al. (2022; green) using nested sampling with 200 live points. Gibson et al. (2022) includes the additional noise-scaling parameter β, shown in the bottom row and column; β is pinned near 1 via an informative prior [0.999, 1.001] (see Step 1), and its truth line is omitted since it is fixed by construction. Contours enclose the 68 and 95 per cent credible regions. Black dashed lines mark the injected truth values (log₁₀(X<sub>H₂O</sub>) = -3.0, K<sub>P</sub> = 149.4 km s<sup>-1</sup>, T<sub>eq</sub> = 1170 K, v<sub>rest</sub> = 0 km s<sup>-1</sup>). Both formulations recover all truth values within 1 to 2σ.
+Posterior probability distributions for the retrieved atmospheric parameters of HD 189733 b (CARMENES NIR, order 23, noiseless simulation), obtained with the log-likelihood formulations of Blain et al. (2024, red) and Gibson et al. (2022, green) using nested sampling with 200 live points. Gibson et al. (2022) includes the additional noise-scaling parameter β, shown in the bottom row and column. β is pinned near 1 via an informative prior [0.999, 1.001] (see Step 1), and its truth line is omitted since it is fixed by construction. Contours enclose the 68 and 95 per cent credible regions. Black dashed lines mark the injected truth values (log₁₀(X<sub>H₂O</sub>) = -3.0, K<sub>P</sub> = 149.4 km s<sup>-1</sup>, T<sub>eq</sub> = 1170 K, v<sub>rest</sub> = 0 km s<sup>-1</sup>). Both formulations recover all truth values within 1 to 2σ.
 :::
 
 Once you have run the two retrievals, the overlay corner plot can be generated with:
@@ -939,7 +939,7 @@ Key optional arguments:
 
 ### Noisy retrieval with ANDES YJHK
 
-The noiseless case above demonstrates bias in the absence of noise. To verify that Blain24 and Gibson22 also recover truth under realistic noise, the same test can be run with a single ANDES YJHK order at J-band (order 35, 1310 to 1326 nm), where H₂O provides strong signal even in one order. The ETC SNR in this order is ≈1256 per resolution element per exposure. The ANDES SNR tables are given per resolution element; EXoPLORE converts them to a per-pixel SNR internally via SNR<sub>pixel</sub> = SNR<sub>resel</sub> / √m, where m = `pixels_per_resolution_element` (2.5 for ANDES), so the per-pixel SNR here is ≈800. Even at this single order the signal is strong enough to make the posteriors tight despite the added noise.
+The noiseless case above demonstrates bias in the absence of noise. To verify that Blain24 and Gibson22 also recover truth under realistic noise, the same test can be run with a single ANDES YJHK order at J-band (order 35, 1310 to 1326 nm), where H₂O provides strong signal even in one order. The ETC SNR in this order is ≈1256 per resolution element per exposure. The ANDES SNR tables are given per resolution element. EXoPLORE converts them to a per-pixel SNR internally via SNR<sub>pixel</sub> = SNR<sub>resel</sub> / √m, where m = `pixels_per_resolution_element` (2.5 for ANDES), so the per-pixel SNR here is ≈800. Even at this single order the signal is strong enough to make the posteriors tight despite the added noise.
 
 ```bash
 # Blain24, noisy, ANDES YJHK, order 35
@@ -954,7 +954,7 @@ With realistic noise the Gibson22 β parameter is identifiable and no prior pinn
 :::{figure} figures/tutorial_retrieval_bias_corner_noisy.png
 :width: 90%
 :align: center
-Posterior probability distributions for the retrieved atmospheric parameters of HD 189733 b (ANDES YJHK, order 35, 1310 to 1326 nm, noisy simulation), obtained with Blain et al. (2024; red) and Gibson et al. (2022; green) using nested sampling with 200 live points. Both formulations recover the truth values within 1 to 2σ, with no evidence of systematic pipeline bias, and their posteriors are of comparable width since both weight each pixel by its known uncertainty. The recovered K<sub>P</sub> sits ~3 km s<sup>-1</sup> below the injected value for both methods (146.5 and 146.3 km s<sup>-1</sup> against 149.4), consistent between them; this reflects the particular noise realisation of this single order rather than a pipeline bias. The β parameter of Gibson et al. (2022) is free and identifiable on noisy data (β = 0.994 ± 0.001), requiring no prior pinning; its truth line is omitted as it is a noise-model parameter with no injected value. Black dashed lines mark the injected truth values.
+Posterior probability distributions for the retrieved atmospheric parameters of HD 189733 b (ANDES YJHK, order 35, 1310 to 1326 nm, noisy simulation), obtained with Blain et al. (2024, red) and Gibson et al. (2022, green) using nested sampling with 200 live points. Both formulations recover the truth values within 1 to 2σ, with no evidence of systematic pipeline bias, and their posteriors are of comparable width since both weight each pixel by its known uncertainty. The recovered K<sub>P</sub> sits ~3 km s<sup>-1</sup> below the injected value for both methods (146.5 and 146.3 km s<sup>-1</sup> against 149.4), consistent between them. This reflects the particular noise realisation of this single order. The β parameter of Gibson et al. (2022) is free and identifiable on noisy data (β = 0.994 ± 0.001), requiring no prior pinning. Its truth line is omitted as it is a noise-model parameter with no injected value. Black dashed lines mark the injected truth values.
 :::
 
 The overlay corner plot is generated with:
@@ -979,7 +979,7 @@ the log-likelihood formulations in full.
 
 ## Tutorial 8: Detection significance and statistical validation
 
-> **Approximate run time:** the illustrative script (`illustrate_significance_sampling.py`) runs in seconds; the full statistical study is ~20 to 30 min per velocity step.
+> **Approximate run time:** the illustrative script (`illustrate_significance_sampling.py`) runs in seconds. The full statistical study is ~20 to 30 min per velocity step.
 
 The significance of a detection has more than one defensible definition (see the [Concepts primer](concepts.md#6-detection-significance-three-complementary-measures)), and a careful analysis reports more than one. This tutorial covers the three significance metrics EXoPLORE provides and a subtle bias in the Welch t-test that depends on the cross-correlation velocity step.
 
@@ -994,7 +994,7 @@ The cross-correlation metrics are selected in the `cross_correlation` block:
 | Cross-correlation S/N | `"ccf_snr": true` | Peak CCF value divided by the standard deviation of the CCF away from the planet trail |
 | Welch's t-test | `"welch_ttest": true` | Statistical separation between the in-trail and out-of-trail distributions of CCF values |
 
-Setting `"all_significance_metrics": true` computes both in the same run, writing both Kp-Vsys maps. These metrics involve only the cross-correlation and do not invoke the retrieval.
+Setting `"all_significance_metrics": true` computes both in the same run, writing both Kp-Vsys maps. These metrics are calculated from the cross-correlation products.
 
 The retrieval-based metric is the **Bayesian evidence**, obtained from the retrieval (Tutorial 6). Running the retrieval for the model and for a null model without the species yields two evidences whose ratio is a Bayes factor, which can be mapped to a frequentist sigma. This is a separate analysis from the cross-correlation, governed by the `retrieval` block, and is considerably more expensive.
 
@@ -1016,7 +1016,7 @@ python scripts/illustrate_significance_sampling.py \
 Median significance of a fixed injected peak across many noise realisations, as a function of the cross-correlation velocity step. The S/N (blue) is flat: it does not depend on how finely the CCF is sampled. The Welch t-value (red) rises steeply once the step falls below the resolution element (dashed line), because the in-trail CCF values become correlated and the t-test counts them as independent. Shaded regions are the 16 to 84 percentile spread over realisations.
 ```
 
-To first order, the offset between the Welch and S/N significances is approximately √(Resolution / Sampling), the square root of the number of correlated points per resolution element. The exact factor depends on the correlation structure of the CCF (in the toy above the inflation is somewhat steeper, since correlated samples also reduce the in-trail variance estimate), so the relation should be read as a guide rather than a correction to be applied blindly. The practical consequence is that Welch significances are not directly comparable across analyses that use different velocity steps; the S/N is the more transportable metric, and any quoted significance should state the velocity step and in-trail window used.
+To first order, the offset between the Welch and S/N significances is approximately √(Resolution / Sampling), the square root of the number of correlated points per resolution element. The exact factor depends on the correlation structure of the CCF (in the toy above the inflation is somewhat steeper, since correlated samples also reduce the in-trail variance estimate), so the relation provides an approximate guide whose accuracy depends on those correlations. The practical consequence is that Welch significances are not directly comparable across analyses that use different velocity steps. The S/N is the more transportable metric, and any quoted significance should state the velocity step and in-trail window used.
 
 **Running the full statistical study.** The toy isolates the mechanism. To reproduce the effect with the full forward model, run the simulator with many noise realisations of the same injected atmosphere: set `observation.n_nights` to the number of realisations, `observation.different_nights: false` (so the conditions are fixed and only the noise changes), `statistics.enabled: true`, and `cross_correlation.all_significance_metrics: true`. Keep `retrieval.enabled: false`: the statistical study and the `all_significance_metrics` flag concern only the cross-correlation, and leaving the retrieval enabled would run a full Bayesian retrieval on every realisation, which is unnecessary here and very slow. EXoPLORE then records, for each realisation, the S/N, the Welch significance, and the recovered Kp and Vrest, writing them into the run's `matrices` directory (the S/N statistics as `stats_*.npz` and the Welch t-test statistics as `stats_welch_*.npz`). Running the study at two velocity steps (`cross_correlation.velocity_step_kms`, for example 1.3 and 3.0 km/s) isolates the Welch inflation.
 
@@ -1034,7 +1034,7 @@ python scripts/plot_significance_study.py \
 :width: 85%
 :align: center
 
-Distributions of the recovered significance, K<sub>P</sub>, and V<sub>rest</sub> over 200 noise realisations of the same injected HD 189733 b atmosphere (ANDES, single order), for the S/N (blue) and Welch (red) metrics at the oversampled (solid) and critical (dashed) velocity steps. The S/N distributions for the two steps coincide (the metric is insensitive to the sampling), while the Welch distribution shifts to higher significance at the oversampled step (median 6.8 against 4.4). Dotted lines mark the injected truth values; the recovered K<sub>P</sub> and V<sub>rest</sub> cluster at the injected values in the realisations where the planetary peak dominates the map, on top of a broad pedestal from realisations in which a noise spike elsewhere wins instead, as expected at this modest per-order significance.
+Distributions of the recovered significance, K<sub>P</sub>, and V<sub>rest</sub> over 200 noise realisations of the same injected HD 189733 b atmosphere (ANDES, single order), for the S/N (blue) and Welch (red) metrics at the oversampled (solid) and critical (dashed) velocity steps. The S/N distributions for the two steps coincide (the metric is insensitive to the sampling), while the Welch distribution shifts to higher significance at the oversampled step (median 6.8 against 4.4). Dotted lines mark the injected truth values. The recovered K<sub>P</sub> and V<sub>rest</sub> cluster at the injected values in the realisations where the planetary peak dominates the map, on top of a broad pedestal from realisations in which a noise spike elsewhere wins instead, as expected at this modest per-order significance.
 ```
 
 A single ANDES order yields only a marginal per-order signal from a strong absorber such as H₂O under realistic noise (here a median S/N of about 4), and at this modest significance the recovered peak position varies appreciably from one noise realisation to the next, as the scatter in the figure shows. The distribution is broad: in the most favourable realisations (a few percent of the sample) the single-order S/N exceeds 5, reaching about 5.7 at best, while in less favourable ones it drops well below the median, so no single realisation should be read as characteristic. This single-order case is deliberately conservative: it isolates the sampling effect with the smallest usable signal and is not representative of a real analysis. Co-adding the full set of ANDES orders (and, where available, multiple nights) raises the combined significance well above this floor and tightens the recovered K<sub>P</sub> and V<sub>rest</sub> correspondingly. The purpose of this study is not to quote a headline single-order significance but to show how the two metrics respond to the velocity sampling, and why a Welch value must always be read together with the step at which it was computed.
@@ -1043,9 +1043,9 @@ A single ANDES order yields only a marginal per-order signal from a strong absor
 
 ## Tutorial 9: Analyse real CRIRES+ data (WASP-127 b)
 
-Tutorials 1 to 8 simulate observations. This tutorial and the next analyse **real** data reduced from raw archive frames and run through the pipeline end to end. Here we use the single CRIRES+ K2148 transit of the hot Saturn WASP-127 b (ESO programme 108.22PH, 2022-03-24), for which Nortmann et al. (2025) report H₂O and CO with a resolved supersonic-jet signature. The CRIRES+ analysis recipe is the `Nortmann26` pipeline (Nortmann et al. 2025, 2026); see [The Nortmann26 pipeline](nortmann26_pipeline.md) for the method and [Reducing CRIRES+ data](crires_reduction.md) for the upstream reduction.
+Tutorials 1 to 8 simulate observations. This tutorial and the next analyse **real** data reduced from raw archive frames and run through the pipeline end to end. Here we use the single CRIRES+ K2148 transit of the hot Saturn WASP-127 b (ESO programme 108.22PH, 2022-03-24), for which Nortmann et al. (2025) report H₂O and CO with a resolved supersonic-jet signature. The CRIRES+ analysis recipe is the `Nortmann26` pipeline (Nortmann et al. 2025, 2026). See [The Nortmann26 pipeline](nortmann26_pipeline.md) for the method and [Reducing CRIRES+ data](crires_reduction.md) for the upstream reduction.
 
-> **Approximate run time:** the analysis step is ~4 min on an Apple Mac Studio M2 Ultra (64 GB RAM), running `configs/wasp127b_crires_h2oco.json` (18 K2148 segments, division SYSREM with 9 iterations, real data, no retrieval); the petitRADTRANS template and the Kp-Vsys maps (Block 7) dominate. The one-off raw reduction ([`cr2res`](https://www.eso.org/sci/software/pipelines/cr2res/) + [`molecfit`](https://www.eso.org/sci/software/pipelines/molecfit/)) is separate and much longer (tens of minutes to a few hours; molecfit is the slow part). With `timing: true` each run writes a `timing_report_<date>.txt` with the exact per-block breakdown.
+> **Approximate run time:** the analysis step is ~4 min on an Apple Mac Studio M2 Ultra (64 GB RAM), running `configs/wasp127b_crires_h2oco.json` (18 K2148 segments, division SYSREM with 9 iterations, real data, no retrieval). The petitRADTRANS template and the Kp-Vsys maps (Block 7) dominate. The one-off raw reduction ([`cr2res`](https://www.eso.org/sci/software/pipelines/cr2res/) + [`molecfit`](https://www.eso.org/sci/software/pipelines/molecfit/)) is separate and much longer (tens of minutes to a few hours, molecfit is the slow part). With `timing: true` each run writes a `timing_report_<date>.txt` with the exact per-block breakdown.
 
 ### Step 1: Reduce and prepare the night (once)
 
@@ -1056,11 +1056,11 @@ python scripts/reduce_crires_night.py /path/to/WASP127b/raw all
 python scripts/prepare_crires_night.py /path/to/WASP127b inputs/CRIRES_PLUS/WASP127b/reference_night
 ```
 
-Two practical points about real ESO deliveries, both covered on the reduction page: the raw frames arrive `.fits.Z`-compressed and a single delivery may bundle several nights, so decompress and keep **each night in its own directory**; and `cr2res_cal_wave` requires the per-setting static `M.CRIRES.*.fits` catalogs (emission-line list and trace-wave) that come with the download to be **present in the frame directory**, or the wavelength step fails.
+Two practical points about real ESO deliveries, both covered on the reduction page: the raw frames arrive `.fits.Z`-compressed and a single delivery may bundle several nights, so decompress and keep **each night in its own directory**. And `cr2res_cal_wave` requires the per-setting static `M.CRIRES.*.fits` catalogs (emission-line list and trace-wave) that come with the download to be **present in the frame directory**, or the wavelength step fails.
 
 ### Step 2: The telluric correction (molecfit)
 
-[`molecfit`](https://www.eso.org/sci/software/pipelines/molecfit/) fits the telluric transmittance per detector segment; the wrapper anchors the wavelength solution on water and the analysis masks the saturated line cores (the deep-line mask of Nortmann et al. 2025). The bundled `plot_telluric_correction` routine (`exoplore.plotting`) illustrates the fit for one K-band segment:
+[`molecfit`](https://www.eso.org/sci/software/pipelines/molecfit/) fits the telluric transmittance per detector segment. The wrapper anchors the wavelength solution on water and the analysis masks the saturated line cores (the deep-line mask of Nortmann et al. 2025). The bundled `plot_telluric_correction` routine (`exoplore.plotting`) illustrates the fit for one K-band segment:
 
 ```{figure} figures/tutorial9_telluric_wasp127.png
 :width: 85%
@@ -1071,7 +1071,7 @@ Telluric correction for one CRIRES+ K2148 segment of the WASP-127 b night. Top: 
 
 ### Step 3: The effective resolution (super-resolution)
 
-`prepare_crires_night.py` measures the effective resolving power per order from the stellar PSF width in the `cr2res` headers (Nortmann et al. 2024, App. A.2). When the seeing-limited PSF underfills the 0.2″ slit the star acts as a narrower entrance aperture and the resolution exceeds the nominal R = 100 000 (super-resolution); when it overfills the slit (poor seeing) the resolution is slit-limited and clamped to the nominal value. The engine then convolves all templates to the measured median R:
+`prepare_crires_night.py` measures the effective resolving power per order from the stellar PSF width in the `cr2res` headers (Nortmann et al. 2024, App. A.2). When the seeing-limited PSF underfills the 0.2″ slit the star acts as a narrower entrance aperture and the resolution exceeds the nominal R = 100 000 (super-resolution). When it overfills the slit (poor seeing) the resolution is slit-limited and clamped to the nominal value. The engine then convolves all templates to the measured median R:
 
 ```{figure} figures/tutorial9_resolution_wasp127.png
 :width: 80%
@@ -1098,7 +1098,7 @@ Measured effective resolving power per order for the WASP-127 b night (median R 
 "paths":        { "inputs_dir": "inputs/CRIRES_PLUS/WASP127b/" }
 ```
 
-Set your local `paths` (and the PHOENIX files, as in Tutorial 1). The template here is a combined H₂O + CO model; single-species runs use `["H2", "He", "H2O"]` or `["H2", "He", "CO"]`.
+Set your local `paths` (and the PHOENIX files, as in Tutorial 1). The template here is a combined H₂O + CO model. Single-species runs use `["H2", "He", "H2O"]` or `["H2", "He", "CO"]`.
 
 ### Step 5: Run
 
@@ -1114,14 +1114,14 @@ The engine ingests the reference night, applies the common-blaze normalisation, 
 :width: 75%
 :align: center
 
-Cross-correlation of the combined H₂O + CO template with the WASP-127 b residuals, in the Earth rest frame (phase × velocity), zoomed to ±60 km/s (`plot_velocity_zoom_kms`). The planetary signal follows the diagonal trail; the double-peaked structure around the trail is the resolved evening/morning terminator split of the supersonic equatorial jet reported by Nortmann et al. (2025). Produced by the run as `CC_ERF_<run>.pdf`.
+Cross-correlation of the combined H₂O + CO template with the WASP-127 b residuals, in the Earth rest frame (phase × velocity), zoomed to ±60 km/s (`plot_velocity_zoom_kms`). The planetary signal follows the diagonal trail. The double-peaked structure around the trail is the resolved evening/morning terminator split of the supersonic equatorial jet reported by Nortmann et al. (2025). Produced by the run as `CC_ERF_<run>.pdf`.
 ```
 
 ```{figure} figures/tutorial9_kpvsys_wasp127.png
 :width: 80%
 :align: center
 
-Kp-Vsys cross-correlation S/N map for WASP-127 b. The combined H₂O + CO signal peaks at K<sub>P</sub> ≈ 133 km s⁻¹ and v<sub>rest</sub> ≈ −7.5 km s⁻¹ at ~8.6σ; the blueshift is the jet signature. Following Nortmann et al. (2025), the map is normalised by the standard deviation over v ∈ [−75, −20] ∪ [+20, +75] km s⁻¹ across the whole K<sub>P</sub> range (the region outside the planetary signal), so the colour scale reads directly in σ. Produced by the run as `sn_map_<run>_SNR.pdf`.
+Kp-Vsys cross-correlation S/N map for WASP-127 b. The combined H₂O + CO signal peaks at K<sub>P</sub> ≈ 133 km s⁻¹ and v<sub>rest</sub> ≈ −7.5 km s⁻¹ at ~8.6σ. The blueshift is the jet signature. Following Nortmann et al. (2025), the map is normalised by the standard deviation over v ∈ [−75, −20] ∪ [+20, +75] km s⁻¹ across the whole K<sub>P</sub> range (the region outside the planetary signal), so the colour scale reads directly in σ. Produced by the run as `sn_map_<run>_SNR.pdf`.
 ```
 
 **Disk footprint:** with the default output settings a single-night CRIRES+ analysis writes ~80 MB (the per-segment CCF and matrix `.npz` products), plus a few MB of diagnostic PDFs. See [Outputs](outputs.md) to control which matrices are kept.
@@ -1132,11 +1132,11 @@ Kp-Vsys cross-correlation S/N map for WASP-127 b. The combined H₂O + CO signal
 
 The same real-data workflow applies to IGRINS. The `Cheverall26` pipeline implements the IGRINS high-resolution cross-correlation recipe of Cheverall et al. (2026), building on the IGRINS analysis lineage of Line et al. (2021), Brogi et al. (2023) and Smith et al. (2024). We use it here on the IGRINS/Gemini-South transit of the temperate super-Earth L 98-59 d (2021-03-12), the target and dataset of Cheverall et al. (2026), searching for H₂S.
 
-> **Approximate run time:** ~30 s on an Apple Mac Studio M2 Ultra (64 GB RAM), running `configs/l9859d_igrins_h2s.json` (26 IGRINS H- and K-band orders, one night, PCA detrending with one component, no retrieval). The forward model (Blocks 3 to 6) is ~87% of the total; the Kp-Vsys maps are ~2 s. With `timing: true` the run writes a `timing_report_<date>.txt`.
+> **Approximate run time:** ~30 s on an Apple Mac Studio M2 Ultra (64 GB RAM), running `configs/l9859d_igrins_h2s.json` (26 IGRINS H- and K-band orders, one night, PCA detrending with one component, no retrieval). The forward model (Blocks 3 to 6) is ~87% of the total. The Kp-Vsys maps are ~2 s. With `timing: true` the run writes a `timing_report_<date>.txt`.
 
 ### Step 1: The reference night
 
-IGRINS data reduced with the public IGRINS Pipeline Package are assembled into the `reference_night/` layout EXoPLORE consumes (per-order flux, uncertainty, wavelength, and per-exposure BJD/BERV/airmass); see [Input files](input_files.md) for the format. Point the config at that directory via `paths.inputs_dir`.
+IGRINS data reduced with the public IGRINS Pipeline Package are assembled into the `reference_night/` layout EXoPLORE consumes (per-order flux, uncertainty, wavelength, and per-exposure BJD/BERV/airmass). See [Input files](input_files.md) for the format. Point the config at that directory via `paths.inputs_dir`.
 
 ### Step 2: Inspect the config
 
@@ -1154,9 +1154,9 @@ IGRINS data reduced with the public IGRINS Pipeline Package are assembled into t
 "cross_correlation": { "velocity_max_kms": 420, "kp_max_kms": 150, "snr_exclude_kms": 15 }
 ```
 
-The `Cheverall26` pipeline uses a data-driven per-channel noise estimate (the median absolute deviation of each wavelength channel over time) and removes a single common mode by unweighted PCA (`detrend_method: "pca"`, de Kok et al. 2013; Cheverall et al. 2023), with `sysrem_iterations: 1` setting the component count, matching the choices of Cheverall et al. (2026). The `snr_exclude_kms` window sets the velocity band excluded when estimating the CCF noise.
+The `Cheverall26` pipeline uses a data-driven per-channel noise estimate (the median absolute deviation of each wavelength channel over time) and removes a single common mode by unweighted PCA (`detrend_method: "pca"`, de Kok et al. 2013, Cheverall et al. 2023), with `sysrem_iterations: 1` setting the component count, matching the choices of Cheverall et al. (2026). The `snr_exclude_kms` window sets the velocity band excluded when estimating the CCF noise.
 
-**Line list matters here.** The H₂S template uses the ExoMol AYT2 line list (`1H2-32S__AYT2.R1e+06_0.3-28.0mu`), not the default HITRAN H₂S opacity. For this temperate, near-threshold signal the line list is decisive: HITRAN does not recover the detection, while AYT2 reproduces the CCF S/N of Cheverall et al. (2026). Make sure the AYT2 opacity is present in your petitRADTRANS `input_data` (from the [ExoMol database](https://www.exomol.com/), converted to the petitRADTRANS line-by-line format, or fetched from the petitRADTRANS opacity server) before running.
+**Line list matters here.** The H₂S template uses the ExoMol AYT2 line list (`1H2-32S__AYT2.R1e+06_0.3-28.0mu`). For this temperate, near-threshold signal the line list is decisive: HITRAN does not recover the detection, while AYT2 reproduces the CCF S/N of Cheverall et al. (2026). Make sure the AYT2 opacity is present in your petitRADTRANS `input_data` (from the [ExoMol database](https://www.exomol.com/), converted to the petitRADTRANS line-by-line format, or fetched from the petitRADTRANS opacity server) before running.
 
 ### Step 3: Run
 
@@ -1177,7 +1177,7 @@ Pipeline stages for one IGRINS order of the L 98-59 d transit: the 1-D spectrum,
 :width: 80%
 :align: center
 
-Kp-Vsys cross-correlation S/N map for the H₂S template on the L 98-59 d transit. The red cross marks the expected planet position (v<sub>rest</sub> = 0). A marginal peak appears near the expected velocity, consistent with the tentative H₂S signal reported by Cheverall et al. (2026); at this per-transit significance the map is noise-dominated and no strong claim follows from one night. Produced by the run as `sn_map_<run>_SNR.pdf`.
+Kp-Vsys cross-correlation S/N map for the H₂S template on the L 98-59 d transit. The red cross marks the expected planet position (v<sub>rest</sub> = 0). A marginal peak appears near the expected velocity, consistent with the tentative H₂S signal reported by Cheverall et al. (2026). At this per-transit significance the map is noise-dominated and no strong claim follows from one night. Produced by the run as `sn_map_<run>_SNR.pdf`.
 ```
 
 The `Cheverall26` pipeline also writes a **duration ("N_in") test**, a temporal diagnostic of the same kind as Fig. 4 of Cheverall et al. (2026): the in-transit exposures are ranked by proximity to mid-transit and the N_in most-central ones are co-added, for increasing N_in. A signal that is genuinely tied to the transit builds up as more in-transit exposures are added and peaks when N_in reaches the number of exposures spanning the transit duration (T₁₄), then dilutes as out-of-transit exposures enter.
@@ -1186,7 +1186,7 @@ The `Cheverall26` pipeline also writes a **duration ("N_in") test**, a temporal 
 :width: 95%
 :align: center
 
-Duration ("N_in") test for the H₂S template on L 98-59 d. **Left:** cross-correlation S/N as a function of systemic velocity and N<sub>in</sub> (the number of most-central in-transit spectra co-added). **Right:** the S/N-versus-N<sub>in</sub> curve at the expected velocity (red) and at the map peak (orange); both rise and peak at N<sub>in</sub> ≈ 13, the number of exposures spanning the transit duration T₁₄ (red dashed line). The build-up-then-peak-at-T₁₄ behaviour is what a transit-tied signal should show. Produced by the run as `duration_test_fig4_<run>.png`.
+Duration ("N_in") test for the H₂S template on L 98-59 d. **Left:** cross-correlation S/N as a function of systemic velocity and N<sub>in</sub> (the number of most-central in-transit spectra co-added). **Right:** the S/N-versus-N<sub>in</sub> curve at the expected velocity (red) and at the map peak (orange). Both rise and peak at N<sub>in</sub> ≈ 13, the number of exposures spanning the transit duration T₁₄ (red dashed line). The build-up-then-peak-at-T₁₄ behaviour is what a transit-tied signal should show. Produced by the run as `duration_test_fig4_<run>.png`.
 ```
 
 **Disk footprint:** a single IGRINS night writes a few tens of MB (per-order CCF and matrix products) plus the diagnostic PDFs.
@@ -1197,7 +1197,7 @@ Duration ("N_in") test for the H₂S template on L 98-59 d. **Left:** cross-corr
 
 A detectability map answers a planning question: **across a range of atmospheric compositions, at what significance would my simulated observation recover a given molecule?** EXoPLORE sweeps two atmosphere variables on a grid, runs the full forward model + cross-correlation at each grid point, and records the recovered S/N at the injected planet position, producing one map per molecule. This is driven by the `detectability` config block and the `scripts/run_detectability_maps.py` runner, which launches **one subprocess per grid point** (memory-isolated and trivially parallel, ideal for a cluster job array).
 
-> **Approximate run time:** each grid point is a full simulation, so the total scales with the grid size. For the HD 189733 b ANDES case each point is ~32 min (all 76 YJHK orders), so the default 11×11 grid (121 points) is tens of hours run serially. This is meant to be **parallelised**: pass `--workers N` to run N grid points at once (each is an independent subprocess), or distribute them across nodes with a cluster job array. An interrupted sweep also resumes, recomputing only the missing points. For a quick look, shrink the grid (`x_values`/`y_values`) or restrict `instrument.order_indices`. Each point writes only the Kp-Vsys map (per-order matrices are switched off), so the sweep is light on disk; the results themselves are one-line text files.
+> **Approximate run time:** each grid point is a full simulation, so the total scales with the grid size. For the HD 189733 b ANDES case each point is ~32 min (all 76 YJHK orders), so the default 11×11 grid (121 points) is tens of hours run serially. This is meant to be **parallelised**: pass `--workers N` to run N grid points at once (each is an independent subprocess), or distribute them across nodes with a cluster job array. An interrupted sweep also resumes, recomputing only the missing points. For a quick look, shrink the grid (`x_values`/`y_values`) or restrict `instrument.order_indices`. Each point writes only the Kp-Vsys map (per-order matrices are switched off), so the sweep is light on disk. The results themselves are one-line text files.
 
 ### Step 1: Configure the sweep
 
@@ -1219,11 +1219,11 @@ A detectability map answers a planning question: **across a range of atmospheric
 
 - **`x_variable` / `y_variable`**: two supported pairs: **metallicity vs C/O** (above) and **metallicity vs cloud-top pressure** (`"y_variable": "cloud_pressure_bar"`). Metallicity is always `metallicity_wrt_solar` = log₁₀(Z/Z⊙). The swept variables are set on both the injected planet model and the matched-filter template, with equilibrium chemistry on, so metallicity and C/O map to abundances.
 - **`x_values` / `y_values`**: the grid on each axis. **Tune them freely, or leave a list empty (`[]`) to use the built-in default grid** for the chosen pair:
-    - *metallicity vs C/O*: log₁₀ Z in `[-1.5 … +1.5]` and C/O in `[0.30 … 1.10]` (the 11×11 grid shown above);
+    - *metallicity vs C/O*: log₁₀ Z in `[-1.5 … +1.5]` and C/O in `[0.30 … 1.10]` (the 11×11 grid shown above).
     - *metallicity vs clouds*: log₁₀ Z in `[0 … 3]` (1 to 1000× solar) and cloud-top pressure in `[1e-4 … 1.0]` bar, log-spaced (10×10).
   The map resolution is entirely yours to set here (a coarse grid for a quick survey, a fine one for a publication figure).
-- **`molecules`**: one single-species map per entry; defaults to `["H2O"]`. List several (e.g. `["H2O", "CO", "CH4"]`) to get one map each.
-- **`significance`**: `"cell_box"` (default) takes the maximum S/N in a small box around the injected position (`box_half_vrest_kms`, `box_half_kp_kms`), robust to the Kp-Vrest degeneracy over a single transit; `"injected_point"` reads only the exact injected cell.
+- **`molecules`**: one single-species map per entry. Defaults to `["H2O"]`. List several (e.g. `["H2O", "CO", "CH4"]`) to get one map each.
+- **`significance`**: `"cell_box"` (default) takes the maximum S/N in a small box around the injected position (`box_half_vrest_kms`, `box_half_kp_kms`), robust to the Kp-Vrest degeneracy over a single transit. `"injected_point"` reads only the exact injected cell.
 
 ### Step 2: Run the sweep
 
@@ -1239,10 +1239,10 @@ For each molecule and grid point this writes a temporary single-point config, ru
 :width: 80%
 :align: center
 
-H₂O detectability for a single HD 189733 b ANDES transit (all 76 YJHK orders), over metallicity ([Fe/H]) and C/O over the full 11×11 metallicity and C/O grid. The colour scale is the recovered cross-correlation S/N at the injected planet position; white contours mark the S/N = 3 and 5 detection thresholds. This tells the observer which compositions are recoverable in one transit and which require co-adding several. Produced with `exoplore.plotting.plot_detectability_map`.
+H₂O detectability for a single HD 189733 b ANDES transit (all 76 YJHK orders), over metallicity ([Fe/H]) and C/O over the full 11×11 metallicity and C/O grid. The colour scale is the recovered cross-correlation S/N at the injected planet position. White contours mark the S/N = 3 and 5 detection thresholds. This tells the observer which compositions are recoverable in one transit and which require co-adding several. Produced with `exoplore.plotting.plot_detectability_map`.
 ```
 
-To resume an interrupted sweep, just re-run the command: existing grid points are already saved as text files and only the missing points are recomputed (and `plot_detectability_map(..., )` can render a partial grid). Because each grid point is an independent process, the fastest way to fill a large grid is to run several points concurrently; the runner is a thin wrapper over per-point subprocesses precisely so this parallelises cleanly.
+To resume an interrupted sweep, just re-run the command: existing grid points are already saved as text files and only the missing points are recomputed (and `plot_detectability_map(..., )` can render a partial grid). Because each grid point is an independent process, the fastest way to fill a large grid is to run several points concurrently. The runner is a thin wrapper over per-point subprocesses precisely so this parallelises cleanly.
 
 ---
 
@@ -1266,7 +1266,7 @@ The reduction uses the ESO `cr2res` pipeline, as described in [Reducing CRIRES+ 
 python scripts/reduce_crires_night.py mynight/raw all
 ```
 
-This produces the individual extracted A and B spectra and `mynight/reduced/timeseries_manifest.txt`, which associates each spectrum with its observing time. Starting from an already reduced night, we can proceed directly to the telluric correction below. The helium route reads these extracted spectra rather than the nod-wide reference correction used by the molecular analysis in Tutorial 9.
+This produces the individual extracted A and B spectra and `mynight/reduced/timeseries_manifest.txt`, which associates each spectrum with its observing time. Starting from an already reduced night, we can proceed directly to the telluric correction below. The helium route reads these extracted spectra. Tutorial 9 describes the nod-wide reference correction used by the molecular analysis.
 
 ### Step 2: Select the helium preparation
 
@@ -1668,7 +1668,7 @@ Both runs retain the per-exposure corrected spectra in `observations.npz`, the t
 
 **Simulation running all orders when you only want one**, `cross_correlation.order_selection` is a CCF-only filter. To restrict the entire simulation (Blocks 3 to 9) to a specific set of orders, use `instrument.order_indices`. For a single-order retrieval test: `"instrument": { "order_indices": [23] }`. We caution that forgetting this will run all orders through the forward model and make the retrieval far slower than necessary.
 
-**Retrieval posterior is completely flat / log Z ≈ 0**, This means the log-likelihood function is returning the same value for every parameter combination. The run log should be checked for Python `Traceback` or `KeyError` lines printed before the MultiNest output, these are exceptions silently swallowed inside the Fortran/Python interface that cause [pymultinest](https://github.com/JohannesBuchner/PyMultiNest) to return a default constant value. Common causes are: i) a missing key in the configuration dict passed to `preparing_pipeline` or `call_pRT` (check that `instrument.order_indices` is set and the config is otherwise valid); ii) using a SYSREM-based pipeline with `noiseless: true` without a pinned β prior (over-subtraction may render data identically zero for all models, use BL19 or Blain24, or Gibson22 with `prior_bounds` pinning β near 1).
+**Retrieval posterior is completely flat / log Z ≈ 0**, This means the log-likelihood function is returning the same value for every parameter combination. The run log should be checked for Python `Traceback` or `KeyError` lines printed before the MultiNest output, these are exceptions silently swallowed inside the Fortran/Python interface that cause [pymultinest](https://github.com/JohannesBuchner/PyMultiNest) to return a default constant value. Common causes are: i) a missing key in the configuration dict passed to `preparing_pipeline` or `call_pRT` (check that `instrument.order_indices` is set and the config is otherwise valid). Ii) using a SYSREM-based pipeline with `noiseless: true` without a pinned β prior (over-subtraction may render data identically zero for all models, use BL19 or Blain24, or Gibson22 with `prior_bounds` pinning β near 1).
 
 **Retrieval corner plot shows `Too few points to create valid contours`**, The posterior is effectively flat (all 200 equal-weight samples uniformly cover the prior). See the point above. We caution that when using the Gibson22 likelihood with `noiseless: true`, the β hyperparameter diverges and the posterior cannot be constrained, switching to BL19 or Blain24 resolves this.
 
@@ -1676,7 +1676,12 @@ Both runs retain the per-exposure corrected spectra in `observations.npz`, the t
 
 For anything petitRADTRANS-related (installation, opacity downloads, line lists, build problems), the [petitRADTRANS documentation](https://petitradtrans.readthedocs.io) is the absolute guide and should be checked first. The entries below only cover the issues most commonly seen from within EXoPLORE runs.
 
-**`FileNotFoundError` for petitRADTRANS opacity tables**, Set `paths.prt_input_data` to the `input_data/` directory inside the petitRADTRANS installation. Run `python -c "import petitRADTRANS; print(petitRADTRANS.__file__)"` to find the installation path.
+**`FileNotFoundError` for petitRADTRANS opacity tables**, Set `paths.prt_input_data` to the `input_data/` directory inside the petitRADTRANS installation. To find the installation path, run the following in Python:
+
+```python
+import petitRADTRANS
+print(petitRADTRANS.__file__)
+```
 
 **macOS `ImportError` for petitRADTRANS**, Add `export SDKROOT="$(xcrun --show-sdk-path)"` to the shell profile. This sets the Fortran compiler SDK path required by petitRADTRANS on macOS.
 

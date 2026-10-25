@@ -46,9 +46,9 @@ Individual arm files (`ANDES_ETC_WAVE_SNR_YJH_HD189733b.fits`, `…_K_…`, `…
 | `wave_CARMENES_NIR.fits` | `src/exoplore/instruments/data/` | Wavelength solution for the CARMENES NIR channel. Shape: `(28, 4080)` = `(n_orders, n_pixels)`. Units: µm. Generated from a CARACAL wavelength calibration file. **Included in the repository.** |
 | `wave_CARMENES_VIS.fits` | `src/exoplore/instruments/data/` | Wavelength solution for the CARMENES VIS channel. Shape: `(44, 4096)` = `(n_orders, n_pixels)`. Units: µm. Averaged from 95 CARMENES VIS calibration frames. **Included in the repository.** |
 
-Both wavelength files are found automatically by the simulator, you do not need to copy or configure them. The simulator also needs per-night observation reference files (see Section 2).
+The simulator locates both wavelength files automatically. The simulator also needs per-night observation reference files (see Section 2).
 
-The wavelength grid was extracted from real CARMENES FITS files produced by the CARACAL pipeline. Each per-exposure FITS file (e.g. `car-YYYYMMDDTHHMMSS-sci-norl-nir_A.fits`) contains four data extensions: spectra (1), continuum (2), uncertainties (3), and wavelength (4). All four have shape `(n_pixels, n_orders)` per exposure; when read across a full night they form arrays of shape `(n_spectra, n_orders, n_pixels)` after transposition. The wavelength solution is stable across exposures, so the bundled `wave_CARMENES_NIR.fits` discards the `n_spectra` dimension and has shape `(n_orders, n_pixels)` in µm (extension 4 values divided by 1e4 to convert from Å). The full `(n_spectra, n_orders, n_pixels)` arrays for spectra, uncertainties, and wavelengths are only needed when `observation.specific_event: true` (reference-night noise model) or `observation.use_real_data: true` (real-data analysis), and are provided as the `sig`, `snr`, and `observations_night_K` files described in Section 2.
+The wavelength grid was extracted from real CARMENES FITS files produced by the CARACAL pipeline. Each per-exposure FITS file (e.g. `car-YYYYMMDDTHHMMSS-sci-norl-nir_A.fits`) contains four data extensions: spectra (1), continuum (2), uncertainties (3), and wavelength (4). All four have shape `(n_pixels, n_orders)` per exposure. When read across a full night they form arrays of shape `(n_spectra, n_orders, n_pixels)` after transposition. The wavelength solution is stable across exposures, so the bundled `wave_CARMENES_NIR.fits` discards the `n_spectra` dimension and has shape `(n_orders, n_pixels)` in µm (extension 4 values divided by 1e4 to convert from Å). The full `(n_spectra, n_orders, n_pixels)` arrays for spectra, uncertainties, and wavelengths are only needed when `observation.specific_event: true` (reference-night noise model) or `observation.use_real_data: true` (real-data analysis), and are provided as the `sig`, `snr`, and `observations_night_K` files described in Section 2.
 
 ---
 
@@ -71,7 +71,7 @@ Files always use a **night index suffix** (`_0`, `_1`, …), even for single-nig
 
 `different_nights: true` is supported for both **ANDES** and **CARMENES_NIR**.
 
-Supply one file per night, with a zero-based night index suffix. When `use_real_data: true`, each night may have a **different number of spectra** `n_spectra_b` (read from its `julian_date_{b}.fits`); the simulator pads all arrays to the maximum night length with NaN and operates only on the live rows. With `use_real_data: false` all nights share the same number of spectra.
+Supply one file per night, with a zero-based night index suffix. When `use_real_data: true`, each night may have a **different number of spectra** `n_spectra_b` (read from its `julian_date_{b}.fits`). The simulator pads all arrays to the maximum night length with NaN and operates only on the live rows. With `use_real_data: false` all nights share the same number of spectra.
 
 | File | Shape | Description |
 |---|---|---|
@@ -91,7 +91,7 @@ Supply one file per night, with a zero-based night index suffix. When `use_real_
 
 Here `K` is the **instrument order ID** stored in `order_selection`.
 
-> **Note on `n_spectra`:** regardless of `use_real_data`, the number of exposures per night is always determined by `julian_date_{b}.fits`, specifically, `n_spectra_b = len(julian_date_b)`. The spectral and uncertainty arrays must have a matching first dimension; the simulator does not infer `n_spectra` from them. For `different_nights: false` with `use_real_data: true`, the night suffix is omitted: `observations_order_{K}.fits` and `observations_berv.fits`.
+> **Note on `n_spectra`:** regardless of `use_real_data`, the number of exposures per night is always determined by `julian_date_{b}.fits`, specifically, `n_spectra_b = len(julian_date_b)`. The spectral and uncertainty arrays must have a matching first dimension. Their exposure count must match the timing file. For `different_nights: false` with `use_real_data: true`, the night suffix is omitted: `observations_order_{K}.fits` and `observations_berv.fits`.
 
 **For the HD189733b CARMENES reference night** ([Alonso-Floriano et al. 2019](https://doi.org/10.1051/0004-6361/201834339), A&A 621, A74, night of 2017-09-07):
 The sig/snr/JD/airmass files from that published observation are in `inputs/CARMENES_NIR/HD189733b/reference_night/`. These are the files used in the CARMENES validation run. They should be cited as Alonso-Floriano et al. (2019) if used in published work.
@@ -126,7 +126,7 @@ The wavelength file is at:
 https://phoenix.astro.physik.uni-goettingen.de/data/HiResFITS/WAVE_PHOENIX-ACES-AGSS-COND-2011.fits
 ```
 
-These files are large (the wavelength file is ~10 MB; flux files are ~500 MB each) and are **not included in the repository**. Set the absolute paths in your config under `paths.phoenix_wave_file` and `paths.phoenix_flux_file`.
+These files are large (the wavelength file is ~10 MB, flux files are ~500 MB each) and are **not included in the repository**. Set the absolute paths in your config under `paths.phoenix_wave_file` and `paths.phoenix_flux_file`.
 
 ---
 
@@ -140,7 +140,7 @@ EXoPLORE supports three telluric modes (see [config_reference.md §7](config_ref
 
 ### Mode 1, Airmass-scaled reference (default, `use_full_skycalc: false`)
 
-Requires a single reference telluric spectrum computed at `reference_airmass` (typically 1.0). The simulator scales it to each exposure using the Beer-Lambert-Bouguer law (Bouguer 1729; Lambert 1760; Beer 1852):
+Requires a single reference telluric spectrum computed at `reference_airmass` (typically 1.0). The simulator scales it to each exposure using the Beer-Lambert-Bouguer law (Bouguer 1729, Lambert 1760, Beer 1852):
 
 ```
 T(X) = T_ref ^ (X / X_ref)
@@ -175,7 +175,7 @@ some margin. For example, inside the existing `tellurics` block:
 
 That interval is suitable for the full reference ANDES YJHK example. The
 existing ANDES UBV example instead uses `[0.34, 0.65]`. Values here are in
-**microns**; the generator converts them to SkyCalc's **nanometres**. This
+**microns**. The generator converts them to SkyCalc's **nanometres**. This
 setting controls the downloaded spectrum. Instrument input files define the observing grid.
 
 Generate the reference with `scripts/generate_skycalc_inputs.py`
@@ -198,7 +198,7 @@ For a single reference, point `tellurics.reference_telluric_file` at that file.
 For per-exposure tellurics, use the directory convention below and set
 `use_full_skycalc: true`. EXoPLORE checks coverage of the selected orders and
 raises an error if the file is too narrow. Synthetic observations load these
-transmission files. Observed-data preparation uses the measured spectra;
+transmission files. Observed-data preparation uses the measured spectra.
 a telluric search template explicitly requests a transmission input.
 
 Alternatively use the
@@ -237,7 +237,7 @@ EXoPLORE provides a ready-to-use script that queries the ESO SkyCalc REST
 API directly via the `skycalc_ipy` Python package (no CLI installation
 required). It reads the wavelength interval, observatory, PWV and observing
 choices from your simulation config. Other sky-model components and spectral
-sampling retain the defaults in `_query_skycalc()`; they are not all exposed as
+sampling retain the defaults in `_query_skycalc()`. They are not all exposed as
 JSON options. No separate SkyCalc JSON is required.
 
 **Install the dependency once:**
@@ -252,7 +252,7 @@ python scripts/generate_skycalc_inputs.py configs/my_config.json
 
 The script writes `tell_spec_{n}.fits` and `tell_ref_airmass_{X.X}.fits` into
 the directory the simulator expects, and generates `pwv_values.fits` when
-`constant_pwv: false`.  Existing files are skipped; use `--overwrite` to
+`constant_pwv: false`.  Existing files are skipped. Use `--overwrite` to
 regenerate them.
 
 ---
@@ -278,9 +278,9 @@ The behaviour differs depending on `observation.specific_event`:
 
 **`specific_event: true`, you have a real observed night:**
 
-> You should use the **real airmass from `reference_night/airmass_0.fits`**
-> rather than this mode.  The simulator reads those files directly
-> (`syn_jd = JD_og` in `get_event`; airmass loaded from `airmass_0.fits`).
+> Use the **measured airmass in `reference_night/airmass_0.fits`**.
+> The simulator reads the reference-night arrays directly
+> (`syn_jd = JD_og` in `get_event`, airmass loaded from `airmass_0.fits`).
 >
 > If `airmass_0.fits` is unavailable, `--mode astro` is a fallback: it loads
 > the real timestamps from `reference_night/julian_date_0.fits` (the same
@@ -325,7 +325,7 @@ python scripts/generate_skycalc_inputs.py configs/hd189733b_andes_transit_clean.
 **Required fields in planet parameter file for `--mode astro`:**
 - `ra_deg`, `dec_deg`, sky coordinates (J2000)
 - `transit_epoch_bjd`, `orbital_period_days`, ephemeris
-- `transit_duration_hours`, optional; computed from orbital elements if absent
+- `transit_duration_hours`, optional. Computed from orbital elements if absent
 
 ---
 
@@ -351,7 +351,7 @@ python scripts/generate_skycalc_inputs.py configs/my_config.json --mode syntheti
 | Situation | Recommended approach |
 |---|---|
 | Fully synthetic simulation (ANDES or CARMENES, no real night) | `--mode astro` (default) |
-| Reproducing a known real night (`specific_event: true`) | Use `airmass_0.fits` directly; `--mode astro` as fallback |
+| Reproducing a known real night (`specific_event: true`) | Use `airmass_0.fits` directly. `--mode astro` as fallback |
 | Planning future observations from site geometry | `--mode astro [--search-from DATE]` |
 | Coordinates unavailable or quick tests | `--mode synthetic` |
 
@@ -373,7 +373,7 @@ When `constant_pwv: false`, `PWV_handling` draws a per-exposure PWV sequence tha
 [0.05, 0.1, 0.25, 0.5, 1.0, 1.5, 2.5, 3.5, 5.0, 7.5, 10.0, 20.0, 30.0]  mm
 ```
 
-Each exposure is assigned the reference value or one grid step above/below it, mimicking realistic intra-night PWV fluctuation. Files go to `Variable_PWV/` instead of `Fixed_PWV/`.
+Each exposure is assigned the reference value or one grid step above/below it, mimicking realistic intra-night PWV fluctuation. Files go to `Variable_PWV/`.
 
 ---
 

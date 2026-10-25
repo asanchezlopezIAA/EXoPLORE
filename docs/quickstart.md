@@ -44,7 +44,7 @@ To adapt the reference configuration to a different scientific case, the followi
 
 i) **Change the instrument**: replace `"CARMENES_NIR"` with `"ANDES_YJHK"` and provide the corresponding input files under `inputs/ANDES/`.
 
-ii) **Change the atmosphere**: edit `atmosphere.planet_model.carbon_to_oxygen_ratio` and `metallicity_wrt_solar` to explore different chemical compositions; alternatively, set `use_easychem: false` and provide explicit volume mixing ratios via `vmr`.
+ii) **Change the atmosphere**: edit `atmosphere.planet_model.carbon_to_oxygen_ratio` and `metallicity_wrt_solar` to explore different chemical compositions. Alternatively, set `use_easychem: false` and provide explicit volume mixing ratios via `vmr`.
 
 iii) **Enable Bayesian retrieval**: add a `retrieval` block to the config with `"enabled": true`, choose a log-likelihood (`"BL19"`, `"Blain24"`, or `"Gibson22"`), and set the number of live points. See [Tutorial 6](tutorial.md#tutorial-6-enable-bayesian-retrieval) for details.
 

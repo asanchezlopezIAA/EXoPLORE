@@ -49,21 +49,21 @@ The planet signal is therefore the component that marches most steadily across
 the detector while the contaminants remain comparatively fixed. This separation
 in the time-velocity plane underlies the technique, and it is also why HRS does
 not require a reference star or absolute flux calibration: the information lives
-in the **motion** of narrow lines rather than in the broadband continuum.
+in the **motion** of narrow lines.
 
 ```{figure} figures/doppler_trick.png
 :width: 90%
 :align: center
 
 Schematic of a time-series spectral matrix during a transit (wavelength on the
-horizontal axis, time or orbital phase on the vertical axis; darker means more
+horizontal axis, time or orbital phase on the vertical axis. Darker means more
 absorption). The telluric and stellar lines are stationary in wavelength and
 appear as vertical features, while the planet's lines Doppler-shift during the
 transit and trace an inclined trail. The cross-correlation technique exploits
 this separation to isolate the moving planet signal.
 ```
 
-The Doppler shift is the primary handle, but not the only one. The planetary
+The timing of the signal also helps identify its origin. The planetary
 absorption signal is present **only in transit** (in transmission) or
 **around secondary eclipse** (in dayside emission), so the timing of the signal
 relative to the orbital ephemeris provides additional discrimination: a
@@ -81,7 +81,7 @@ job of the cross-correlation function (Section 4).
 > large velocity swing during transit (for example HD 189733 b) separates
 > cleanly from the stationary contaminants. A slowly moving planet (a temperate
 > super-Earth on a wide orbit) barely shifts during an event and is
-> correspondingly harder, since its lines overlap the contaminants for longer;
+> correspondingly harder, since its lines overlap the contaminants for longer.
 > it is not, however, beyond reach, and the in-transit timing constraint above
 > helps to recover such signals.
 
@@ -106,12 +106,12 @@ A model transmission spectrum of HD 189733 b over part of the near-infrared
 (transit depth against wavelength), computed with petitRADTRANS. The forest of
 narrow lines, here dominated by H₂O, is the planetary signal that EXoPLORE
 injects and that the cross-correlation later combines. Individual lines are far
-below the photon noise of a single exposure; their number is what makes the
+below the photon noise of a single exposure. Their number is what makes the
 detection possible.
 ```
 
 The terminator of a real hot Jupiter is generally **not** uniform. The morning
-(leading) limb probes gas arriving from the cool nightside; the evening
+(leading) limb probes gas arriving from the cool nightside. The evening
 (trailing) limb probes gas from the hot dayside. These two limbs can differ in
 temperature, chemistry, and the direction of their winds, and they contribute
 to the observed spectrum with **phase-dependent weights** as the planet crosses
@@ -130,7 +130,7 @@ rest-frame velocity against orbital phase (dashed lines mark the transit
 contacts T₁, T₄). **Bottom row:** the corresponding 1D cross-correlation
 functions averaged over ingress (blue) and egress (red), which isolate the
 leading and trailing limbs respectively. **Left:** a H₂O signal from
-HD 189733 b with a modest day-to-nightside wind; the two limbs share almost the
+HD 189733 b with a modest day-to-nightside wind. The two limbs share almost the
 same velocity, so they merge into a single, slightly asymmetric trail (the
 morning and evening limbs only enter and leave transit at slightly different
 times), and the ingress and egress CCFs peak close together. **Middle:** neutral
@@ -199,7 +199,7 @@ separately in [Section 5](#5-from-cross-correlation-to-a-likelihood).
   polynomial in airmass on the log-flux (`remove_telluric_lines_fit`), masking
   channels where the fitted transmittance falls below 0.8. Both live in
   `exoplore.pipelines.blain24`. This preparation is also implemented natively in
-  [petitRADTRANS](https://petitradtrans.readthedocs.io); see its [retrieval documentation](https://petitradtrans.readthedocs.io/en/latest/content/notebooks/retrieval_spectral_model.html).
+  [petitRADTRANS](https://petitradtrans.readthedocs.io). See its [retrieval documentation](https://petitradtrans.readthedocs.io/en/latest/content/notebooks/retrieval_spectral_model.html).
 - **ASL19** (Sánchez-López et al.
   [2019](https://doi.org/10.1051/0004-6361/201936084), A&A, 630, A53). Developed
   for the CARMENES near-infrared detection of water vapour in HD 209458 b, using
@@ -219,16 +219,16 @@ separately in [Section 5](#5-from-cross-correlation-to-a-likelihood).
 
 The SYSREM preparation acting on one CARMENES NIR order of an HD 189733 b
 simulation (Gibson22 pipeline), for the 1.486 to 1.489 µm water band. Top: the
-noiseless (black) and noisy (red) in-silico flux in a single exposure; the deep
+noiseless (black) and noisy (red) in-silico flux in a single exposure. The deep
 features are telluric water lines.
 Below, the time-series matrix (wavelength on the horizontal axis, spectrum
 number on the vertical) at successive cleaning stages. In the raw matrix the
 telluric and stellar contamination appears as static vertical bands. After one
-SYSREM iteration the dominant common-mode systematics are largely gone; after
+SYSREM iteration the dominant common-mode systematics are largely gone. After
 five iterations only residual noise remains, within which the much fainter
 planet trail is buried. Wavelength channels too strongly absorbed by tellurics
 are masked, shown as uniform grey columns. Red dashed lines mark ingress and
-egress; the iterations shown are set by `plotting.pipeline_steps_sysrem_iterations`.
+egress. The iterations shown are set by `plotting.pipeline_steps_sysrem_iterations`.
 ```
 
 This removal comes at a cost. Because the planet's lines are only
@@ -254,19 +254,19 @@ original references) as a starting point, but the appropriate choice, the number
 of SYSREM components, the masking thresholds, and the order-by-order treatment
 all depend on the data at hand. We caution that these must be studied and, where
 necessary, adapted for each dataset. High-resolution data analysis is difficult,
-and every night carries its own tellurics, systematics, and stellar behaviour; a
+and every night carries its own tellurics, systematics, and stellar behaviour. A
 pipeline should be verified on the data it is applied to, not applied blindly.
 :::
 
 > The SYSREM-based recipes raise a further question: how many components should
-> be removed? Too few leaves systematics in the data; too many over-fits and
+> be removed? Too few leaves systematics in the data. Too many over-fits and
 > erodes the planet signal. Choosing the number by maximising the detection
 > significance is circular, since the analysis is then tuned until it shows the
 > expected result. EXoPLORE provides three criteria via
 > `pipeline.optimize_criterion`: maximising the recovered significance (the
-> biased baseline, retained for comparison); optimising the recovery of a model
+> biased baseline, retained for comparison). Optimising the recovery of a model
 > signal injected at a velocity **away** from the planet, so the choice never
-> sees the real signal; and a model-independent criterion based on the change in
+> sees the real signal. And a model-independent criterion based on the change in
 > the residual standard deviation between successive SYSREM iterations
 > (`delta_sigma`), following [Parker et al. (2025, MNRAS, 538, 3263)](https://doi.org/10.1093/mnras/staf469), which
 > avoids assuming a model altogether. The two latter approaches both avoid tuning the
@@ -314,14 +314,14 @@ displaced from V_rest = 0 would indicate a net Doppler shift, such as a
 day-to-night wind.
 ```
 
-Two features of the map are physical rather than incidental:
+Two features of the map help interpret the signal:
 
 - **The peak behaves as a matched filter.** The cross-correlation co-adds many
   lines that are quasi-periodic in velocity space, so the response is that of a
   matched filter with a zero-mean kernel. At high signal-to-noise this produces
   faint anti-correlation lobes flanking the main peak. These lobes arise from
-  the autocorrelation function of the template itself and do not represent
-  artefacts; they are a modest, expected cost of using a densely lined template,
+  the autocorrelation function of the template itself. They are an expected
+  response of a densely lined template,
   and they only rise above the noise in very high-quality data (such as
   simulated ANDES spectra).
 - **The position encodes physics.** A peak displaced from `V_rest = 0` indicates
@@ -352,7 +352,7 @@ ln L_BL19 = -(N/2) · ln(s_f² - 2R + s_g²),
 ```
 
 where `s_f²` and `s_g²` are the mean squared data and model and `R` is their
-cross-covariance; the bracket equals the mean squared residual. No per-pixel
+cross-covariance. The bracket equals the mean squared residual. No per-pixel
 uncertainty enters: BL19 estimates one global noise level per spectrum from the
 data itself. It is therefore self-calibrating and insensitive to absolute flux.
 Brogi & Line (2019) developed and validated this formulation on simulated CRIRES
@@ -373,14 +373,14 @@ ln L_Blain24 = -(1/2) · Σ_n [ (d(n) - m(n)) / σ(n) ]².
 Each pixel is weighted by `1/σ(n)²`. The formulation derives from the framework
 of Gibson et al. (2020, MNRAS, 493, 2215). The Blain24 method and its retrieval
 framework are also implemented natively in petitRADTRANS, where they are handled
-directly; we encourage readers to consult the [petitRADTRANS retrieval
+directly. We encourage readers to consult the [petitRADTRANS retrieval
 documentation](https://petitradtrans.readthedocs.io/en/latest/content/notebooks/retrieval_spectral_model.html).
 
 **Gibson et al. (2022, MNRAS, 512, 4618), `Gibson22`.** The same chi-square with a
 global scale factor `β` multiplying the uncertainties, plus a `-N ln β` penalty.
 `β` absorbs a uniform under- or over-estimate of the noise. It is identifiable
 on noisy data but diverges on noiseless data (the residuals vanish, so the
-likelihood is maximised by `β → 0`); for noiseless bias tests `β` is pinned near
+likelihood is maximised by `β → 0`). For noiseless bias tests `β` is pinned near
 1 with an informative prior (Tutorial 7).
 
 ---
@@ -398,12 +398,12 @@ careful analysis reports more than one. EXoPLORE provides:
   values with the out-of-trail distribution. It is less sensitive to a single
   hot pixel than the S/N, at the cost of assumptions about the two populations.
 - **Bayesian evidence.** The marginal likelihood of a model containing the
-  species compared with a null model without it; the ratio is a Bayes factor,
+  species compared with a null model without it. The ratio is a Bayes factor,
   which can be mapped to a frequentist sigma. It accounts for the prior volume
   and the full parameter space and is the most rigorous of the three, but also
   the most expensive.
 
-The three measures rest on different assumptions and need not agree; comparing
+The three measures rest on different assumptions and need not agree. Comparing
 them is itself informative, and is the subject of Tutorial 8.
 
 ---

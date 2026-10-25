@@ -22,7 +22,7 @@ observed spectra.
 > matters), and the precision-versus-accuracy problem. It assumes little prior HRS
 > experience.
 
-> **Note:** this is an early public release. The legacy code adaptation to a modular, easier to use (for someone other than me... =D) version takes a bit of time. The documentation is actively being expanded and plots/discussion will change; feedback and suggestions are welcome via the [issue tracker](https://github.com/asanchezlopezIAA/EXoPLORE/issues).
+> **Note:** this is an early public release. The legacy code adaptation to a modular, easier to use (for someone other than me... =D) version takes a bit of time. The documentation is actively being expanded and plots/discussion will change. Feedback and suggestions are welcome via the [issue tracker](https://github.com/asanchezlopezIAA/EXoPLORE/issues).
 
 ---
 
@@ -42,7 +42,7 @@ observed spectra.
 <td width="50%"><img src="docs/figures/significance_study_corner.png" alt="Significance and velocity recovery over 100 noise realisations"/></td>
 </tr>
 <tr>
-<td align="center"><b>Bayesian atmospheric retrieval.</b> Posterior distributions for a Blain24 retrieval of a single noiseless CARMENES NIR order of HD 189733 b; the water abundance, K<sub>P</sub>, T<sub>eq</sub>, and V<sub>rest</sub> are all recovered at the injected truth values (red lines).</td>
+<td align="center"><b>Bayesian atmospheric retrieval.</b> Posterior distributions for a Blain24 retrieval of a single noiseless CARMENES NIR order of HD 189733 b. The water abundance, K<sub>P</sub>, T<sub>eq</sub>, and V<sub>rest</sub> are all recovered at the injected truth values (red lines).</td>
 <td align="center"><b>Statistical validation over 100 noise realisations.</b> Distributions of the recovered significance, K<sub>P</sub>, and V<sub>rest</sub> for the same injected HD 189733 b atmosphere (ANDES, single order), comparing the S/N and Welch metrics at two cross-correlation velocity steps.</td>
 </tr>
 </table>
@@ -56,7 +56,7 @@ Planet / system parameters
         ↓
 Instrument and observing setup
         ↓
-Atmospheric forward model  (petitRADTRANS + EasyChem; 1D or pseudo-2D limbs)
+Atmospheric forward model  (petitRADTRANS + EasyChem, 1D or pseudo-2D limbs)
         ↓
 Stellar + planetary + telluric + instrumental effects
         ↓
@@ -79,11 +79,11 @@ Kp-Vsys detection maps  and/or  atmospheric retrieval  (MultiNest / emcee)
 - [petitRADTRANS](https://petitradtrans.readthedocs.io), Mollière et al. (2019, [A&A 627, A67](https://doi.org/10.1051/0004-6361/201935470))
 - [EasyChem](https://easychem.readthedocs.io), Lei & Mollière (2024, [arXiv:2410.21364](https://arxiv.org/abs/2410.21364))
 - [BATMAN](https://lkreidberg.github.io/batman/docs/html/index.html), Kreidberg (2015, [PASP 127, 1161](https://doi.org/10.1086/683602))
-- [PHOENIX stellar models](https://phoenix.astro.physik.uni-goettingen.de), Husser et al. (2013, [A&A 553, A6](https://doi.org/10.1051/0004-6361/201219058)); download the wave grid and the flux file matching your target star
+- [PHOENIX stellar models](https://phoenix.astro.physik.uni-goettingen.de), Husser et al. (2013, [A&A 553, A6](https://doi.org/10.1051/0004-6361/201219058)). Download the wave grid and the flux file matching your target star
 - A Fortran compiler (gfortran) is required to build petitRADTRANS and EasyChem
-- petitRADTRANS opacity tables (several GB); see [docs/input_files.md](docs/input_files.md)
-- For [SkyCalc](https://skycalc-ipy.readthedocs.io) telluric generation (optional, Mode 2 only): [skycalc_ipy](https://skycalc-ipy.readthedocs.io), Noll et al. (2012, [A&A 543, A92](https://doi.org/10.1051/0004-6361/201219040)); [astroplan](https://astroplan.readthedocs.io), Morris et al. (2018, [AJ 155, 128](https://doi.org/10.3847/1538-3881/aaa47e))
-- For Bayesian retrieval (optional): [PyMultiNest](https://github.com/JohannesBuchner/PyMultiNest), Feroz et al. (2009, [MNRAS 398, 1601](https://doi.org/10.1111/j.1365-2966.2009.14548.x)); [emcee](https://emcee.readthedocs.io), Foreman-Mackey et al. (2013, [PASP 125, 306](https://doi.org/10.1086/670067)); [corner](https://corner.readthedocs.io), Foreman-Mackey (2016, [JOSS 1, 24](https://doi.org/10.21105/joss.00024))
+- petitRADTRANS opacity tables (several GB). See [docs/input_files.md](docs/input_files.md)
+- For [SkyCalc](https://skycalc-ipy.readthedocs.io) telluric generation (optional, Mode 2 only): [skycalc_ipy](https://skycalc-ipy.readthedocs.io), Noll et al. (2012, [A&A 543, A92](https://doi.org/10.1051/0004-6361/201219040)). [astroplan](https://astroplan.readthedocs.io), Morris et al. (2018, [AJ 155, 128](https://doi.org/10.3847/1538-3881/aaa47e))
+- For Bayesian retrieval (optional): [PyMultiNest](https://github.com/JohannesBuchner/PyMultiNest), Feroz et al. (2009, [MNRAS 398, 1601](https://doi.org/10.1111/j.1365-2966.2009.14548.x)). [emcee](https://emcee.readthedocs.io), Foreman-Mackey et al. (2013, [PASP 125, 306](https://doi.org/10.1086/670067)). [corner](https://corner.readthedocs.io), Foreman-Mackey (2016, [JOSS 1, 24](https://doi.org/10.21105/joss.00024))
 
 ### Step-by-step
 
@@ -199,7 +199,7 @@ Runtime for the reference HD 189733 b ANDES simulation (76 orders, 1 night) is a
 To follow the calculation through the code, start with the
 [code reading guide](docs/code_reading_guide.md). The
 [file-by-file guide](docs/module_guide.md) explains what each maintained module
-and script is for; the [architecture overview](docs/architecture.md) shows how
+and script is for. The [architecture overview](docs/architecture.md) shows how
 the parts connect.
 
 ```

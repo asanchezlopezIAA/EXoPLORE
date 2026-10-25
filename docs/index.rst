@@ -11,7 +11,7 @@ current and next-generation ground-based spectrographs.
    :class: danger
 
    This is an early public release. The documentation is actively being
-   expanded; feedback and suggestions are welcome via the
+   expanded. Feedback and suggestions are welcome via the
    `GitHub issue tracker <https://github.com/asanchezlopezIAA/EXoPLORE/issues>`_.
 
 .. toctree::

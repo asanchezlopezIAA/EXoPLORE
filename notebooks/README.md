@@ -23,6 +23,6 @@ Each run saves its configuration, overrides, log, products and software/input
 record under `outputs/notebooks/01_first_ANDES_simulation/`.
 
 Figures and the CCF-to-map animation are embedded in the notebook. Matplotlib
-and Pillow render the animation; PyMuPDF provides inline PDF previews.
+and Pillow render the animation. PyMuPDF provides inline PDF previews.
 Tutorial 1 links directly to the notebook download. Sphinx copies the file
 from `notebooks/` into its download directory when building the documentation.

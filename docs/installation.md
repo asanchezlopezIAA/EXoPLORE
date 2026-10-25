@@ -2,7 +2,7 @@
 
 ## Requirements
 
-EXoPLORE requires Python 3.10 or later and a UNIX-like system (Linux or macOS; Windows is not tested). In addition, approximately 10 GB of free disk space are needed to accommodate the [petitRADTRANS](https://petitradtrans.readthedocs.io) opacity tables and PHOENIX stellar model files.
+EXoPLORE requires Python 3.10 or later and a UNIX-like system (Linux or macOS, Windows is not tested). In addition, approximately 10 GB of free disk space are needed to accommodate the [petitRADTRANS](https://petitradtrans.readthedocs.io) opacity tables and PHOENIX stellar model files.
 
 ## 1. Clone the repository
 

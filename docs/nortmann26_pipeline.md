@@ -13,16 +13,16 @@ series:
 
 1. **Common-blaze normalisation** (Nortmann 2026, Sec. 3.1). Two steps: each
    spectrum is divided by a second-order polynomial fit to its ratio with the
-   master (the summed out-of-transit spectrum); then the master itself is
+   master (the summed out-of-transit spectrum). Then the master itself is
    fitted with a second-order polynomial under iterative stellar-line masking
    and divided out, bringing all spectra to a common blaze. NaN and >4σ
    outlier pixels are flagged.
 2. **Column masking**. Columns with more than three flagged pixels are
-   masked entirely; lighter flags are interpolated over time
+   masked entirely. Lighter flags are interpolated over time
    (`nortmann_column_mask`).
 3. **Deepest-telluric mask**. Regions where the flux falls below 20% of the
    continuum are masked before detrending (Nortmann 2026, Sec. 3.1).
-4. **Division SYSREM** (Gibson et al. 2020 convention; Nortmann 2026,
+4. **Division SYSREM** (Gibson et al. 2020 convention, Nortmann 2026,
    Sec. 3.2). SYSREM components are accumulated into a systematics model
    M_N and the data are corrected by division, R = D / M_N, preserving the
    planet signal shape. The per-iteration time basis U is stored for model
@@ -34,7 +34,7 @@ series:
    distortions as the data.
 
 The Kp-Vsys maps, in/out-of-trail statistics and significance metrics are the
-engine's standard CCF machinery; the map convention is
+engine's standard CCF machinery. The map convention is
 `v_rest = offset from the expected planet trail`.
 
 ## Extra preparation steps bundled for CRIRES+
@@ -45,20 +45,20 @@ engine's standard CCF machinery; the map convention is
   `ESO QC SLITFWHM` headers) or S/N are strong outliers for the night
   (adaptive-optics losses) are excluded, data-driven.
 - **Cosmic-ray rejection** (Lesjak et al. 2025): per wavelength channel, a
-  robust (Tukey biweight) polynomial fit over time; >5σ outliers are replaced
+  robust (Tukey biweight) polynomial fit over time. >5σ outliers are replaced
   by the fit value (`Robust_Outlier_Removal`).
-- **Effective spectral resolution** (Nortmann et al. 2024, App. A.2; Lesjak
-  et al. 2025): the stellar PSF FWHM is read from the cr2res headers; a PSF
+- **Effective spectral resolution** (Nortmann et al. 2024, App. A.2, Lesjak
+  et al. 2025): the stellar PSF FWHM is read from the cr2res headers. A PSF
   narrower than the slit means the star underfills it and the true resolution
   exceeds the nominal R = 100,000 ("super-resolution"),
   R = 100000 × 3.5 px / FWHM px. When the PSF **overfills** the slit (poor
   seeing) the resolution is slit-limited and clamped to the nominal value, rather
   than extrapolated below it. The measured per-segment R is stored in
   `resolution_0.fits` and the engine convolves all templates to the measured
-  median R instead of the nominal value.
+  measured median R.
 - **Telluric alignment check** (Nortmann et al. 2024, App. A.2): every
   exposure is cross-correlated, in continuum-normalised absorption, against a
-  reference exposure over the telluric lines; the A/B offset and night drift
+  reference exposure over the telluric lines. The A/B offset and night drift
   are corrected only if significant, otherwise the grids are kept (the
   no-drift case of Lesjak 2025 and Nortmann 2026).
 
@@ -69,15 +69,15 @@ Read before publishing results based on this pipeline:
 - The theoretical telluric model is currently used in the preparation stage
   (masks, wavelength anchoring) but is **not yet forwarded into the engine's
   normalisation step**, so the 96%-continuum telluric mask of the
-  normalisation fits (Nortmann 2026, Sec. 3.1) is not applied there; the
+  normalisation fits (Nortmann 2026, Sec. 3.1) is not applied there. The
   deep (<20% of continuum) mask uses the observed flux, which matches the
   paper's wording for that mask.
-- Detrending currently runs in the observer frame; the stellar rest frame
+- Detrending currently runs in the observer frame. The stellar rest frame
   variant preferred by Nortmann 2026 (`nortmann_shift_to_stellar_frame`) is
   available in `exoplore.pipelines.nortmann26` but not yet wired into the
-  engine branch. For a single short night the difference is small; for
+  engine branch. For a single short night the difference is small. For
   multi-night stacks it matters.
-- The linear super-resolution anchor extrapolates; at PSF FWHM well below
+- The linear super-resolution anchor extrapolates. At PSF FWHM well below
   the slit width it may overestimate R by several percent (Nortmann 2024
   quote R ≈ 140,000 at ∼2 px). The effect on a matched filter is a few
   percent of S/N at most.
@@ -86,7 +86,7 @@ Read before publishing results based on this pipeline:
   `pipeline.kp_vrest_injection`): a scaled template is injected into the real
   residuals and recovered through the full pipeline, so a non-detection can be
   turned into an upper limit. The injected signal uses the real per-exposure
-  BERV, so it recovers at the planet position rather than displaced.
+  BERV, so it recovers at the expected planet position.
 
 ## Worked example: a public CRIRES+ K-band transit
 
@@ -102,7 +102,7 @@ makes a complete end-to-end example.
    flux tables). Place everything in one directory, e.g. `mynight/raw/`.
 2. **Install the ESO tools**: `esorex` with the `cr2res` and `molecfit`
    recipes, from the [ESO pipelines page](https://www.eso.org/sci/software/pipelines/).
-   See [CRIRES+ reduction](crires_reduction.md); EXoPLORE only wraps these
+   See [CRIRES+ reduction](crires_reduction.md). EXoPLORE only wraps these
    tools.
 3. **Reduce**: `python scripts/reduce_crires_night.py mynight/raw all`
    → `mynight/reduced/` with one extracted spectrum per nodding exposure and
@@ -114,7 +114,7 @@ makes a complete end-to-end example.
    resolution measurement and drift check, and writes the `reference_night/`
    files.
 5. **Configure a run**: planet parameters in `planet_params/L9859c.json`
-   (Demangeon et al. 2021); a minimal config uses
+   (Demangeon et al. 2021). A minimal config uses
 
    ```json
    {
@@ -155,6 +155,6 @@ against a published detection.
 - Tamuz, O., Mazeh, T., & Zucker, S. 2005, MNRAS 356, 1466: SYSREM.
 - Dorn, R. J., et al. 2023, A&A 671, A24: CRIRES+ instrument, nominal
   resolution and slit sampling.
-- Smette, A., et al. 2015, A&A 576, A77; Kausch, W., et al. 2015, A&A 576,
+- Smette, A., et al. 2015, A&A 576, A77. Kausch, W., et al. 2015, A&A 576,
   A78: molecfit.
 - Demangeon, O. D. S., et al. 2021, A&A 653, A41: L 98-59 system parameters.

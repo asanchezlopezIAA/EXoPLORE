@@ -64,7 +64,7 @@ Stored in `planet_params/<PlanetName>.json`. All values use natural astronomical
 | `kp_kms` | km/s | Planet orbital velocity semi-amplitude (used for CCF map axes and retrieval) |
 | `stellar_rv_semiamplitude_kms` | km/s | Stellar RV semi-amplitude K_star |
 | `equilibrium_temperature_K` | K | Planet equilibrium temperature (default for atmosphere model) |
-| `t_int_K` | K | Planet internal temperature (for Guillot profile; typically 100 to 300 K) |
+| `t_int_K` | K | Planet internal temperature (for Guillot profile, typically 100 to 300 K) |
 | `kappa_ir` | cm²/g | Infrared opacity for Guillot temperature profile |
 | `gamma_guillot` |, | Ratio of optical to infrared opacity for Guillot profile |
 | `limb_darkening_coeffs` |, | Quadratic limb darkening coefficients [u1, u2] for [BATMAN](https://lkreidberg.github.io/batman/docs/html/index.html) transit model |
@@ -105,7 +105,7 @@ Stored in `planet_params/<PlanetName>.json`. All values use natural astronomical
 | Field | Valid values | Description |
 |---|---|---|
 | `name` | See table below | Instrument name. Controls the wavelength grid, resolving power, and number of spectral orders. See [Supported instruments](#14-supported-instruments). |
-| `observatory` | `"paranal"`, `"lasilla"` | Observatory site for BERV computation and sky models. Set automatically by the instrument module; override only if you need to force a different site. |
+| `observatory` | `"paranal"`, `"lasilla"` | Observatory site for BERV computation and sky models. Set automatically by the instrument module. Override only if you need to force a different site. |
 | `pixels_per_resolution_element` | typically 2 to 4 | Number of detector pixels per resolution element, denoted m. Used when convolving model spectra to instrument resolution, and to convert the ETC SNR (given per resolution element) to a per-pixel SNR via SNR<sub>pixel</sub> = SNR<sub>resel</sub> / √m. ANDES: 2.5. CARMENES NIR: 3.3. CARMENES VIS: 3.3. |
 | `order_indices` | `[]` or list of ints | Spectral order indices to simulate. Empty list `[]` means all orders for the selected instrument band. Use `[0]` for single-order instruments. Example: `[0, 1, 5, 10]` simulates only those four orders (useful for fast testing). |
 | `split_detectors` | `true`, `false` | If `true`, treat each detector half as an independent order. Used for raw CARMENES data where each echelle order spans two detectors. |
@@ -153,7 +153,7 @@ Stored in `planet_params/<PlanetName>.json`. All values use natural astronomical
 | `pre_event_hours` | float ≥ 0 | Hours of baseline observation before the event starts (before ingress for transit). **When set to `0.0` (the default), the simulator automatically substitutes half the transit duration** as the pre-event window. Set an explicit positive value to override this. |
 | `post_event_hours` | float ≥ 0 | Hours of baseline observation after the event ends (after egress for transit). Same auto-substitution behaviour as `pre_event_hours`: `0.0` → half transit duration. |
 | `n_nights` | int ≥ 1 | Number of transits (or eclipses) to co-add. Multiple nights use the same config but different epochs, spaced by the orbital period. |
-| `different_nights` | `true`, `false` | If `true`, each night has its own number of spectra, airmass profile, and timing, enabling genuinely distinct simulated nights. Supported for both **ANDES** and **CARMENES_NIR**. Three sub-modes exist. **Sub-mode A, per-night reference files:** provide `julian_date_N.fits`, `snr_N.fits`, and `airmass_N.fits` for each night; the length of `julian_date_N.fits` defines `n_spectra[n]` for that night. This works for both real data (`use_real_data: true`) and fully synthetic simulations, the files may be synthetically generated or taken from real observations. When different nights have different numbers of spectra, arrays are padded to the maximum length with NaN and each night is processed on its live rows only. **Sub-mode B, `exposure_time_seconds_per_night`:** provide a list of per-night exposure times; the simulator regenerates each night's JD grid synthetically with that cadence, without requiring JD files. BERV is broadcast as the scalar `berv_kms`. **Sub-mode C, fully synthetic (ANDES default):** when `specific_event: false` and no JD files are present, the simulator synthesises per-night JD grids automatically, placing each night at successive transit epochs (T₀ + n × P) with a parabolic airmass model. This is the standard mode for ANDES detectability studies. If `false`, all nights are identical copies of night 1, co-added coherently (S/N scales as √N). See [docs/tutorial.md §5](tutorial.md#tutorial-5-multiple-nights) for the required file naming conventions. |
+| `different_nights` | `true`, `false` | If `true`, each night has its own number of spectra, airmass profile, and timing, enabling genuinely distinct simulated nights. Supported for both **ANDES** and **CARMENES_NIR**. Three sub-modes exist. **Sub-mode A, per-night reference files:** provide `julian_date_N.fits`, `snr_N.fits`, and `airmass_N.fits` for each night. The length of `julian_date_N.fits` defines `n_spectra[n]` for that night. This works for both real data (`use_real_data: true`) and fully synthetic simulations, the files may be synthetically generated or taken from real observations. When different nights have different numbers of spectra, arrays are padded to the maximum length with NaN and each night is processed on its live rows only. **Sub-mode B, `exposure_time_seconds_per_night`:** provide a list of per-night exposure times. The simulator regenerates each night's JD grid synthetically with that cadence, without requiring JD files. BERV is broadcast as the scalar `berv_kms`. **Sub-mode C, fully synthetic (ANDES default):** when `specific_event: false` and no JD files are present, the simulator synthesises per-night JD grids automatically, placing each night at successive transit epochs (T₀ + n × P) with a parabolic airmass model. This is the standard mode for ANDES detectability studies. If `false`, all nights are identical copies of night 1, co-added coherently (S/N scales as √N). See [docs/tutorial.md §5](tutorial.md#tutorial-5-multiple-nights) for the required file naming conventions. |
 | `exposure_time_seconds` | float > 0 | Individual exposure time in seconds. |
 | `readout_time_seconds` | float ≥ 0 | CCD/detector readout time per exposure (added to exposure time to get cadence). |
 | `overhead_time_seconds` | float ≥ 0 | Additional per-exposure overhead (guiding, nodding, etc.). |
@@ -169,9 +169,9 @@ Stored in `planet_params/<PlanetName>.json`. All values use natural astronomical
 | `significant_eccentricity` | `true`, `false` | If `true`, use a full eccentric orbit model for the planet velocity. Set to `false` for circular orbits (eccentricity = 0). |
 | `berv_kms` | float | Barycentric Earth Radial Velocity correction in km/s. If 0.0, the simulator computes the BERV from the observation time, coordinates, and observatory location. Set a fixed value to override. |
 | `noiseless` | `true`, `false` | If `true`, produce fully noiseless simulated spectra (photon noise = 0). Useful for testing the signal model in isolation. |
-| `first_night_noiseless` | `true`, `false` | If `true`, only the first night is noiseless; subsequent nights have noise. Useful for testing signal injection. |
+| `first_night_noiseless` | `true`, `false` | If `true`, only the first night is noiseless. Subsequent nights have noise. Useful for testing signal injection. |
 | `add_throughput_variations` | `true`, `false` | If `true`, add realistic time-varying throughput variations (airmass + instrumental drift) to the simulated spectra. |
-| `throughput_seed` | non-negative int or `null` | Optional throughput base seed; default `null` preserves unseeded draws. The public simulator derives separate streams from the physical order ID and zero-based night index using `SeedSequence([base_seed, order_id, night_index, 1])`. Independent of `noise.noise_seed`; ignored when throughput is disabled or the run is noiseless. Tutorial 1 sets both base seeds to `12345`. |
+| `throughput_seed` | non-negative int or `null` | Optional throughput base seed. Default `null` preserves unseeded draws. The public simulator derives separate streams from the physical order ID and zero-based night index using `SeedSequence([base_seed, order_id, night_index, 1])`. Independent of `noise.noise_seed`. Ignored when throughput is disabled or the run is noiseless. Tutorial 1 sets both base seeds to `12345`. |
 | `exposure_time_seconds_per_night` | list of float or `null` | Per-night exposure times in seconds. Only valid when `different_nights: true`. When set, the JD grid for each night is regenerated with that night's own DIT, enabling different cadences per night without requiring separate JD FITS files. Length must equal `n_nights`. `null` (default) uses the same `exposure_time_seconds` for all nights. |
 | `mask_v_rotsini` | `true`, `false` | If `true`, mask the CCF velocity range within ±v_rot_sini of Vsys=0 to avoid the stellar line broadening region. |
 
@@ -212,7 +212,7 @@ The atmosphere section contains up to six sub-blocks. Each describes a separate 
 | `evening_day` | Evening limb, dayside |
 | `evening_night` | Evening limb, nightside |
 
-For the `gradual`, `asymmetric` and `simplified_step` modes, the morning and evening models are read from `morning_day` and `evening_day`; the `_night` sub-blocks are unused. Their chemistry settings therefore do not affect Tutorial 1.
+For the `gradual`, `asymmetric` and `simplified_step` modes, the morning and evening models are read from `morning_day` and `evening_day`. The `_night` sub-blocks are unused in these modes.
 
 **Which sub-blocks are used** depends on `limb_asymmetries` and `limb_divisions`:
 
@@ -225,7 +225,7 @@ For the `gradual`, `asymmetric` and `simplified_step` modes, the morning and eve
 | Field | Valid values | Description |
 |---|---|---|
 | `limb_asymmetries` | `true`, `false` | If `true`, use distinct morning and evening limb models. If `false`, use only `planet_model` for the whole limb. |
-| `limb_divisions` | `"gradual"`, `"asymmetric"`, `"simplified_step"` | How to weight morning vs evening limb contributions over the transit. `"gradual"` (**default**, recommended for most targets): smooth cubic transition, morning limb dominates ingress, equal 50/50 mix at full transit, evening limb dominates egress. `"asymmetric"` (use for an ultra-hot Jupiter like WASP-76 b): asymmetric, morning limb dominates the first quarter of full transit, cubic handover completes at mid-transit, evening limb dominates the second half and egress; calibrated for planets with extreme day-to-night contrast and poor heat redistribution. `"simplified_step"`: hard step-function, pure morning during ingress, 50/50 during full transit, pure evening during egress; use for reference tests and simplified scenarios where clean physical interpretation of morning vs evening contributions is needed. |
+| `limb_divisions` | `"gradual"`, `"asymmetric"`, `"simplified_step"` | How to weight morning vs evening limb contributions over the transit. `"gradual"` (**default**, recommended for most targets): smooth cubic transition, morning limb dominates ingress, equal 50/50 mix at full transit, evening limb dominates egress. `"asymmetric"` (use for an ultra-hot Jupiter like WASP-76 b): asymmetric, morning limb dominates the first quarter of full transit, cubic handover completes at mid-transit, evening limb dominates the second half and egress. Calibrated for planets with extreme day-to-night contrast and poor heat redistribution. `"simplified_step"`: hard step-function, pure morning during ingress, 50/50 during full transit, pure evening during egress. Use for reference tests and simplified scenarios where clean physical interpretation of morning vs evening contributions is needed. |
 | `cc_with_true_model` | `true`, `false` | If `true`, use the same model for CCF template as for injection (`planet_model`). If `false`, use the separate `ccf_template` block. |
 
 ### 13. Atmosphere model block reference
@@ -269,7 +269,7 @@ All six atmosphere sub-blocks share the same structure:
 | `cloud_pressure_bar` | bar or `null` | Pressure of a grey cloud deck. Everything below this pressure is opaque. `null` = cloud-free. |
 | `pressure_min_bar` | bar | Top of atmosphere pressure (lowest pressure). Typically 1e-6 bar. |
 | `pressure_max_bar` | bar | Bottom of atmosphere pressure (highest pressure). Typically 100 bar. Must be > `pressure_min_bar`. |
-| `pressure_grid_size` | int | Number of pressure levels in the log-spaced grid. 100 is standard; increase for higher accuracy at the cost of speed. |
+| `pressure_grid_size` | int | Number of pressure levels in the log-spaced grid. 100 is standard. Increase for higher accuracy at the cost of speed. |
 | `isothermal` | `true`, `false` | If `true`, use a uniform temperature profile at `isothermal_temperature_K`. |
 | `isothermal_temperature_K` | K or `null` | Temperature for isothermal profile. Required if `isothermal: true`. |
 | `equilibrium_temperature_K` | K | Planet equilibrium temperature used in the Guillot temperature profile. Also used when `two_point: false` and `isothermal: false`. |
@@ -287,15 +287,15 @@ All six atmosphere sub-blocks share the same structure:
 | Water | `H2O` | Strong NIR absorption |
 | Carbon monoxide | `CO` | 2.3 µm bandhead, K-band |
 | Methane | `CH4` | Strong in cool planets (< ~1200 K) |
-| Ammonia | `NH3` | Moderate; cool planets |
+| Ammonia | `NH3` | Moderate. Cool planets |
 | Hydrogen sulfide | `H2S` | Moderate NIR absorption |
 | Hydrogen cyanide | `HCN` | Detectable in warm C-rich atmospheres |
-| Carbon dioxide | `CO2` | Weak in H/He-dominated; detectable at high C/O |
+| Carbon dioxide | `CO2` | Weak in H/He-dominated. Detectable at high C/O |
 | Acetylene | `C2H2` | Only significant at very high C/O |
 | Iron | `Fe` | Ultra-hot Jupiters (> ~2000 K) |
 | Calcium | `Ca` | Ultra-hot Jupiters |
-| Sodium | `Na` | Optical; not NIR |
-| Potassium | `K` | Optical; not NIR |
+| Sodium | `Na` | Optical. Not NIR |
+| Potassium | `K` | Optical. Not NIR |
 | Hydrogen (bulk) | `H2` | Always include, bulk gas + CIA opacity |
 | Helium (bulk) | `He` | Always include, bulk gas |
 
@@ -325,7 +325,7 @@ All six atmosphere sub-blocks share the same structure:
 in microns, inside this same simulation JSON. It is unrelated to instrument
 convolution. Instrument input files define the wavelength grid. Use a finite
 positive pair `[minimum, maximum]` covering all selected orders with margin.
-The full YJHK example uses `[0.9, 2.5]`; the UBV example uses `[0.34, 0.65]`.
+The full YJHK example uses `[0.9, 2.5]`. The UBV example uses `[0.34, 0.65]`.
 Missing or `null` uses `[0.95, 2.45]`, which may be too narrow for your
 instrument. The field survives configuration
 loading/saving. The downloader uses this interval for its SkyCalc query.
@@ -335,7 +335,7 @@ EXoPLORE checks that the returned file covers the selected wavelengths. See the 
 
 EXoPLORE supports three levels of telluric treatment, selected by combining `include_tellurics` and `use_full_skycalc`. The choice directly affects how realistic the atmospheric systematics are, which spectral regions are masked, and how the pipeline handles the residuals. In the following we describe each mode in turn.
 
-**Mode 1, Airmass-scaled reference** (`include_tellurics: true`, `use_full_skycalc: false`, **default and recommended**): loads a single reference telluric spectrum computed at `reference_airmass` and scales it to each exposure using the Beer-Lambert-Bouguer law (Bouguer 1729; Lambert 1760; Beer 1852):
+**Mode 1, Airmass-scaled reference** (`include_tellurics: true`, `use_full_skycalc: false`, **default and recommended**): loads a single reference telluric spectrum computed at `reference_airmass` and scales it to each exposure using the Beer-Lambert-Bouguer law (Bouguer 1729, Lambert 1760, Beer 1852):
 
 ```
 T(X) = T_ref ^ (X / X_ref)
@@ -358,7 +358,7 @@ where `T_ref` is the reference transmission at airmass `X_ref` and `X` is the ai
 | `airmass_limits` | `[min, max]` | Minimum and maximum airmass during the observation. Used to construct the airmass time series when `use_accurate_airmass: false`. |
 | `constant_pwv` | `true`, `false` | Controls PWV handling for both Mode 2 and Mode 3. `true`: all exposures use the same `pwv_mm` value (saved to `Fixed_PWV/pwv_values.fits`). `false`: PWV varies randomly around `pwv_mm` within the [SkyCalc](https://skycalc-ipy.readthedocs.io) grid (saved to `Variable_PWV/pwv_values.fits`). **In Mode 1 (airmass scaling), PWV does not affect the computed telluric spectra**, its value is recorded in the FITS file and used when generating per-exposure files for Mode 2. |
 | `pwv_mm` | mm | Precipitable water vapour in mm. Reference value used when `constant_pwv: true` (all exposures), or as the centre of the random draw when `constant_pwv: false`. Typical range: 1 to 30 mm. Dry site (Paranal): 2 to 10 mm. Must be a value on the SkyCalc PWV grid: `[0.05, 0.1, 0.25, 0.5, 1.0, 1.5, 2.5, 3.5, 5.0, 7.5, 10.0, 20.0, 30.0]`. |
-| `pwv_mm_per_night` | list of mm or `null` | Per-night PWV values for `different_nights: true` simulations. When set, night `n` uses `pwv_mm_per_night[n]` instead of `pwv_mm`. Length must equal `n_nights`. Used by the simulator when loading per-night SkyCalc files (Mode 2) and by `scripts/generate_skycalc_inputs.py --night N` when generating those files. Example: `[2.5, 3.5]` for a two-night run with different atmospheric conditions. `null` (default) uses `pwv_mm` for all nights. |
+| `pwv_mm_per_night` | list of mm or `null` | Per-night PWV values for `different_nights: true` simulations. When set, night `n` uses `pwv_mm_per_night[n]`. Length must equal `n_nights`. Used by the simulator when loading per-night SkyCalc files (Mode 2) and by `scripts/generate_skycalc_inputs.py --night N` when generating those files. Example: `[2.5, 3.5]` for a two-night run with different atmospheric conditions. `null` (default) uses `pwv_mm` for all nights. |
 | `reference_airmass` | float | The airmass at which `reference_telluric_file` was computed. Typically 1.0. Used in the Beer-Lambert scaling formula `T(X) = T_ref^(X / X_ref)` for Mode 1. |
 | `reference_telluric_file` | path | Path to the FITS file containing the reference telluric transmission spectrum (columns `lam` in nm and `trans` as fractional transmission). Required for Mode 1. If left empty, auto-constructed as `{inputs_dir}tellurics/tell_ref_airmass_{reference_airmass:.1f}.fits`. The standard convention is to place this file in a `tellurics/` subdirectory inside `inputs_dir`, both the bundled ANDES and CARMENES inputs follow this layout. See [docs/input_files.md](input_files.md#4-telluric-reference-spectra). |
 | `mask_threshold` | float 0 to 1 | Fractional transmission below which a pixel is flagged as a deep telluric and masked. 0.2 means pixels with < 20% transmission are masked. |
@@ -404,7 +404,7 @@ Four pipeline recipes are available. They fall into two groups depending on whet
 
 ### Template preparation and SYSREM distortions
 
-SYSREM removes dominant telluric and stellar structure and also changes the underlying planetary signal as a function of time and wavelength. A CCF template that does not account for this distortion will be mismatched to the residual data, reducing detection significance and preventing accurate retrievals. Therefore, **`prepare_template: true` is strongly recommended for all pipelines.** The implementation differs by pipeline:
+SYSREM removes dominant telluric and stellar structure and also changes the underlying planetary signal as a function of time and wavelength. Preparing the template with the corresponding operator accounts for this distortion when comparing it with the residual data. Therefore, **`prepare_template: true` is strongly recommended for all pipelines.** The implementation differs by pipeline:
 
 - **`BL19` / `Blain24`**, the template is normalised and continuum-corrected in the same way as the data (polynomial fits, telluric correction). No SYSREM is involved, so the template retains full spectral line structure.
 
@@ -490,8 +490,8 @@ SYSREM removes dominant telluric and stellar structure and also changes the unde
 |---|---|---|
 | `enabled` | `true`, `false` | Master switch. Set to `false` to skip retrieval entirely (default for exploration runs). When `true`, the retrieval runs at the **end of the same simulation** using the spectral matrices held in memory. Repeating this retrieval starts with a new simulation run. |
 | `sampler` | `"nested_sampling"`, `"mcmc"` | Bayesian sampler. `"nested_sampling"`: [MultiNest](https://github.com/JohannesBuchner/PyMultiNest) via [PyMultiNest](https://github.com/JohannesBuchner/PyMultiNest) (faster, better for multimodal posteriors). `"mcmc"`: [emcee](https://emcee.readthedocs.io) ensemble sampler. |
-| `log_likelihood` | `"Blain24"`, `"BL19"`, `"Gibson22"` | Log-likelihood function. **Coupled to `dimensionality`, see below.** `"Blain24"`: Blain, Sánchez-López & Mollière (2024, AJ, 167, 179), per-order noise scaling; use with `"1D"`, `"1D_CtoO_met"`, or `"2D"`. `"BL19"`: Brogi & Line (2019), analytic marginalisation over signal scaling; use with `"1D"`, `"1D_CtoO_met"`, or `"2D"`. `"Gibson22"`: Gibson et al. (2022), chi-squared with free β noise-scaling; **must be used exclusively with `"1D_Gibson22"`**. Any invalid combination raises a `ValueError` at runtime. |
-| `dimensionality` | `"1D"`, `"1D_Gibson22"`, `"1D_CtoO_met"`, `"1D_extended"`, `"1D_extended_fast"`, `"2D"` | Retrieval parameter space. **Coupled to `log_likelihood`, see above.** `"1D"`: single VMR (H₂O), Kp, T_eq, wind velocity (4 params), use with BL19 or Blain24. `"1D_Gibson22"`: same plus β noise-scaling parameter (5 params), **use only with Gibson22 likelihood**. `"1D_CtoO_met"`: C/O ratio and metallicity via EasyChem (2 params, Kp and V_wind fixed to planet values), use with BL19 or Blain24. `"1D_extended"`: log₁₀(VMR) for H₂O, CH₄, NH₃, CO, CO₂, HCN plus Kp, T_eq, and wind velocity (9 params), multi-species retrieval; use with BL19 or Blain24. `"1D_extended_fast"`: same species plus T_eq only (Kp and wind velocity fixed; 7 params). `"2D"`: morning and evening limb VMR and T_eq independently (limb asymmetry retrieval), use with BL19 or Blain24. |
+| `log_likelihood` | `"Blain24"`, `"BL19"`, `"Gibson22"` | Log-likelihood function. **Coupled to `dimensionality`, see below.** `"Blain24"`: Blain, Sánchez-López & Mollière (2024, AJ, 167, 179), per-order noise scaling. Use with `"1D"`, `"1D_CtoO_met"`, or `"2D"`. `"BL19"`: Brogi & Line (2019), analytic marginalisation over signal scaling. Use with `"1D"`, `"1D_CtoO_met"`, or `"2D"`. `"Gibson22"`: Gibson et al. (2022), chi-squared with free β noise-scaling. **must be used exclusively with `"1D_Gibson22"`**. Any invalid combination raises a `ValueError` at runtime. |
+| `dimensionality` | `"1D"`, `"1D_Gibson22"`, `"1D_CtoO_met"`, `"1D_extended"`, `"1D_extended_fast"`, `"2D"` | Retrieval parameter space. **Coupled to `log_likelihood`, see above.** `"1D"`: single VMR (H₂O), Kp, T_eq, wind velocity (4 params), use with BL19 or Blain24. `"1D_Gibson22"`: same plus β noise-scaling parameter (5 params), **use only with Gibson22 likelihood**. `"1D_CtoO_met"`: C/O ratio and metallicity via EasyChem (2 params, Kp and V_wind fixed to planet values), use with BL19 or Blain24. `"1D_extended"`: log₁₀(VMR) for H₂O, CH₄, NH₃, CO, CO₂, HCN plus Kp, T_eq, and wind velocity (9 params), multi-species retrieval. Use with BL19 or Blain24. `"1D_extended_fast"`: same species plus T_eq only (Kp and wind velocity fixed, 7 params). `"2D"`: morning and evening limb VMR and T_eq independently (limb asymmetry retrieval), use with BL19 or Blain24. |
 | `retrieval_choice` | int | Selects the specific retrieval configuration within a dimensionality class. See the retrieval module documentation. |
 | `time_resolution` | `true`, `false` | If `true`, perform a time-resolved retrieval splitting the transit into time bins. |
 | `time_resolution_step` | int | Number of exposures per time bin for time-resolved retrieval. |
@@ -500,7 +500,7 @@ SYSREM removes dominant telluric and stellar structure and also changes the unde
 | `n_walkers` | int | Number of walkers for MCMC (emcee). Must be ≥ 2 × number of free parameters. Default: 32. |
 | `n_steps` | int | Number of MCMC steps per walker. |
 | `burnin` | int | Number of initial MCMC steps to discard as burn-in. |
-| `prior_bounds` | dict | Override the default prior bounds per dimensionality. Keys are dimensionality strings (e.g. `"1D_CtoO_met"`); values are lists of `[low, high]` pairs, one per free parameter in the same order as the parameter labels. If omitted, the built-in defaults are used. |
+| `prior_bounds` | dict | Override the default prior bounds per dimensionality. Keys are dimensionality strings (e.g. `"1D_CtoO_met"`). Values are lists of `[low, high]` pairs, one per free parameter in the same order as the parameter labels. If omitted, the built-in defaults are used. |
 | `pressure_n_levels` | int (default 100) | Number of atmospheric pressure layers for the retrieval forward model (log-spaced grid). |
 | `pressure_log_min` | float (default -6.0) | Log₁₀ of the minimum pressure in bar for the retrieval pressure grid. |
 | `pressure_log_max` | float (default 2.0) | Log₁₀ of the maximum pressure in bar for the retrieval pressure grid. |
@@ -598,12 +598,12 @@ Controls diagnostic plots automatically generated at the end of every run.
 | Field | Default | Description |
 |---|---|---|
 | `pipeline_steps_order` | `null` | Absolute spectral-order index to display in the pipeline-steps plot. If the requested order was not processed in the run (e.g. order 44 when the instrument has only 28 orders, or an order excluded by `instrument.order_indices`), the **first processed order** is used. `null` means the first processed order. |
-| `pipeline_steps_xlim_um` | `[1.4862, 1.4890]` | Wavelength window [lo, hi] in µm to zoom into. For the SYSREM waterfall every panel uses this window; for the polynomial four-panel it applies to the 1-D panel only (the 2-D panels show the full order). If the window does **not** fall within the displayed order, the **full order** is shown. Set to `null` for the full order. The default is a water-band window at ~1.487 µm. |
-| `pipeline_steps_sysrem_iterations` | `[1, 5]` | Which SYSREM iterations to show as panels in the pipeline-steps plot. **Used only for SYSREM pipelines** (ASL19, Gibson22); ignored by the polynomial pipelines (BL19, Blain24). Each value is a 1-based iteration index. |
+| `pipeline_steps_xlim_um` | `[1.4862, 1.4890]` | Wavelength window [lo, hi] in µm to zoom into. For the SYSREM waterfall every panel uses this window. For the polynomial four-panel it applies to the 1-D panel only (the 2-D panels show the full order). If the window does **not** fall within the displayed order, the **full order** is shown. Set to `null` for the full order. The default is a water-band window at ~1.487 µm. |
+| `pipeline_steps_sysrem_iterations` | `[1, 5]` | Which SYSREM iterations to show as panels in the pipeline-steps plot. **Used only for SYSREM pipelines** (ASL19, Gibson22). Ignored by the polynomial pipelines (BL19, Blain24). Each value is a 1-based iteration index. |
 
 ### Pipeline-steps diagnostic plot
 
-Every run automatically saves `<run_dir>/plots/pipeline_steps_<sim_name>.pdf`, a stacked grey-scale figure illustrating the data-simulation and preparation steps for the displayed order (set by `pipeline_steps_order`). The top panel is the 1-D in-silico flux at mid-transit, noiseless (black) and noisy (red), zoomed to `pipeline_steps_xlim_um` if set; below it are time-series matrices (wavelength on the horizontal axis, spectrum number on the vertical), with masked channels in the prepared panels shown as white and ingress/egress marked by red dashed lines. The number of matrix panels depends on the pipeline:
+Every run automatically saves `<run_dir>/plots/pipeline_steps_<sim_name>.pdf`, a stacked grey-scale figure illustrating the data-simulation and preparation steps for the displayed order (set by `pipeline_steps_order`). The top panel is the 1-D in-silico flux at mid-transit, noiseless (black) and noisy (red), zoomed to `pipeline_steps_xlim_um` if set. Below it are time-series matrices (wavelength on the horizontal axis, spectrum number on the vertical), with masked channels in the prepared panels shown as white and ingress/egress marked by red dashed lines. The number of matrix panels depends on the pipeline:
 
 - **Polynomial pipelines (BL19, Blain24)** have no iterations, so two matrix panels: the **raw** matrix (throughput + tellurics) and the **corrected (residual)** matrix after `preparing_pipeline`. Raw → corrected.
 - **SYSREM pipelines (ASL19, Gibson22)** show the systematics peeling away iteration by iteration: the **raw** matrix, then one panel per iteration listed in `pipeline_steps_sysrem_iterations` (for example after iteration 1 and after iteration 5). The intermediate residuals are reconstructed with `apply_sysrem` on the displayed order, using the components saved by the preparation calculation.
@@ -614,7 +614,7 @@ This plot follows the style of the ANDES paper and is the standard way to verify
 
 ## 15. `output`
 
-Selects which per-order spectral matrices are written to disk. Almost all of a run's disk footprint is these matrices; the global masks, velocity grids, Kp-Vsys map, phase, and Julian dates are always written. The calculation uses these matrices in memory; the flags select which arrays are available on disk afterward. If the block is omitted, the defaults below apply.
+Selects which per-order spectral matrices are written to disk. Almost all of a run's disk footprint is these matrices. The global masks, velocity grids, Kp-Vsys map, phase, and Julian dates are always written. The calculation uses these matrices in memory. The flags select which arrays are available on disk afterward. If the block is omitted, the defaults below apply.
 
 ```json
 "output": {
@@ -712,7 +712,7 @@ If your setting covers only one detector order, set `"order_indices": [0]` in th
    ```
    or look up the measured value from radial velocity studies.
 
-   For a circular orbit the planet velocity is `Kp·sin(2πφ)`, with `φ = 0` at mid-transit. If `observation.significant_eccentricity` is set, the velocity is instead computed by solving Kepler's equation for the true anomaly at each phase (`get_V_eccentric` in `src/exoplore/observation/velocity.py`); `eccentricity` and `argument_of_periastron_deg` (in degrees) then also shape the velocity curve.
+   For a circular orbit the planet velocity is `Kp·sin(2πφ)`, with `φ = 0` at mid-transit. If `observation.significant_eccentricity` is set, the velocity is instead computed by solving Kepler's equation for the true anomaly at each phase (`get_V_eccentric` in `src/exoplore/observation/velocity.py`). `eccentricity` and `argument_of_periastron_deg` (in degrees) then also shape the velocity curve.
 4. For the PHOENIX stellar model, download the file matching `stellar_teff_K` (rounded to nearest 100 K), `stellar_logg` (nearest 0.5), and `stellar_metallicity` (nearest 0.5) from https://phoenix.astro.physik.uni-goettingen.de/data/HiResFITS/PHOENIX-ACES-AGSS-COND-2011/
 5. Create `configs/yourplanet_instrument_event.json` by copying the HD189733b config and updating all planet, instrument, atmosphere, and path fields.
 6. Preview: `python scripts/run_exoplore.py configs/yourplanet_instrument_event.json`
