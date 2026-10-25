@@ -47,7 +47,7 @@ current and next-generation ground-based spectrographs.
 
 .. toctree::
    :maxdepth: 1
-   :caption: Development
+   :caption: Understanding the code
 
    architecture
    code_reading_guide

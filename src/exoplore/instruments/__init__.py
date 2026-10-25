@@ -25,7 +25,7 @@ Modes: A = ETC-based (no reference night), B = reference-night synthetic,
 Adding a new instrument
 -----------------------
 1. Create ``src/exoplore/instruments/my_instrument.py`` implementing
-   ``get_instrument_info(inp_dat) -> InstrumentInfo``.
+   ``get_instrument_info(request) -> InstrumentInfo``.
 2. Add one entry to ``_REGISTRY`` below, that is the only file you touch.
 3. Add a test in ``tests/test_instruments.py``.
 4. Document required input files in ``docs/input_files.md``.
@@ -33,7 +33,7 @@ Adding a new instrument
 
 from __future__ import annotations
 
-from .base import InstrumentInfo
+from .base import InstrumentInfo, InstrumentInputs
 
 # Per-instrument get_instrument_info() functions
 from .wavegrid import (
@@ -51,7 +51,6 @@ from .crires_plus  import get_instrument_info as _crires_plus_info
 # Utilities still used by the simulator
 from .wavegrid import (
     ANDESInstrument,
-    Load_Instrumental_Info,
     get_WaveGrid,
     From1OrderTo1Detector,
     pixel_snr_one_order,
@@ -59,7 +58,6 @@ from .wavegrid import (
     compute_pixel_velocity_scale,
     FromOrdersToDetectors,
     Interp_Uniform_Wvl_Grid,
-    Load_CARMENES,
 )
 
 # ---------------------------------------------------------------------------
@@ -82,94 +80,25 @@ _REGISTRY: dict[str, object] = {
 }
 
 
-def load_instrument_v2(cfg: "SimulationConfig") -> InstrumentInfo:
-    """Return instrument metadata directly from a config.
-
-    Read :class:`~exoplore.config.models.SimulationConfig`, construct the
-    instrument-loader arguments and call the function registered for its name.
-    """
-    from typing import TYPE_CHECKING
-    _mini: dict = {
-        "instrument":       cfg.instrument.name,
-        "inputs_dir":       cfg.paths.inputs_dir,
-        "Exoplanet_name":   cfg.planet.name,
-        "specific_event":   cfg.observation.specific_event,
-        "use_real_data":    cfg.observation.use_real_data,
-        "Different_nights": cfg.observation.different_nights,
-        "different_nights": cfg.observation.different_nights,
-        "n_nights":         cfg.observation.n_nights,
-        "fixed_snr":        cfg.noise.fixed_snr if cfg.noise.fixed_snr else 0,
-        "Pix_per_resel":    cfg.instrument.pixels_per_resolution_element,
-        "ETC":              False,
-    }
+def load_instrument(cfg: "SimulationConfig") -> InstrumentInfo:
+    """Select the instrument inputs and read its metadata from the config."""
+    inputs = InstrumentInputs(
+        inputs_dir=cfg.paths.inputs_dir,
+        planet_name=cfg.planet.name,
+        observation=cfg.observation,
+        fixed_snr=cfg.noise.fixed_snr if cfg.noise.fixed_snr else 0,
+    )
     name = cfg.instrument.name
     if name not in _REGISTRY:
         supported = ", ".join(sorted(_REGISTRY))
-        raise ValueError(
-            f"Unknown instrument '{name}'.  Supported: {supported}"
-        )
-    return _REGISTRY[name](_mini)
-
-
-def get_WaveGrid_v2(cfg: "SimulationConfig",
-                    inst: "InstrumentInfo",
-                    n_orders: int):
-    """Build the wavelength grid directly from a config.
-
-    Read SimulationConfig and InstrumentInfo, construct the wavelength-reader
-    arguments and call get_WaveGrid.
-    """
-    _mini: dict = {
-        "instrument":       cfg.instrument.name,
-        "Different_nights": cfg.observation.different_nights,
-        "n_nights":         cfg.observation.n_nights,
-        "Pix_per_resel":    cfg.instrument.pixels_per_resolution_element,
-        "ETC":              False,  # CRIRES-only flag. ANDES uses snr_file=="__ETC__"
-    }
-    return get_WaveGrid(
-        _mini,
-        inst.wave_file,
-        inst.sig_file,
-        inst.snr_file,
-        inst.JD_file,
-        inst.airmass_file,
-        n_orders,
-    )
-
-
-def load_instrument(inp_dat: dict) -> InstrumentInfo:
-    """Return instrument metadata for the instrument named in *inp_dat*.
-
-    Select the instrument loader using the name in inp_dat["instrument"].
-
-    Parameters
-    ----------
-    inp_dat : dict
-        Simulation input dictionary.  Must contain ``"instrument"``, a string
-        matching one of the keys in ``_REGISTRY``.
-
-    Returns
-    -------
-    InstrumentInfo
-        Named tuple: observatory, file paths, n_orders_total, res, …
-
-    Raises
-    ------
-    ValueError
-        If the instrument name is not found in the registry.
-    """
-    name = inp_dat.get("instrument", "")
-    if name not in _REGISTRY:
-        supported = ", ".join(sorted(_REGISTRY))
-        raise ValueError(
-            f"Unknown instrument '{name}'.  Supported: {supported}"
-        )
-    return _REGISTRY[name](inp_dat)
+        raise ValueError(f"Unknown instrument '{name}'. Supported: {supported}")
+    return _REGISTRY[name](inputs)
 
 
 __all__ = [
     # Public API
     "InstrumentInfo",
+    "InstrumentInputs",
     "load_instrument",
     # Per-instrument functions (for direct import)
     "get_instrument_info_YJHK",
@@ -179,7 +108,6 @@ __all__ = [
     "get_instrument_info_UBV",
     # Utilities
     "ANDESInstrument",
-    "Load_Instrumental_Info",
     "get_WaveGrid",
     "From1OrderTo1Detector",
     "pixel_snr_one_order",
@@ -187,5 +115,4 @@ __all__ = [
     "compute_pixel_velocity_scale",
     "FromOrdersToDetectors",
     "Interp_Uniform_Wvl_Grid",
-    "Load_CARMENES",
 ]

@@ -52,6 +52,30 @@ _M_jup_kg = 1.898e27   # kg per Jupiter mass
 _M_sun_kg = 1.989e30   # kg per solar mass
 
 
+def _required_number(raw: dict, key: str) -> float:
+    """Read a finite physical value and identify missing or invalid fields."""
+    if key not in raw or raw[key] is None:
+        raise ValueError(f"Required planet parameter {key!r} is missing or null.")
+    if isinstance(raw[key], bool):
+        raise ValueError(f"Planet parameter {key!r} must be a finite number.")
+    try:
+        value = float(raw[key])
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Planet parameter {key!r} must be a finite number.") from exc
+    if not math.isfinite(value):
+        raise ValueError(f"Planet parameter {key!r} must be a finite number.")
+    return value
+
+
+def _required_limb_darkening(raw: dict) -> list:
+    """Read the supplied coefficients for the configured limb-darkening model."""
+    key = "limb_darkening_coeffs"
+    values = raw.get(key)
+    if not isinstance(values, list):
+        raise ValueError(f"Required planet parameter {key!r} must be a list.")
+    return [_required_number({key: value}, key) for value in values]
+
+
 def load_planet(path: str | Path) -> PlanetParameters:
     """Load planet parameters from a JSON file.
 
@@ -73,6 +97,10 @@ def load_planet(path: str | Path) -> PlanetParameters:
     ------
     FileNotFoundError
         If ``path`` does not exist.
+    ValueError
+        If a required physical parameter is absent, null or non-finite.
+        Kp, stellar RV amplitude and transit duration can be calculated from
+        the supplied system parameters. Sky coordinates may be omitted.
     """
     path = Path(path)
     if not path.exists():
@@ -81,11 +109,17 @@ def load_planet(path: str | Path) -> PlanetParameters:
     with open(path) as fh:
         raw = json.load(fh)
 
-    # Auto-detect format
-    if "orbital_period_days" in raw:
-        return _load_new_format(raw, path.stem)
-    else:
-        return _load_si_unit_format(raw, path.stem)
+    if not isinstance(raw, dict):
+        raise ValueError(f"Planet parameter file {path} must contain a JSON object.")
+    # Report the source file together with the offending physical parameter.
+    try:
+        if "orbital_period_days" in raw:
+            return _load_new_format(raw, path.stem)
+        if "Period" in raw:
+            return _load_si_unit_format(raw, path.stem)
+        raise ValueError("Required orbital_period_days (or SI-format Period) is missing.")
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Invalid planet parameter file {path}: {exc}") from exc
 
 
 # ─── New format loader ────────────────────────────────────────────────────────
@@ -96,9 +130,8 @@ def _load_new_format(raw: dict, stem: str) -> PlanetParameters:
     def _get(key, default=None):
         return raw.get(key, default)
 
-    def _getf(key, default=0.0):
-        v = raw.get(key, default)
-        return float(v) if v is not None else default
+    def _getf(key):
+        return _required_number(raw, key)
 
     name = _get("name", stem)
 
@@ -114,7 +147,7 @@ def _load_new_format(raw: dict, stem: str) -> PlanetParameters:
     if t_dur is not None:
         t_dur = float(t_dur)
 
-    ld = raw.get("limb_darkening_coeffs", [0.3, 0.1])
+    ld = _required_limb_darkening(raw)
 
     ra = raw.get("ra_deg", None)
     dec = raw.get("dec_deg", None)
@@ -125,28 +158,28 @@ def _load_new_format(raw: dict, stem: str) -> PlanetParameters:
         orbital_period_days=_getf("orbital_period_days"),
         transit_epoch_bjd=_getf("transit_epoch_bjd"),
         semi_major_axis_au=_getf("semi_major_axis_au"),
-        inclination_deg=_getf("inclination_deg", 90.0),
-        eccentricity=_getf("eccentricity", 0.0),
-        argument_of_periastron_deg=_getf("argument_of_periastron_deg", 0.0),
+        inclination_deg=_getf("inclination_deg"),
+        eccentricity=_getf("eccentricity"),
+        argument_of_periastron_deg=_getf("argument_of_periastron_deg"),
         # Planet
         planet_radius_rjup=_getf("planet_radius_rjup"),
         planet_mass_mjup=_getf("planet_mass_mjup"),
         # Star
         stellar_radius_rsun=_getf("stellar_radius_rsun"),
         stellar_mass_msun=_getf("stellar_mass_msun"),
-        stellar_teff_K=_getf("stellar_teff_K", 5778.0),
-        stellar_logg=_getf("stellar_logg", 4.44),
-        stellar_metallicity=_getf("stellar_metallicity", 0.0),
-        v_rotsini_kms=_getf("v_rotsini_kms", 0.0),
+        stellar_teff_K=_getf("stellar_teff_K"),
+        stellar_logg=_getf("stellar_logg"),
+        stellar_metallicity=_getf("stellar_metallicity"),
+        v_rotsini_kms=_getf("v_rotsini_kms"),
         # Velocities
-        systemic_velocity_kms=_getf("systemic_velocity_kms", 0.0),
+        systemic_velocity_kms=_getf("systemic_velocity_kms"),
         kp_kms=kp,
         stellar_rv_semiamplitude_kms=ks,
         # Atmosphere
         equilibrium_temperature_K=_getf("equilibrium_temperature_K"),
-        t_int_K=_getf("t_int_K", 200.0),
-        kappa_ir=_getf("kappa_ir", 0.01),
-        gamma_guillot=_getf("gamma_guillot", 0.4),
+        t_int_K=_getf("t_int_K"),
+        kappa_ir=_getf("kappa_ir"),
+        gamma_guillot=_getf("gamma_guillot"),
         # Limb darkening
         limb_darkening_coeffs=list(ld),
         # Sky
@@ -165,53 +198,53 @@ def _load_si_unit_format(raw: dict, stem: str) -> PlanetParameters:
     name = raw.get("Exoplanet_name", stem)
 
     # ── Orbital ──
-    period = float(raw.get("Period", 0.0))
-    epoch = float(raw.get("T_0", 0.0))
+    period = _required_number(raw, "Period")
+    epoch = _required_number(raw, "T_0")
 
     # Semi-major axis: this format stores metres (e.g. 1.496e8 * 0.03099)
-    a_raw = float(raw.get("a", 0.0))
+    a_raw = _required_number(raw, "a")
     a_au = a_raw / _AU_m if a_raw > 1e6 else a_raw   # heuristic: >1e6 ⇒ metres
 
     # Inclination: this format stores radians
-    incl_raw = float(raw.get("incl", math.pi / 2))
+    incl_raw = _required_number(raw, "incl")
     incl_deg = math.degrees(incl_raw) if incl_raw <= 2 * math.pi else incl_raw
 
-    ecc = float(raw.get("eccentricity", 0.0))
-    omega = float(raw.get("long_periastron_w", 0.0))
+    ecc = _required_number(raw, "eccentricity")
+    omega = _required_number(raw, "long_periastron_w")
 
     # ── Sizes ──
-    R_pl_raw = float(raw.get("R_pl", 0.0))
+    R_pl_raw = _required_number(raw, "R_pl")
     R_pl_rjup = R_pl_raw / _R_jup_m if R_pl_raw > 1e4 else R_pl_raw
 
-    R_s_raw = float(raw.get("R_star", 0.0))
+    R_s_raw = _required_number(raw, "R_star")
     R_s_rsun = R_s_raw / _R_sun_m if R_s_raw > 1e4 else R_s_raw
 
-    M_pl_raw = float(raw.get("M_pl", 0.0))
+    M_pl_raw = _required_number(raw, "M_pl")
     M_pl_mjup = M_pl_raw / _M_jup_kg if M_pl_raw > 1e20 else M_pl_raw
 
-    M_s_raw = float(raw.get("M_star", 0.0))
+    M_s_raw = _required_number(raw, "M_star")
     M_s_msun = M_s_raw / _M_sun_kg if M_s_raw > 1e25 else M_s_raw
 
     # ── Stellar ──
-    t_star = float(raw.get("T_star", 5778.0))
-    logg = float(raw.get("logg", 4.44))
-    met = float(raw.get("met", 0.0))
-    v_rot = float(raw.get("v_rotsini", 0.0))
+    t_star = _required_number(raw, "T_star")
+    logg = _required_number(raw, "logg")
+    met = _required_number(raw, "met")
+    v_rot = _required_number(raw, "v_rotsini")
 
     # ── Velocities ──
-    v_sys = float(raw.get("V_sys", 0.0))
+    v_sys = _required_number(raw, "V_sys")
     kp = raw.get("K_p", None)
     if kp is not None:
         kp = float(kp)
 
     # ── Atmosphere ──
-    t_equ = float(raw.get("T_equ", 0.0))
-    kappa_ir = float(raw.get("Kappa_IR", 0.01))
-    gamma = float(raw.get("Gamma", 0.4))
-    t_int = float(raw.get("T_int", 200.0))
+    t_equ = _required_number(raw, "T_equ")
+    kappa_ir = _required_number(raw, "Kappa_IR")
+    gamma = _required_number(raw, "Gamma")
+    t_int = _required_number(raw, "T_int")
 
     # ── Limb darkening ──
-    ld = raw.get("limb_darkening_coeffs", [0.3, 0.1])
+    ld = _required_limb_darkening(raw)
 
     # ── Sky coords ──
     ra = raw.get("RA", None)

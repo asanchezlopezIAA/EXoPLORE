@@ -152,103 +152,51 @@ def transit_contact_times(
 
 
 # ---------------------------------------------------------------------------
-# get_event_v2
-# ---------------------------------------------------------------------------
-
-def get_event_v2(cfg, planet, JD_og):
-    """Compute event timing directly from a config.
-
-    Uses SimulationConfig and PlanetData to calculate the observing sequence.
-    """
-    _pre = (cfg.observation.pre_event_hours
-            if cfg.observation.pre_event_hours > 0
-            else planet.transit_duration_hours / 2.0)
-    _post = (cfg.observation.post_event_hours
-             if cfg.observation.post_event_hours > 0
-             else planet.transit_duration_hours / 2.0)
-    _mini = {
-        "event":            cfg.observation.event_type,
-        "T_0":              planet.transit_epoch_bjd,
-        "Period":           planet.orbital_period_days,
-        "T_duration":       (planet.transit_duration_hours / 24.0
-                             if planet.transit_duration_hours is not None
-                             else None),
-        "DIT":              cfg.observation.exposure_time_seconds,
-        "readout":          cfg.observation.readout_time_seconds,
-        "overheads":        cfg.observation.overhead_time_seconds,
-        "flag_event":       cfg.observation.flag_event,
-        "pre_event":        _pre,
-        "post_event":       _post,
-        "specific_event":   cfg.observation.specific_event,
-        "specific_T_0":     cfg.observation.specific_T0_bjd,
-        "Different_nights": cfg.observation.different_nights,
-        "n_nights":         cfg.observation.n_nights,
-        "RA":               planet.ra_deg,
-        "Dec":              planet.dec_deg,
-    }
-    return get_event(_mini, JD_og)
-
-
-# ---------------------------------------------------------------------------
 # get_event
 # ---------------------------------------------------------------------------
 
-def get_event(inp_dat, JD_og):
-    """Build synthetic JD grid and find in/out-of-event indices.
+def get_event(observation, planet, JD_og):
+    """Build event times and select exposures from the observing configuration.
 
-    Parameters
-    ----------
-    inp_dat : dict
-        Full simulation input dictionary.  The following keys are used:
-        ``event``, ``T_0``, ``Period``, ``T_duration``, ``DIT``,
-        ``readout``, ``overheads``, ``flag_event``, ``pre_event``,
-        ``post_event``, ``specific_event``, ``specific_T_0``,
-        ``Different_nights``, ``n_nights``.
-    JD_og : array or list of arrays
-        Original Julian dates.  Used as-is when simulating specific events
-        or multiple different nights.
-
-    Returns
-    -------
-    syn_jd : numpy.ndarray (or list for Different_nights)
-        Synthetic Julian dates of each exposure.
-    with_signal : numpy.ndarray (or list)
-        Indices of in-transit (or out-of-eclipse) exposures.
-    without_signal : numpy.ndarray (or list)
-        Indices of out-of-transit (or in-eclipse) exposures.
-    transit_mid_JD : float or list
-        Mid-transit (or mid-eclipse) time(s) in JD.
+    observation is ObservationConfig and planet is PlanetParameters. JD_og
+    supplies the measured dates for a specific event or separate nights.
+    Return dates, signal-exposure indices, other-exposure indices and event
+    midpoints using the input time convention. For dayside spectra, the
+    signal selection contains the exposures outside secondary eclipse.
     """
-    event = inp_dat['event']
-    t_0 = inp_dat['T_0']
-    period = inp_dat['Period']
-    transit_duration = inp_dat['T_duration']
-    DIT = inp_dat['DIT']
-    readout = inp_dat['readout']
-    overheads = inp_dat['overheads']
-    flag_event = inp_dat['flag_event']
-    pre_time = inp_dat['pre_event']
-    post_time = inp_dat['post_event']
+    event = observation.event_type
+    t_0 = planet.transit_epoch_bjd
+    period = planet.orbital_period_days
+    transit_duration = (planet.transit_duration_hours / 24.0
+                        if planet.transit_duration_hours is not None else None)
+    DIT = observation.exposure_time_seconds
+    readout = observation.readout_time_seconds
+    overheads = observation.overhead_time_seconds
+    flag_event = observation.flag_event
+    pre_time = (observation.pre_event_hours if observation.pre_event_hours > 0
+                else planet.transit_duration_hours / 2.0)
+    post_time = (observation.post_event_hours if observation.post_event_hours > 0
+                 else planet.transit_duration_hours / 2.0)
 
-    if inp_dat["Different_nights"]:
+    if observation.different_nights:
         in_transit = []
         out_transit = []
         transit_mid_JD = []
         # Use specific_T_0 when available (specific_event=True). fall back
         # to T_0 (the reference epoch) for fully synthetic nights so that
         # the nearest transit to each night's JD array can still be found.
-        _t0_ref = (inp_dat["specific_T_0"]
-                   if inp_dat["specific_T_0"] is not None
-                   else inp_dat["T_0"])
-        for n in range(inp_dat["n_nights"]):
+        _t0_ref = (observation.specific_T0_bjd
+                   if observation.specific_T0_bjd is not None
+                   else planet.transit_epoch_bjd)
+        for n in range(observation.n_nights):
             transit_mid_JD.append(
                 _t0_ref
-                + inp_dat["Period"] * int(
-                    ((JD_og[n] - _t0_ref) / inp_dat["Period"])[-1]
+                + planet.orbital_period_days * int(
+                    ((JD_og[n] - _t0_ref) / planet.orbital_period_days)[-1]
                 )
             )
-            transit_begin_JD = transit_mid_JD[n] - inp_dat["T_duration"] / 2.0
-            transit_end_JD = transit_mid_JD[n] + inp_dat["T_duration"] / 2.0
+            transit_begin_JD = transit_mid_JD[n] - transit_duration / 2.0
+            transit_end_JD = transit_mid_JD[n] + transit_duration / 2.0
             in_transit.append(
                 np.where(
                     np.logical_and(JD_og[n] > transit_begin_JD,
@@ -264,21 +212,21 @@ def get_event(inp_dat, JD_og):
         return JD_og, in_transit, out_transit, transit_mid_JD
 
     # Validate specific-event inputs
-    if inp_dat['specific_T_0'] is not None and inp_dat['specific_event']:
-        t_0 = inp_dat['specific_T_0']
-    elif inp_dat['specific_T_0'] is not None and not inp_dat['specific_event']:
+    if observation.specific_T0_bjd is not None and observation.specific_event:
+        t_0 = observation.specific_T0_bjd
+    elif observation.specific_T0_bjd is not None and not observation.specific_event:
         raise ValueError(
-            "You must switch inp_dat['specific_event'] to True. "
-            "Or rather put inp_dat['specific_T_0'] to None."
+            "Set observation.specific_event=true to use specific_T0_bjd, "
+            "or set observation.specific_T0_bjd=null."
         )
-    elif inp_dat['specific_event'] and inp_dat['specific_T_0'] is None:
+    elif observation.specific_event and observation.specific_T0_bjd is None:
         raise ValueError("Please provide the T_0 of your event.")
 
     # Compute start/end JDs
-    if event == 'transit' and not inp_dat['specific_event']:
+    if event == 'transit' and not observation.specific_event:
         jd_ini = t_0 - transit_duration / 2.0 - pre_time / 24.0
         jd_fin = t_0 + transit_duration / 2.0 + post_time / 24.0
-    elif event == 'dayside' and not inp_dat['specific_event']:
+    elif event == 'dayside' and not observation.specific_event:
         eclip_mid = t_0 + period / 2.0
         if flag_event == 'full_event':
             jd_ini = eclip_mid - transit_duration / 2.0 - pre_time / 24.0
@@ -291,7 +239,7 @@ def get_event(inp_dat, JD_og):
             jd_fin = eclip_mid + transit_duration / 2.0 + post_time / 24.0
 
     # Build synthetic JD grid (or use provided one)
-    if not inp_dat['specific_event']:
+    if not observation.specific_event:
         jd_step = (DIT + overheads + readout) / (3600.0 * 24.0)
         syn_jd = np.arange(jd_ini, jd_fin + jd_step, jd_step)
     else:
@@ -364,34 +312,18 @@ def find_nights_with_extrema(stats, first_night_noiseless):
     return night_min, night_max
 
 
-def get_transit(inp_dat, julian_date):
-    """Return in-transit and out-of-transit frame indices from Julian dates.
+def get_transit(julian_date, *, transit_epoch_bjd, orbital_period_days, transit_duration_days):
+    """Return in-transit and out-of-transit exposure indices.
 
-    Computes the mid-transit JD nearest to the last observation, then
-    selects frames inside and outside the transit window defined by
-    ``inp_dat['T_duration']``.
-
-    Parameters
-    ----------
-    inp_dat : dict
-        Simulation input dictionary.  Must contain ``'T_0'`` (transit epoch
-        in JD), ``'Period'`` (orbital period in days), and ``'T_duration'``
-        (transit duration in days).
-    julian_date : numpy.ndarray
-        1-D array of Julian dates for all observed frames.
-
-    Returns
-    -------
-    in_transit : numpy.ndarray of int
-        Indices of frames inside the transit window.
-    out_transit : numpy.ndarray of int
-        Indices of frames outside the transit window.
+    julian_date and transit_epoch_bjd share the input time convention.
+    orbital_period_days and transit_duration_days are measured in days.
+    The event epoch is selected using the final observation time.
     """
-    transit_mid_JD = inp_dat['T_0'] + inp_dat['Period'] * (
-        int(((julian_date - inp_dat['T_0']) / inp_dat['Period'])[-1])
+    transit_mid_JD = transit_epoch_bjd + orbital_period_days * (
+        int(((julian_date - transit_epoch_bjd) / orbital_period_days)[-1])
     )
-    transit_begin_JD = transit_mid_JD - inp_dat['T_duration'] / 2.
-    transit_end_JD   = transit_mid_JD + inp_dat['T_duration'] / 2.
+    transit_begin_JD = transit_mid_JD - transit_duration_days / 2.
+    transit_end_JD   = transit_mid_JD + transit_duration_days / 2.
     in_transit  = np.where(np.logical_and(julian_date > transit_begin_JD,
                                           julian_date < transit_end_JD))[0]
     out_transit = np.where(np.logical_or(julian_date < transit_begin_JD,
@@ -430,30 +362,19 @@ def dayside_fraction(syn_jd, without_signal):
     return fraction
 
 
-def UTC_to_TDB_CARMENES(inp_dat, utc):
-    """
-    Convert UTC Julian dates to TDB (barycentric dynamical time) for CARMENES.
+def UTC_to_TDB_CARMENES(utc, *, ra_deg, dec_deg):
+    """Convert UTC Julian dates to barycentric TDB Julian dates for CAHA.
 
-    Parameters
-    ----------
-    inp_dat : dict
-        Simulation input dictionary.  Must contain ``'RA'`` and ``'Dec'``
-        keys (decimal degrees).
-    utc : array_like
-        1-D array of observation times in UTC Julian dates.
-
-    Returns
-    -------
-    times_tdb : numpy.ndarray
-        Barycentric dynamical time values (JD_TDB) as a plain NumPy array.
+    utc contains UTC Julian dates. ra_deg and dec_deg locate the target in
+    decimal degrees. Astropy supplies the CAHA observatory coordinates.
     """
     import astropy.units as u
     from astropy.coordinates import EarthLocation, SkyCoord
     from astropy.time import Time
 
     site_name = "CAHA"  # Calar Alto astropy site name
-    ra = inp_dat["RA"] * u.deg
-    dec = inp_dat["Dec"] * u.deg
+    ra = ra_deg * u.deg
+    dec = dec_deg * u.deg
     times_utc = utc  # load MJD_UTC times
     observer_location = EarthLocation.of_site(site_name)
     target_coordinates = SkyCoord(ra=ra, dec=dec)

@@ -141,21 +141,21 @@ def preview_simulation(simulator, config):
     """Display the simulator summary, wavelength grid and exposure sequence.
 
 The exposure preview uses the public timing function called by the simulator."""
-    from exoplore.instruments import load_instrument_v2, get_WaveGrid_v2
+    from exoplore.instruments import load_instrument, get_WaveGrid
     from exoplore.planets import load_planet
-    from exoplore.observation import get_event_v2
+    from exoplore.observation import get_event
     text = io.StringIO()
     with contextlib.redirect_stdout(text):
         print(simulator.summary())
-        instrument = load_instrument_v2(config)
-        grid = get_WaveGrid_v2(config, instrument, instrument.n_orders_total)
+        instrument = load_instrument(config)
+        grid = get_WaveGrid(config.instrument, config.observation, instrument, instrument.n_orders_total)
         orders = config.instrument.order_indices or list(range(instrument.n_orders_total))
         print('Selected zero-based orders:', orders)
         for order in orders:
             wave = grid[0][order]
             print(f'  {order}: {wave.min():.4f}–{wave.max():.4f} micrometres')
         planet = load_planet(config.planet.parameter_file)
-        exposure_count = len(get_event_v2(config, planet, grid[4])[0])
+        exposure_count = len(get_event(config.observation, planet, grid[4])[0])
     show_table(['Experiment', 'Configured value'], [
         ['Target', config.planet.name], ['Instrument', config.instrument.name],
         ['Orders', len(orders)], ['Exposures (EXoPLORE timing preview)', exposure_count],

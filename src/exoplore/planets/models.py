@@ -10,26 +10,26 @@ always includes the unit suffix (e.g. ``orbital_period_days``,
 a scientist reading the file knows exactly what every number means
 without digging into the code.
 
-The class is intentionally dumb: it stores numbers, not computed
-derivatives.  Derived quantities (Kp, transit duration) are computed
-automatically in ``__post_init__`` when not supplied.
+Supply the physical system parameters explicitly. The class checks that
+these values are finite. Derived quantities (Kp, stellar RV amplitude and
+transit duration) are calculated in ``__post_init__`` when omitted.
 
 Use :func:`exoplore.planets.catalog.load_planet` to create an instance
-from a JSON file.  Use :meth:`PlanetParameters.to_inp_dat` to
-inject the parameters back into the ``inp_dat`` dict expected by the
-simulator.
+from a JSON file. The simulator reads its named physical fields and
+unit-conversion properties.
 """
 
 from __future__ import annotations
 
 # Role in the calculation
 # Store planetary-system parameters and calculate derived orbital quantities. Unit-
-# labelled fields supply the atmosphere and timing code. compatibility properties
+# labelled fields supply the atmosphere and timing code. Properties
 # convert them to the conventions used by their callers.
 
 
 import math
-from dataclasses import dataclass, field
+from numbers import Real
+from dataclasses import dataclass, field, fields, MISSING
 from typing import List, Optional
 
 
@@ -121,49 +121,47 @@ class PlanetParameters:
         if not supplied.
     """
 
-    name: str = ""
+    name: str
 
     # ── Orbital ───────────────────────────────────────────────────────────
-    orbital_period_days: float = 0.0
-    transit_epoch_bjd: float = 0.0
-    semi_major_axis_au: float = 0.0
-    inclination_deg: float = 90.0
-    eccentricity: float = 0.0
-    argument_of_periastron_deg: float = 0.0
+    orbital_period_days: float
+    transit_epoch_bjd: float
+    semi_major_axis_au: float
+    inclination_deg: float
+    eccentricity: float
+    argument_of_periastron_deg: float
 
     # ── Planet ────────────────────────────────────────────────────────────
-    planet_radius_rjup: float = 0.0
-    planet_mass_mjup: float = 0.0
+    planet_radius_rjup: float
+    planet_mass_mjup: float
 
     # ── Star ──────────────────────────────────────────────────────────────
-    stellar_radius_rsun: float = 0.0
-    stellar_mass_msun: float = 0.0
-    stellar_teff_K: float = 5778.0
-    stellar_logg: float = 4.44
-    stellar_metallicity: float = 0.0
-    v_rotsini_kms: float = 0.0
+    stellar_radius_rsun: float
+    stellar_mass_msun: float
+    stellar_teff_K: float
+    stellar_logg: float
+    stellar_metallicity: float
+    v_rotsini_kms: float
 
     # ── Velocities ────────────────────────────────────────────────────────
-    systemic_velocity_kms: float = 0.0
-    kp_kms: Optional[float] = None
-    stellar_rv_semiamplitude_kms: Optional[float] = None
+    systemic_velocity_kms: float
 
     # ── Atmospheric / thermal ─────────────────────────────────────────────
-    equilibrium_temperature_K: float = 0.0
-    t_int_K: float = 200.0
-    kappa_ir: float = 0.01
-    gamma_guillot: float = 0.4
+    equilibrium_temperature_K: float
+    t_int_K: float
+    kappa_ir: float
+    gamma_guillot: float
 
     # ── Limb darkening ────────────────────────────────────────────────────
-    limb_darkening_coeffs: List[float] = field(
-        default_factory=lambda: [0.3, 0.1]
-    )
+    limb_darkening_coeffs: List[float]
 
     # ── Sky coordinates ───────────────────────────────────────────────────
     ra_deg: Optional[float] = None
     dec_deg: Optional[float] = None
 
     # ── Derived ───────────────────────────────────────────────────────────
+    kp_kms: Optional[float] = None
+    stellar_rv_semiamplitude_kms: Optional[float] = None
     transit_duration_hours: Optional[float] = None
 
     # ─────────────────────────────────────────────────────────────────────
@@ -340,6 +338,20 @@ class PlanetParameters:
         return duration_days * 24.0
 
     def __post_init__(self) -> None:
+        # Required fields describe the physical system supplied by the user.
+        # Validate them before calculating velocities or transit geometry.
+        for item in fields(self):
+            if item.default is not MISSING or item.default_factory is not MISSING:
+                continue
+            value = getattr(self, item.name)
+            if item.name == "name":
+                continue
+            values = value if item.name == "limb_darkening_coeffs" else [value]
+            if not isinstance(values, (list, tuple)):
+                raise ValueError(f"Planet parameter {item.name!r} requires numeric values.")
+            if any(isinstance(v, bool) or not isinstance(v, Real) or not math.isfinite(v)
+                   for v in values):
+                raise ValueError(f"Planet parameter {item.name!r} must contain finite numbers.")
         if self.kp_kms is None and self.semi_major_axis_au > 0:
             self.kp_kms = self.compute_kp()
         if self.stellar_rv_semiamplitude_kms is None and self.semi_major_axis_au > 0:
@@ -381,73 +393,3 @@ class PlanetParameters:
         """Orbital inclination in radians."""
         import math
         return math.radians(self.inclination_deg)
-
-    # ─────────────────────────────────────────────────────────────────────
-    # inp_dat conversion
-    # ─────────────────────────────────────────────────────────────────────
-
-    def to_inp_dat(self) -> dict:
-        """Return a dict with the keys and units expected by ``inp_dat``.
-
-        Unit conventions follow the pRT / inp_dat convention:
-
-        * ``R_pl``, ``R_star``, in **cm** (CGS), because ``call_pRT``
-          computes gravity as ``cst.G * M_pl / R_pl**2`` where
-          ``cst.G = 6.674e-8`` cm³ g⁻¹ s⁻².
-        * ``M_pl``, ``M_star``, in **grams** (CGS), same reason.
-        * ``a``, in **km** (not AU, not m), matching the
-          convention ``inp_dat['a'] = 1.496e8 * a_au`` (km per AU).
-        * ``incl``, in **radians** (converted from degrees).
-        * All velocities in km/s.
-
-        Returns
-        -------
-        dict
-            Keys and units match the ``inp_dat`` convention.
-
-        Example
-        -------
-        >>> from exoplore.planets import load_planet
-        >>> planet = load_planet("planet_params/HD189733b.json")
-        >>> inp_dat = planet.to_inp_dat()
-        >>> inp_dat["K_p"]   # km/s
-        149.4...
-        """
-        return {
-            "Exoplanet_name": self.name,
-            # Orbital
-            "Period": self.orbital_period_days,
-            "T_0": self.transit_epoch_bjd,
-            "a": self.semi_major_axis_au * self._AU_km,        # AU → km
-            "incl": math.radians(self.inclination_deg),        # deg → rad
-            "eccentricity": self.eccentricity,
-            "long_periastron_w": self.argument_of_periastron_deg,
-            "arg_periastron_w": self.argument_of_periastron_deg,  # alias used by v_planet calls
-            "T_duration": (self.transit_duration_hours / 24.0
-                           if self.transit_duration_hours is not None
-                           else None),                          # hours → days
-            # Sizes, CGS (cm, grams) to match cst.G used in call_pRT
-            "R_pl": self.planet_radius_rjup * self._R_jup_cm,  # R_Jup → cm
-            "R_star": self.stellar_radius_rsun * self._R_sun_cm,  # R_sun → cm
-            "M_pl": self.planet_mass_mjup * self._M_jup_g,     # M_Jup → grams
-            "M_star": self.stellar_mass_msun * self._M_sun_g,  # M_sun → grams
-            # Stellar
-            "T_star": self.stellar_teff_K,
-            "logg": self.stellar_logg,
-            "met": self.stellar_metallicity,
-            "v_rotsini": self.v_rotsini_kms,
-            # Velocities
-            "V_sys": self.systemic_velocity_kms,
-            "K_p": self.kp_kms,
-            "K_s": self.stellar_rv_semiamplitude_kms,
-            # Atmosphere
-            "T_equ": self.equilibrium_temperature_K,
-            "T_int": self.t_int_K,
-            "Kappa_IR": self.kappa_ir,
-            "Gamma": self.gamma_guillot,
-            # Limb darkening
-            "limb_darkening_coeffs": self.limb_darkening_coeffs,
-            # Sky
-            "RA": self.ra_deg,
-            "Dec": self.dec_deg,
-        }

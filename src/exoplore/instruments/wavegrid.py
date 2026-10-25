@@ -59,7 +59,7 @@ import numpy as np
 from dataclasses import dataclass
 from typing import List, Optional
 
-from .base import InstrumentInfo
+from .base import InstrumentInfo, InstrumentInputs
 
 
 # ---------------------------------------------------------------------------
@@ -76,18 +76,18 @@ _RES_ANDES = 1e5          # nominal resolving power R ≈ 100 000
 _OBS_ANDES = "paranal"    # ESO Paranal observatory (ELT site)
 
 
-def _andes_etc_file(inp_dat: dict, band_suffix: str) -> str:
+def _andes_etc_file(request: InstrumentInputs, band_suffix: str) -> str:
     """Return the expected ETC FITS path for a given ANDES band suffix."""
-    planet = inp_dat.get("Exoplanet_name", "HD189733b")
-    inputs = inp_dat.get("inputs_dir", "inputs/")
+    planet = request.planet_name
+    inputs = request.inputs_dir
     return _os.path.join(inputs, f"ANDES_ETC_WAVE_SNR_{band_suffix}_{planet}.fits")
 
 
-def _andes_jd_airmass(inp_dat: dict):
+def _andes_jd_airmass(request: InstrumentInputs):
     """Return (JD_file, airmass_file) for ANDES (only needed for specific_event=True)."""
-    inputs = inp_dat.get("inputs_dir", "inputs/")
+    inputs = request.inputs_dir
     ref = _os.path.join(inputs, "reference_night")
-    if inp_dat.get("specific_event", False):
+    if request.observation.specific_event:
         return (
             _os.path.join(ref, "julian_date_0.fits"),
             _os.path.join(ref, "airmass_0.fits"),
@@ -99,7 +99,7 @@ def _andes_jd_airmass(inp_dat: dict):
 # Per-band get_instrument_info() implementations
 # ---------------------------------------------------------------------------
 
-def get_instrument_info_YJHK(inp_dat: dict) -> InstrumentInfo:
+def get_instrument_info_YJHK(request: InstrumentInputs) -> InstrumentInfo:
     """Return instrument metadata for ANDES YJHK (0.4 to 1.8 µm, 76 orders).
 
     This is the full ANDES coverage combining the YJH and K arms.  The ETC
@@ -107,10 +107,10 @@ def get_instrument_info_YJHK(inp_dat: dict) -> InstrumentInfo:
     ``YJH_WAVE_ENDS``, ``YJH_SNR_MID``, ``K_WAVE_STARTS``, ``K_WAVE_MIDS``,
     ``K_WAVE_ENDS``, ``K_SNR_MID``.
     """
-    jd, am = _andes_jd_airmass(inp_dat)
+    jd, am = _andes_jd_airmass(request)
     return InstrumentInfo(
         observatory=_OBS_ANDES,
-        wave_file=_andes_etc_file(inp_dat, "YJHK"),
+        wave_file=_andes_etc_file(request, "YJHK"),
         sig_file="",
         snr_file="__ETC__",
         JD_file=jd,
@@ -121,16 +121,16 @@ def get_instrument_info_YJHK(inp_dat: dict) -> InstrumentInfo:
     )
 
 
-def get_instrument_info_YJH(inp_dat: dict) -> InstrumentInfo:
+def get_instrument_info_YJH(request: InstrumentInputs) -> InstrumentInfo:
     """Return instrument metadata for ANDES YJH (0.4 to 1.4 µm, 55 orders).
 
     The ETC FITS file must contain extensions ``WAVE_STARTS``, ``WAVE_MIDS``,
     ``WAVE_ENDS``, ``SNR_MID``.
     """
-    jd, am = _andes_jd_airmass(inp_dat)
+    jd, am = _andes_jd_airmass(request)
     return InstrumentInfo(
         observatory=_OBS_ANDES,
-        wave_file=_andes_etc_file(inp_dat, "YJH"),
+        wave_file=_andes_etc_file(request, "YJH"),
         sig_file="",
         snr_file="__ETC__",
         JD_file=jd,
@@ -141,16 +141,16 @@ def get_instrument_info_YJH(inp_dat: dict) -> InstrumentInfo:
     )
 
 
-def get_instrument_info_K(inp_dat: dict) -> InstrumentInfo:
+def get_instrument_info_K(request: InstrumentInputs) -> InstrumentInfo:
     """Return instrument metadata for ANDES K (1.4 to 1.8 µm, 21 orders).
 
     The ETC FITS file must contain extensions ``WAVE_STARTS``, ``WAVE_MIDS``,
     ``WAVE_ENDS``, ``SNR_MID``.
     """
-    jd, am = _andes_jd_airmass(inp_dat)
+    jd, am = _andes_jd_airmass(request)
     return InstrumentInfo(
         observatory=_OBS_ANDES,
-        wave_file=_andes_etc_file(inp_dat, "K"),
+        wave_file=_andes_etc_file(request, "K"),
         sig_file="",
         snr_file="__ETC__",
         JD_file=jd,
@@ -161,16 +161,16 @@ def get_instrument_info_K(inp_dat: dict) -> InstrumentInfo:
     )
 
 
-def get_instrument_info_RIZ(inp_dat: dict) -> InstrumentInfo:
+def get_instrument_info_RIZ(request: InstrumentInputs) -> InstrumentInfo:
     """Return instrument metadata for ANDES RIZ (0.5 to 0.9 µm, 34 orders).
 
     The ETC FITS file must contain extensions ``WAVE_STARTS``, ``WAVE_MIDS``,
     ``WAVE_ENDS``, ``SNR_MID``.
     """
-    jd, am = _andes_jd_airmass(inp_dat)
+    jd, am = _andes_jd_airmass(request)
     return InstrumentInfo(
         observatory=_OBS_ANDES,
-        wave_file=_andes_etc_file(inp_dat, "RIZ"),
+        wave_file=_andes_etc_file(request, "RIZ"),
         sig_file="",
         snr_file="__ETC__",
         JD_file=jd,
@@ -181,16 +181,16 @@ def get_instrument_info_RIZ(inp_dat: dict) -> InstrumentInfo:
     )
 
 
-def get_instrument_info_UBV(inp_dat: dict) -> InstrumentInfo:
+def get_instrument_info_UBV(request: InstrumentInputs) -> InstrumentInfo:
     """Return instrument metadata for ANDES UBV (0.3 to 0.5 µm, 62 orders).
 
     The ETC FITS file must contain extensions ``WAVE_STARTS``, ``WAVE_MIDS``,
     ``WAVE_ENDS``, ``SNR_MID``.
     """
-    jd, am = _andes_jd_airmass(inp_dat)
+    jd, am = _andes_jd_airmass(request)
     return InstrumentInfo(
         observatory=_OBS_ANDES,
-        wave_file=_andes_etc_file(inp_dat, "UBV"),
+        wave_file=_andes_etc_file(request, "UBV"),
         sig_file="",
         snr_file="__ETC__",
         JD_file=jd,
@@ -372,130 +372,7 @@ class ANDESInstrument:
 # ---------------------------------------------------------------------------
 
 
-def Load_Instrumental_Info(inp_dat):
-    """Return file paths and parameters for the selected instrument.
 
-    Parameters
-    ----------
-    inp_dat : dict
-        Simulation input dictionary.  Must contain ``"instrument"``,
-        ``"ETC"``, ``"inputs_dir"``, ``"Exoplanet_name"``, and
-        ``"Different_nights"`` / ``"n_nights"`` keys.
-
-    Returns
-    -------
-    observatory : str
-    wave_file : str
-    sig_file : str or list
-    snr_file : str or list
-    JD_file : str or list
-    airmass_file : str or list
-    gaps : None or list
-    norders_fix : None or int
-    res : float
-    """
-    if inp_dat['instrument'] in ['CARMENES_NIR', 'CARMENES_VIS', 'CRIRES']:
-        if not inp_dat["ETC"]:
-            observatory = "lasilla"
-            if inp_dat['instrument'] == 'CARMENES_NIR':
-                import os as _os
-                # Prefer (n_orders, n_pixels) file. fall back to (n_spectra, n_pixels, n_orders)
-                _pkg_data = _os.path.join(
-                    _os.path.dirname(__file__), "data", "wave_CARMENES_NIR.fits"
-                )
-                _user_clean = f"{inp_dat['inputs_dir']}wave_CARMENES_NIR.fits"
-                _user_fallback = f"{inp_dat['inputs_dir']}wave_NIR.fits"
-                if _os.path.exists(_user_clean):
-                    wave_file = _user_clean
-                elif _os.path.exists(_pkg_data):
-                    wave_file = _pkg_data
-                else:
-                    wave_file = _user_fallback   # fallback
-            else:
-                wave_file = f"{inp_dat['inputs_dir']}wave_crires.fits"
-            _n_ref = inp_dat["n_nights"] if inp_dat["Different_nights"] else 1
-            sig_file = [f"{inp_dat['inputs_dir']}reference_night/sig_{i}.fits"
-                        for i in range(_n_ref)]
-            snr_file = [f"{inp_dat['inputs_dir']}reference_night/snr_{i}.fits"
-                        for i in range(_n_ref)]
-            JD_file = [f"{inp_dat['inputs_dir']}reference_night/julian_date_{i}.fits"
-                       for i in range(_n_ref)]
-            airmass_file = [f"{inp_dat['inputs_dir']}reference_night/airmass_{i}.fits"
-                            for i in range(_n_ref)]
-            if not inp_dat["Different_nights"]:
-                sig_file, snr_file, JD_file, airmass_file = (
-                    sig_file[0], snr_file[0], JD_file[0], airmass_file[0])
-            gaps = None
-            norders_fix = None
-        else:
-            if inp_dat['instrument'] == 'CRIRES':
-                observatory = 'paranal'
-            else:
-                observatory = 'lasilla'
-            wave_file = (
-                f'/Users/alexsl/Documentos/Simulador/'
-                f'{inp_dat["instrument"]}/{inp_dat["Exoplanet_name"]}/'
-                f'ETC/wave_H1582_EXPT90s.fits'
-            )
-            sig_file = ""
-            snr_file = (
-                f'/Users/alexsl/Documentos/Simulador/'
-                f'{inp_dat["instrument"]}/{inp_dat["Exoplanet_name"]}/'
-                f'ETC/snr_H1582_EXPT90s.fits'
-            )
-            JD_file = ''
-            airmass_file = ""
-            gaps = None
-            norders_fix = None
-
-        if inp_dat['instrument'] == 'CARMENES_NIR':
-            res = 80400.
-        elif inp_dat['instrument'] == 'CARMENES_VIS':
-            res = 94600.
-        elif inp_dat['instrument'] == 'CRIRES':
-            res = 1e5
-
-    elif inp_dat['instrument'] in ('ANDES', 'ANDES_YJHK', 'ANDES_YJH',
-                                    'ANDES_K', 'ANDES_RIZ', 'ANDES_UBV'):
-        # Route to the per-band get_instrument_info() and unpack for
-        # the tuple format expected by the rest of Load_Instrumental_Info.
-        band = inp_dat['instrument']
-        if band in ('ANDES', 'ANDES_YJHK'):
-            info = get_instrument_info_YJHK(inp_dat)
-        elif band == 'ANDES_YJH':
-            info = get_instrument_info_YJH(inp_dat)
-        elif band == 'ANDES_K':
-            info = get_instrument_info_K(inp_dat)
-        elif band == 'ANDES_RIZ':
-            info = get_instrument_info_RIZ(inp_dat)
-        else:
-            info = get_instrument_info_UBV(inp_dat)
-        observatory  = info.observatory
-        wave_file    = info.wave_file
-        sig_file     = info.sig_file
-        snr_file     = info.snr_file
-        JD_file      = info.JD_file
-        airmass_file = info.airmass_file
-        gaps         = info.gaps
-        norders_fix  = info.n_orders_total
-        res          = info.res
-
-    elif inp_dat['instrument'] == 'IGRINS2':
-        observatory = '3060m'
-        wave_file = "/Users/alexsl/Documents/Simulador/IGRINS2/wave_igrins2.fits"
-        sig_file = ""
-        snr_file = (
-            f"/Users/alexsl/Documents/Simulador/IGRINS2/"
-            f"{inp_dat['Exoplanet_name']}/snr_igrins2_{inp_dat['Exoplanet_name']}.fits"
-        )
-        JD_file = ""
-        airmass_file = ""
-        gaps = None
-        norders_fix = None
-        res = 45000.
-
-    return observatory, wave_file, sig_file, snr_file, JD_file, \
-           airmass_file, gaps, norders_fix, res
 
 
 def make_wave_grid_ANDES_modes(
@@ -582,18 +459,21 @@ def make_wave_grid_ANDES_modes(
     return wave_grids
 
 
-def get_WaveGrid(inp_dat, wave_file, sig_file, snr_file, JD_file,
-                 airmass_file, n_orders):
+def get_WaveGrid(instrument, observation, info, n_orders, *, use_etc=False):
     """Read or reconstruct the wavelength grid for the selected instrument.
 
     Parameters
     ----------
-    inp_dat : dict
-        Simulation input dictionary.
-    wave_file, sig_file, snr_file, JD_file, airmass_file : str
-        Paths to FITS files returned by :func:`Load_Instrumental_Info`.
+    instrument : InstrumentConfig
+        Instrument name and pixels per resolution element.
+    observation : ObservationConfig
+        Night count and the choice of separate observing sequences.
+    info : InstrumentInfo
+        Selected wavelength, uncertainty, S/N, timing and airmass files.
     n_orders : int
-        Number of spectral orders (used for METIS division).
+        Spectral-order count used by the grid reconstruction.
+    use_etc : bool
+        Select the ETC branch of the CRIRES grid reader.
 
     Returns
     -------
@@ -605,9 +485,11 @@ def get_WaveGrid(inp_dat, wave_file, sig_file, snr_file, JD_file,
     airmass_og : ndarray or None
     wave_mid_og : ndarray or None   (ANDES YJHK mode only)
     """
+    wave_file, sig_file, snr_file = info.wave_file, info.sig_file, info.snr_file
+    JD_file, airmass_file = info.JD_file, info.airmass_file
     from astropy.io import fits
 
-    if inp_dat['instrument'] in ['CARMENES_NIR', 'CARMENES_VIS']:
+    if instrument.name in ['CARMENES_NIR', 'CARMENES_VIS']:
         raw = fits.open(wave_file)[0].data
         # Accept two formats:
         #   CARACAL: shape (n_spectra, n_pixels, n_orders) e.g. (46, 4080, 28)
@@ -625,7 +507,7 @@ def get_WaveGrid(inp_dat, wave_file, sig_file, snr_file, JD_file,
         # simulator Block 2e transposes it back to (n_orders, n_pixels)
         wave_star_out = wvl_clean.T
 
-        if not inp_dat["Different_nights"]:
+        if not observation.different_nights:
             sig_og = fits.open(sig_file)[0].data if sig_file != '' else None
             snr_og = fits.open(snr_file)[0].data if snr_file != '' else None
             JD_og = fits.open(JD_file)[0].data if JD_file != '' else None
@@ -633,7 +515,7 @@ def get_WaveGrid(inp_dat, wave_file, sig_file, snr_file, JD_file,
             return wave_star_out, n_pixels, sig_og, snr_og, JD_og, airmass_og
         else:
             sig_og_list, snr_og_list, JD_og_list, airmass_og_list = [], [], [], []
-            for i in range(inp_dat["n_nights"]):
+            for i in range(observation.n_nights):
                 night_sig = f"{sig_file[i]}" if sig_file != '' else None
                 night_snr = f"{snr_file[i]}" if snr_file != '' else None
                 night_JD = f"{JD_file[i]}" if JD_file != '' else None
@@ -645,7 +527,7 @@ def get_WaveGrid(inp_dat, wave_file, sig_file, snr_file, JD_file,
             return (wave_star_out, n_pixels,
                     sig_og_list, snr_og_list, JD_og_list, airmass_og_list)
 
-    elif inp_dat['instrument'] in ('ANDES_YJH', 'ANDES_K', 'ANDES_RIZ', 'ANDES_UBV'):
+    elif instrument.name in ('ANDES_YJH', 'ANDES_K', 'ANDES_RIZ', 'ANDES_UBV'):
         # Single-arm ANDES bands: ETC file has generic extension names
         # WAVE_STARTS, WAVE_MIDS, WAVE_ENDS, SNR_MID
         with fits.open(wave_file) as hdul:
@@ -655,7 +537,7 @@ def get_WaveGrid(inp_dat, wave_file, sig_file, snr_file, JD_file,
             snr_mid    = np.array(hdul['SNR_MID'].data) if snr_file != '' else None
         wvl_aux = make_wave_grid_ANDES_modes(
             wave_start, wave_mid, wave_end,
-            R=1e5, px_per_resel=inp_dat["Pix_per_resel"], scale=1e-3, mode=1
+            R=1e5, px_per_resel=instrument.pixels_per_resolution_element, scale=1e-3, mode=1
         )
         wvl = np.array(wvl_aux)
         sig_og = None
@@ -664,7 +546,7 @@ def get_WaveGrid(inp_dat, wave_file, sig_file, snr_file, JD_file,
         airmass_og = fits.open(airmass_file)[0].data if airmass_file else None
         return wvl, wvl.shape[1], sig_og, snr_og, JD_og, airmass_og, wave_mid
 
-    elif inp_dat['instrument'] in ('ANDES_YJHK', 'ANDES'):
+    elif instrument.name in ('ANDES_YJHK', 'ANDES'):
         with fits.open(wave_file) as hdul:
             wave_yjh_start = np.array(hdul['YJH_WAVE_STARTS'].data)
             wave_yjh_mid = np.array(hdul['YJH_WAVE_MIDS'].data)
@@ -677,11 +559,11 @@ def get_WaveGrid(inp_dat, wave_file, sig_file, snr_file, JD_file,
 
         wvl_aux_yjh = make_wave_grid_ANDES_modes(
             wave_yjh_start, wave_yjh_mid, wave_yjh_end,
-            R=1e5, px_per_resel=inp_dat["Pix_per_resel"], scale=1e-3, mode=1
+            R=1e5, px_per_resel=instrument.pixels_per_resolution_element, scale=1e-3, mode=1
         )
         wvl_aux_k = make_wave_grid_ANDES_modes(
             wave_k_start, wave_k_mid, wave_k_end,
-            R=1e5, px_per_resel=inp_dat["Pix_per_resel"], scale=1e-3, mode=1
+            R=1e5, px_per_resel=instrument.pixels_per_resolution_element, scale=1e-3, mode=1
         )
         wvl = np.concatenate([np.array(wvl_aux_yjh), np.array(wvl_aux_k)], axis=0)
         wave_mid_og = np.concatenate([wave_yjh_mid, wave_k_mid], axis=0)
@@ -691,7 +573,7 @@ def get_WaveGrid(inp_dat, wave_file, sig_file, snr_file, JD_file,
         airmass_og = fits.open(airmass_file)[0].data if airmass_file != '' else None
         return wvl, wvl.shape[1], sig_og, snr_og, JD_og, airmass_og, wave_mid_og
 
-    elif inp_dat['instrument'] in ('IGRINS', 'IGRINS2', 'CRIRES+'):
+    elif instrument.name in ('IGRINS', 'IGRINS2', 'CRIRES+'):
         # 'IGRINS' is the clean reference-night format written by
         # scripts/prepare_igrins_night.py (wave shape (n_orders, n_pixels),
         # sig/snr cubes (n_spectra, n_orders, n_pixels)). 'IGRINS2' is the
@@ -704,8 +586,8 @@ def get_WaveGrid(inp_dat, wave_file, sig_file, snr_file, JD_file,
         airmass_og = fits.open(airmass_file)[0].data if airmass_file != '' else None
         return wvl, wvl.shape[1], sig_og, snr_og, JD_og, airmass_og
 
-    elif inp_dat['instrument'] == 'CRIRES':
-        if not inp_dat["ETC"]:
+    elif instrument.name == 'CRIRES':
+        if not use_etc:
             wvl = fits.open(wave_file)[0].data
             sig_og = fits.open(sig_file)[0].data if sig_file != '' else None
             snr_og = fits.open(snr_file)[0].data if snr_file != '' else None
@@ -721,7 +603,7 @@ def get_WaveGrid(inp_dat, wave_file, sig_file, snr_file, JD_file,
             hdu.close()
             return wave, wave.shape[1], None, snr, None, None
 
-    elif inp_dat['instrument'] == 'METIS':
+    elif instrument.name == 'METIS':
         with open(wave_file, 'r') as f:
             wave_star_aux, spec_star_aux, sig_star_aux = [], [], []
             n_pixels = -9
@@ -993,82 +875,3 @@ def Interp_Uniform_Wvl_Grid(wave, spec, sig, new_n_pixels):
             new_spec[n, j, :] = interpolate.splev(new_wave[n, j, :], interp_func)
             new_sig[n, j, :] = interpolate.splev(new_wave[n, j, :], interp_func_sig)
     return new_wave, new_spec, new_sig
-
-
-def Load_CARMENES(inp_dat, path, keyword):
-    """Read CARMENES echelle spectra from a directory of FITS files.
-
-    Scans *path* for files matching ``*{keyword}``, loads the spectral
-    data and header keywords (airmass, BERV, MJD), removes fibre-P
-    calibration frames, and splits each order onto two detectors using
-    :func:`FromOrdersToDetectors`.
-
-    Parameters
-    ----------
-    inp_dat : dict
-        Simulation input dictionary.  Must contain ``'instrument'``
-        (``'CARMENES_NIR'`` or ``'CARMENES_VIS'``).
-    path : str
-        Directory path to search for FITS files.
-    keyword : str
-        Glob pattern suffix to select files (e.g. ``'_HE.fits'``).
-
-    Returns
-    -------
-    datafiles : list of str
-        Paths of the loaded FITS files (FP-FP frames excluded).
-    wave : ndarray, shape (2*n_orders, n_pixels//2)
-        Wavelength grid after detector splitting.
-    spec : ndarray, shape (n_files, 2*n_orders, n_pixels//2)
-        Spectral flux cube.
-    sig : ndarray, same shape as *spec*
-        Spectral uncertainty cube.
-    mjd_utc : ndarray, shape (n_files,)
-        Barycentric Julian dates.
-    airmass : ndarray, shape (n_files,)
-        Airmass values.
-    rh : ndarray, shape (n_files,)
-        Relative humidity values.
-    berv : ndarray, shape (n_files,)
-        Barycentric Earth radial velocity in km/s.
-    """
-    from astropy.io import fits
-    if inp_dat['instrument'] == 'CARMENES_NIR':
-        n_pixels = 4080
-        n_orders = 28
-    else:
-        n_pixels = 4096
-        n_orders = 56
-
-    datafiles = sorted(_glob.glob(f"{path}*{keyword}"))
-
-    wave = np.zeros((n_orders * 2, int(n_pixels / 2)), float)
-    airmass = np.zeros((len(datafiles)))
-    rh = np.zeros_like(airmass)
-    berv = np.zeros_like(airmass)
-    mjd_utc = np.zeros_like(airmass)
-    spec = np.zeros((len(datafiles), n_orders * 2, int(n_pixels / 2)), float)
-    sig = np.zeros_like(spec)
-    fp_index_list = list()
-
-    for n in range(len(datafiles)):
-        hdu = fits.open(datafiles[n])
-        fp = hdu[0].header['HIERARCH CAHA INS ICS FIB-MODE']
-        if fp == 'FP,FP':
-            fp_index_list.append(n)
-            continue
-        for j in range(n_orders):
-            spec = FromOrdersToDetectors(hdu[1].data, n_orders, n_pixels)
-            sig  = FromOrdersToDetectors(hdu[3].data, n_orders, n_pixels)
-            if n == 0:
-                wave = FromOrdersToDetectors(hdu[4].data, n_orders, n_pixels)
-        airmass[n] = hdu[0].header['AIRMASS']
-        rh[n]      = hdu[0].header['HIERARCH CAHA GEN AMBI RHUM']
-        berv[n]    = hdu[0].header['HIERARCH CARACAL BERV']
-        mjd_utc[n] = hdu[0].header['HIERARCH CARACAL BJD']
-        hdu.close()
-
-    for l in fp_index_list[::-1]:
-        del spec[l, :], sig[l, :], airmass[l], rh[l], mjd_utc[l], berv[l]
-
-    return datafiles, wave, spec, sig, mjd_utc, airmass, rh, berv

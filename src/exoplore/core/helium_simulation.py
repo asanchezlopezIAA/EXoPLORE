@@ -26,7 +26,7 @@ from exoplore.atmosphere.helium_provider import HeliumTransit, solve_outflow
 from exoplore.pipelines.czesla2024 import exposure_indices, prepare_transmission, timed_exposure_selection
 from exoplore.pipelines.helium_math import stellar_wavelength, window_mask
 from exoplore.planets import load_planet
-from exoplore.instruments import load_instrument_v2, get_WaveGrid_v2
+from exoplore.instruments import load_instrument, get_WaveGrid
 from exoplore.observation.noise import photon_noise
 from exoplore.core.helium_etc import require_helium_orders
 
@@ -166,8 +166,8 @@ def load_observing_order(config) -> dict:
     electron-count noise budget. readout and sky noise are not added twice.
     """
     from astropy.io import fits
-    instrument = load_instrument_v2(config)
-    wave_star, n_pixels, _, snr, *_ = get_WaveGrid_v2(config, instrument, instrument.n_orders_total)
+    instrument = load_instrument(config)
+    wave_star, n_pixels, _, snr, *_ = get_WaveGrid(config.instrument, config.observation, instrument, instrument.n_orders_total)
     selected = config.instrument.order_indices
     require_helium_orders(np.asarray(wave_star, float)*1000, selected,
                           config.pipeline.czesla2024.helium_vacuum_lines_nm)

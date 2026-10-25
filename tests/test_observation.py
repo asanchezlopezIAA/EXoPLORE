@@ -258,9 +258,8 @@ class TestDaysideFraction:
 class TestUTCtoTDB:
     def test_returns_array(self):
         from exoplore.observation.timing import UTC_to_TDB_CARMENES
-        inp_dat = {"RA": 268.03, "Dec": 22.09}
         utc = np.array([2459000.5, 2459000.6])
-        result = UTC_to_TDB_CARMENES(inp_dat, utc)
+        result = UTC_to_TDB_CARMENES(utc, ra_deg=268.03, dec_deg=22.09)
         assert len(result) == 2
 
 

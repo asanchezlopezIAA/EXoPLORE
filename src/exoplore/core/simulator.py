@@ -560,8 +560,8 @@ class ExoploreSimulator:
                              cfg.cross_correlation.kp_max_kms + 1)
 
         # Load instrument resolving power and file locations via the dispatcher
-        from exoplore.instruments import load_instrument_v2, get_WaveGrid_v2
-        inst = load_instrument_v2(cfg)
+        from exoplore.instruments import load_instrument, get_WaveGrid
+        inst = load_instrument(cfg)
         n_orders_total = inst.n_orders_total
 
         # Compute order_selection from cfg (mirrors what Block 3b does)
@@ -579,7 +579,7 @@ class ExoploreSimulator:
         _is_andes_yjhk = cfg.instrument.name in ("ANDES_YJHK", "ANDES")
 
         # Load wavelength grid (and SNR / JD / airmass reference arrays)
-        _wg = get_WaveGrid_v2(cfg, inst, n_orders_total)
+        _wg = get_WaveGrid(cfg.instrument, cfg.observation, inst, n_orders_total)
         _wg = _wg + (None,) * (7 - len(_wg))   # normalise to 7-tuple
         wave_star, n_pixels, sig_og, snr_og, JD_og, airmass_og, wave_mid_og = _wg
 
@@ -722,9 +722,9 @@ class ExoploreSimulator:
                 print(f"  Different nights at observable transit epochs: "
                       f"{', '.join(_iso)}")
 
-        from exoplore.observation import get_event_v2
+        from exoplore.observation import get_event
         syn_jd, with_signal, without_signal, transit_mid_JD = \
-            get_event_v2(cfg, planet, JD_og)
+            get_event(cfg.observation, planet, JD_og)
 
         # Per-night cadence override: if exposure_time_seconds_per_night is
         # set with different_nights=True, regenerate synthetic JD grids using
@@ -1202,21 +1202,6 @@ class ExoploreSimulator:
             "t_points_evening_day":              _ed.two_point_temperatures_K,
             "t_points_evening_night":            cfg.atmosphere.evening_night.two_point_temperatures_K,
         }
-        _mini_rotvel = {
-            "Period": planet.orbital_period_days,
-            "R_pl":   planet.R_pl,
-        }
-        _mini_sflimbs = {
-            "a":          planet.a,
-            "incl":       planet.inc,
-            "R_pl":       planet.R_pl,
-            "R_star":     planet.R_star,
-            "T_duration": (planet.transit_duration_hours / 24.0
-                           if planet.transit_duration_hours is not None
-                           else None),
-            "Period":     planet.orbital_period_days,
-        }
-
         # _mini_* dictionaries translate configuration fields and derived geometry
         # into the inp_dat keys expected by the atmospheric functions.
 
@@ -1554,7 +1539,7 @@ class ExoploreSimulator:
                         ) / r1)
                         kernel_morning_rot, delta_v_rot = \
                             rotation_kernel_Maguire24(
-                                planet_rot_vel(_mini_rotvel), r1,
+                                planet_rot_vel(planet.orbital_period_days, planet.R_pl), r1,
                                 d_morning, wave_pRT,
                                 max_delta_v=100, mode="morning",
                             )
@@ -1567,7 +1552,7 @@ class ExoploreSimulator:
                         ) / r1)
                         kernel_evening_rot, _ = \
                             rotation_kernel_Maguire24(
-                                planet_rot_vel(_mini_rotvel), r1,
+                                planet_rot_vel(planet.orbital_period_days, planet.R_pl), r1,
                                 d_evening, wave_pRT,
                                 max_delta_v=100, mode="evening",
                             )
@@ -1596,7 +1581,7 @@ class ExoploreSimulator:
                              sf_evening, _sf_ign2,
                              _ingress_idx, _egress_idx,
                              ) = get_sflimbs(
-                                _mini_sflimbs, with_signal, without_signal,
+                                planet, with_signal, without_signal,
                                 phase, syn_jd,
                                 mode=cfg.atmosphere.limb_divisions,
                             )

@@ -43,6 +43,13 @@ planet_params/HD189733b.json
 
 Stored in `planet_params/<PlanetName>.json`. All values use natural astronomical units (solar, Jupiter, AU, degrees), the simulator converts internally to CGS and km/s as required by [petitRADTRANS](https://petitradtrans.readthedocs.io).
 
+Supply the orbital, planetary, stellar, thermal and limb-darkening parameters
+explicitly. Missing, `null` or non-finite required values raise a `ValueError`
+that identifies the field and its source file. An explicit zero is retained.
+Kp, stellar RV amplitude and transit duration can be calculated from the supplied
+system parameters when omitted. Sky coordinates are optional at loading time
+and are required by the observing calculations that use them.
+
 | Field | Unit | Description |
 |---|---|---|
 | `name` |, | Planet name string, used for output directory naming |

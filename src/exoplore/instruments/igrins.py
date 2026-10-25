@@ -69,43 +69,34 @@ from __future__ import annotations
 
 
 import os as _os
-from .base import InstrumentInfo
+from .base import InstrumentInfo, InstrumentInputs
 
 _N_ORDERS = 53        # 28 H-band + 25 K-band, ascending wavelength
 _RES      = 45_000.0  # R ≈ 45,000 across both bands
 _OBS      = "cerropachon"  # Gemini South, Cerro Pachón, Chile
 
 
-def get_instrument_info(inp_dat: dict) -> InstrumentInfo:
+def get_instrument_info(request: InstrumentInputs) -> InstrumentInfo:
     """Return instrument metadata for IGRINS (1.43 to 2.52 µm, 53 orders).
 
-    Selects Mode B or C automatically based on flags in *inp_dat*.
+    Selects Mode B or C automatically based on the observing choices in *request*.
     Mode A (ETC-based) is not supported for IGRINS.
 
     Parameters
     ----------
-    inp_dat : dict
-        Simulation input dictionary.  Relevant keys:
-
-        ``inputs_dir``       Base path for input files.
-        ``specific_event``   True → use real JD/airmass from reference night.
-        ``different_nights`` True → load per-night JD/airmass/SNR files.
-        ``n_nights``         Number of nights (used when different_nights=True).
-        ``use_real_data``    True → Mode C (real-data analysis).
+    inputs : InstrumentInputs
+        Input directory, target name, observing configuration and constant S/N.
 
     Returns
     -------
     InstrumentInfo
         Named tuple with file paths and instrument parameters.
     """
-    inputs = inp_dat.get("inputs_dir", "inputs/")
+    inputs = request.inputs_dir
     ref    = _os.path.join(inputs, "reference_night")
 
-    different_nights = (
-        inp_dat.get("different_nights", False)
-        or inp_dat.get("Different_nights", False)
-    )
-    n_nights = inp_dat.get("n_nights", 1)
+    different_nights = request.observation.different_nights
+    n_nights = request.observation.n_nights
 
     # Wavelength grid: written by prepare_igrins_night.py into reference_night/
     wave_file = _os.path.join(ref, "wave.fits")

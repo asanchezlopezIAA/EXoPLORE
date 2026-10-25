@@ -30,32 +30,25 @@ from petitRADTRANS import physical_constants as cst
 # Planet kinematics helpers
 # ---------------------------------------------------------------------------
 
-def planet_rot_vel(inp_dat):
-    """Equatorial rotation velocity of a tidally-locked exoplanet.
+def planet_rot_vel(orbital_period_days, planet_radius_cm):
+    """Return the equatorial velocity of a tidally locked planet in km/s.
 
-    Parameters
-    ----------
-    inp_dat : dict  Needs ``"Period"`` (days) and ``"R_pl"`` (cm).
-
-    Returns
-    -------
-    float  Equatorial rotation velocity in km/s.
+    orbital_period_days is the orbital period in days. planet_radius_cm is
+    the planetary radius in cm. The rotation period equals the orbital period.
     """
     seconds_per_day = 86400
-    P_seconds = inp_dat["Period"] * seconds_per_day
-    R_p_km = inp_dat["R_pl"] * 1e-5  # cm → km
+    P_seconds = orbital_period_days * seconds_per_day
+    R_p_km = planet_radius_cm * 1e-5  # cm → km
     v_rot = (2 * np.pi * R_p_km) / P_seconds
     return v_rot
 
 
-def rotation_angle_during_transit(inp_dat):
-    """Rotation angle of the planet during its transit.
+def rotation_angle_during_transit(transit_duration_days, orbital_period_days):
+    """Return the rotation angle during transit in degrees.
 
-    Returns
-    -------
-    float  Rotation angle in degrees.
+    transit_duration_days and orbital_period_days are both measured in days.
     """
-    return 360.0 * (inp_dat["T_duration"] / inp_dat["Period"])
+    return 360.0 * (transit_duration_days / orbital_period_days)
 
 
 def atmospheric_scale_height(T, mu_amu, g):
@@ -281,25 +274,25 @@ def find_nearest(array, value):
     return array[idx]
 
 
-def get_sflimbs(inp_dat, with_signal, without_signal, phase, syn_jd, mode="gradual"):
+def get_sflimbs(planet, with_signal, without_signal, phase, syn_jd, mode="gradual"):
     """Compute per-exposure limb scaling factors for morning and evening limbs.
 
     Parameters
     ----------
-    inp_dat : dict  Simulation input dictionary.
+    planet : PlanetParameters
+        Planetary radii, orbital geometry and transit duration.
     with_signal : array-like  Indices of in-transit exposures.
     without_signal : array-like  Indices of out-of-transit exposures.
-    Phase : array-like  Orbital phase array.
+    phase : array-like  Orbital phase array.
     syn_jd : array-like  Julian date array.
     mode : str
         ``"gradual"`` (default): smooth cubic transition from morning-dominated
-        ingress to evening-dominated egress. equal mix (0.5/0.5) at full transit.
+        ingress to evening-dominated egress, equal mix (0.5/0.5) at full transit.
         ``"asymmetric"``: as above but morning dominates the first quarter of
         full transit and the transition is completed by mid-transit, calibrated
         for ultra-hot Jupiters (e.g. WASP-76 b) with extreme day-night asymmetry.
         ``"simplified_step"``: hard step-function, pure morning during ingress,
         equal mix (0.5/0.5) during full transit, pure evening during egress.
-        No smooth transition.
 
     Returns
     -------
@@ -307,11 +300,11 @@ def get_sflimbs(inp_dat, with_signal, without_signal, phase, syn_jd, mode="gradu
                ingress_idx, egress_idx)``
     The ``*_night`` arrays are always ``None`` (two-limb modes only).
     """
-    b = inp_dat['a'] * np.cos(inp_dat['incl'])
-    den = inp_dat['a'] * np.sin(inp_dat['incl'])
-    num_full = np.sqrt((1e-5*inp_dat['R_star'] - 1e-5*inp_dat['R_pl'])**2 - b**2)
-    T_full = (inp_dat['Period'] / np.pi) * np.arcsin(num_full / den)
-    T_ingress = (inp_dat['T_duration'] - T_full) / 2.0
+    b = planet.a * np.cos(planet.inc)
+    den = planet.a * np.sin(planet.inc)
+    num_full = np.sqrt((1e-5*planet.R_star - 1e-5*planet.R_pl)**2 - b**2)
+    T_full = (planet.orbital_period_days / np.pi) * np.arcsin(num_full / den)
+    T_ingress = ((planet.transit_duration_hours / 24.0) - T_full) / 2.0
 
     ingress_end_idx = np.where(
         syn_jd == find_nearest(syn_jd, syn_jd[with_signal[0]] + T_ingress)

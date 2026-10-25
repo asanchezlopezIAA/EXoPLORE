@@ -61,7 +61,7 @@ observing sequence.
 |---|---|
 | `io.paths.build_output_tree()` | Creates the configured output directories. |
 | `planets.load_planet()` | Loads system parameters for geometry and atmospheric calculations. |
-| `instruments.Load_Instrumental_Info()` | Supplies the instrument resolution and input locations. |
+| `instruments.load_instrument()` | Supplies the instrument resolution and input locations. |
 | `instruments.wavegrid.get_WaveGrid()` | Supplies wavelength arrays and associated observing inputs. |
 | `io.stellar.LoadPhoenix()` | Reads, broadens and interpolates the stellar model onto the instrument grid. |
 | `observation.timing`, `observation.airmass` | Supply exposure times, event membership and observing conditions. |

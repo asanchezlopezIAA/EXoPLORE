@@ -56,13 +56,13 @@ from __future__ import annotations
 
 
 import os as _os
-from .base import InstrumentInfo
+from .base import InstrumentInfo, InstrumentInputs
 
 _RES = 1e5         # nominal resolving power
 _OBS = "paranal"   # VLT, Paranal
 
 
-def get_instrument_info(inp_dat: dict) -> InstrumentInfo:
+def get_instrument_info(request: InstrumentInputs) -> InstrumentInfo:
     """Return instrument metadata for CRIRES+.
 
     The number of spectral orders is read from the ETC wavelength FITS file
@@ -72,15 +72,8 @@ def get_instrument_info(inp_dat: dict) -> InstrumentInfo:
 
     Parameters
     ----------
-    inp_dat : dict
-        Simulation input dictionary.  Relevant keys:
-
-        ``inputs_dir``    Base path for input files.
-        ``wave_file``     Filename of the ETC wavelength FITS (relative to
-                          ``inputs_dir`` or absolute path).
-        ``snr_file``      Filename of the ETC SNR FITS (relative to
-                          ``inputs_dir`` or absolute path).
-        ``specific_event``  True → use JD/airmass from reference night files.
+    inputs : InstrumentInputs
+        Input directory, target name, observing configuration and constant S/N.
 
     Returns
     -------
@@ -88,15 +81,14 @@ def get_instrument_info(inp_dat: dict) -> InstrumentInfo:
         Named tuple with file paths and instrument parameters.
         ``n_orders_total`` is set from the ETC file shape if readable, else -1.
     """
-    inputs   = inp_dat.get("inputs_dir", "inputs/")
-    planet   = inp_dat.get("Exoplanet_name", "")
+    inputs   = request.inputs_dir
+    planet   = request.planet_name
     ref      = _os.path.join(inputs, "reference_night")
 
     # Mode C, real-data analysis (or reference-night mode): read the reduced
     # night written by scripts/prepare_crires_night.py, exactly like IGRINS.
-    _real = (inp_dat.get("use_real_data", False)
-             or inp_dat.get("Use_real_data", False)
-             or inp_dat.get("specific_event", False))
+    _real = (request.observation.use_real_data
+             or request.observation.specific_event)
     if _real:
         wave_file = _os.path.join(ref, "wave.fits")
         sig_file      = _os.path.join(ref, "sig_0.fits")
@@ -114,14 +106,13 @@ def get_instrument_info(inp_dat: dict) -> InstrumentInfo:
         )
 
     # Mode A, ETC-based simulation (no real data).
-    def _resolve(key, default_name):
-        val = inp_dat.get(key, "")
+    def _resolve(val, default_name):
         if val and _os.path.isabs(val):
             return val
         return _os.path.join(inputs, val or default_name)
 
-    wave_file = _resolve("wave_file", f"CRIRES_ETC_WAVE_{planet}.fits")
-    snr_file  = _resolve("snr_file",  f"CRIRES_ETC_SNR_{planet}.fits")
+    wave_file = _resolve(request.wave_file, f"CRIRES_ETC_WAVE_{planet}.fits")
+    snr_file  = _resolve(request.snr_file,  f"CRIRES_ETC_SNR_{planet}.fits")
     n_orders_total = _read_n_orders(wave_file)
 
     return InstrumentInfo(

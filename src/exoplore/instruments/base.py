@@ -4,7 +4,7 @@ instruments/base.py, Instrument interface contract for EXoPLORE
 
 Every instrument module must expose a single public function::
 
-    get_instrument_info(inp_dat: dict) -> InstrumentInfo
+    get_instrument_info(request: InstrumentInputs) -> InstrumentInfo
 
 where ``InstrumentInfo`` is the named tuple defined below.
 
@@ -12,7 +12,7 @@ where ``InstrumentInfo`` is the named tuple defined below.
 Observing modes
 ────────────────────────────────────────────────────────────────
 
-EXoPLORE supports three observing modes, controlled by flags in ``inp_dat``:
+EXoPLORE supports three observing modes, selected by the observing configuration:
 
 Mode A, ETC-based (recommended for ANDES bands and CRIRES+)
     The SNR per exposure, wavelength grid, and observing time-line are all
@@ -81,7 +81,7 @@ Adding a new instrument
 ────────────────────────────────────────────────────────────────
 
 1.  Create ``src/exoplore/instruments/my_instrument.py``.
-2.  Implement ``get_instrument_info(inp_dat)`` returning an ``InstrumentInfo``
+2.  Implement ``get_instrument_info(request)`` returning an ``InstrumentInfo``
     named tuple (see below).  Follow the docstring conventions in
     ``carmenes_nir.py`` or ``wavegrid.py`` as a template.
 3.  Register the instrument name in ``instruments/__init__.py`` inside the
@@ -102,7 +102,8 @@ from __future__ import annotations
 # the runner. wavegrid.py reads the corresponding arrays.
 
 
-from typing import NamedTuple, Optional
+from typing import NamedTuple, Optional, TYPE_CHECKING
+from dataclasses import dataclass
 import numpy as np
 
 
@@ -144,3 +145,24 @@ class InstrumentInfo(NamedTuple):
     gaps: Optional[list]
     n_orders_total: int
     res: float
+
+
+if TYPE_CHECKING:
+    from exoplore.config.models import ObservationConfig
+
+
+@dataclass(frozen=True)
+class InstrumentInputs:
+    """Inputs used to select instrument files and the observing mode.
+
+    inputs_dir locates the instrument data and planet_name identifies the ETC
+    file. observation supplies the event and night choices. fixed_snr carries
+    the requested constant pixel S/N, with zero selecting the input S/N files.
+    """
+
+    inputs_dir: str
+    planet_name: str
+    observation: ObservationConfig
+    fixed_snr: float
+    wave_file: str = ""
+    snr_file: str = ""

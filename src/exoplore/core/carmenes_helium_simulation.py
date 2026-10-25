@@ -22,7 +22,7 @@ from exoplore.atmosphere.helium_provider import solve_outflow, HeliumTransit
 from exoplore.core.helium_etc import CARMENES_NOISE_CONVENTION, require_helium_orders
 from exoplore.core.helium_simulation import observing_arrays, _write_npz, plot_simulation, NoHeliumTransit
 from exoplore.core.helium_synthetic_observation import utc_midpoints
-from exoplore.instruments import load_instrument_v2, get_WaveGrid_v2
+from exoplore.instruments import load_instrument, get_WaveGrid
 from exoplore.instruments.carmenes_helium_molecfit import fit_carmenes_night
 from exoplore.observation.noise import photon_noise
 from exoplore.pipelines.carmenes_helium import prepare_carmenes_transmission
@@ -56,8 +56,8 @@ def validate_carmenes_helium(config):
 
 def load_carmenes_order(config):
     """Use the existing instrument loader, then select from the full ETC arrays."""
-    instrument = load_instrument_v2(config)
-    wave, pixels, _, snr, *_ = get_WaveGrid_v2(config, instrument, instrument.n_orders_total)
+    instrument = load_instrument(config)
+    wave, pixels, _, snr, *_ = get_WaveGrid(config.instrument, config.observation, instrument, instrument.n_orders_total)
     wave = np.asarray(wave, float).T*1000  # Existing CARMENES wave_star convention.
     snr = np.asarray(snr, float)
     science = config.pipeline.carmenes_helium

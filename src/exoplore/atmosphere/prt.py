@@ -427,14 +427,12 @@ def easychem_molecule(species_name: str) -> str:
     return _EASYCHEM_MOLECULE.get(base, _EASYCHEM_MOLECULE.get(species_name, base))
 
 
-def call_easyCHEM(inp_dat, metallicity, C_to_O, pressures, t, species,
+def call_easyCHEM(metallicity, C_to_O, pressures, t, species,
                   ret_CtoO=False):
     """Compute equilibrium chemistry with EasyChem.
 
     Parameters
     ----------
-    inp_dat : dict
-        Simulation input dictionary, accepted but unused by this function.
     metallicity : float  [M/H] metallicity relative to solar.
     C_to_O : float  Carbon-to-oxygen number ratio.
     pressures : array  Pressure grid in bar.
@@ -584,7 +582,7 @@ def call_pRT(inp_dat, pressures, prt_object, species, vmr, MMW, p0,
         # valid keys for both steps.
         chem = [easychem_molecule(s) for s in species]
         ec_fracs, MMW_tot = call_easyCHEM(
-            inp_dat, metallicity, C_to_O, pressures, t, chem, easychem_CtoO_ret
+            metallicity, C_to_O, pressures, t, chem, easychem_CtoO_ret
         )
         mass_fracs = {opac: ec_fracs[chem[i]] for i, opac in enumerate(species)}
     else:
@@ -746,7 +744,7 @@ def call_pRT_limbs(inp_dat,
         if mode in ["full", "morning"]:
             if inp_dat["use_easyCHEM_morning_day"]:
                 mass_fracs_morning_day, MMW_tot_morning_day = call_easyCHEM(
-                    inp_dat, inp_dat["Metallicity_wrt_solar_morning_day"],
+                    inp_dat["Metallicity_wrt_solar_morning_day"],
                     inp_dat["C_to_O_morning_day"], pressures_morning_day,
                     t_morning_day, inp_dat['species_morning_day']
                 )
@@ -755,7 +753,7 @@ def call_pRT_limbs(inp_dat,
                     vmr_morning_day, species_morning_day, t_morning_day)
             if inp_dat["use_easyCHEM_morning_night"]:
                 mass_fracs_morning_night, MMW_tot_morning_night = call_easyCHEM(
-                    inp_dat, inp_dat["Metallicity_wrt_solar_morning_night"],
+                    inp_dat["Metallicity_wrt_solar_morning_night"],
                     inp_dat["C_to_O_morning_night"], pressures_morning_night,
                     t_morning_night, inp_dat['species_morning_night']
                 )
@@ -766,7 +764,7 @@ def call_pRT_limbs(inp_dat,
         if mode in ["full", "evening"]:
             if inp_dat["use_easyCHEM_evening_day"]:
                 mass_fracs_evening_day, MMW_tot_evening_day = call_easyCHEM(
-                    inp_dat, inp_dat["Metallicity_wrt_solar_evening_day"],
+                    inp_dat["Metallicity_wrt_solar_evening_day"],
                     inp_dat["C_to_O_evening_day"], pressures_evening_day,
                     t_evening_day, inp_dat['species_evening_day']
                 )
@@ -775,7 +773,7 @@ def call_pRT_limbs(inp_dat,
                     vmr_evening_day, species_evening_day, t_evening_day)
             if inp_dat["use_easyCHEM_evening_night"]:
                 mass_fracs_evening_night, MMW_tot_evening_night = call_easyCHEM(
-                    inp_dat, inp_dat["Metallicity_wrt_solar_evening_night"],
+                    inp_dat["Metallicity_wrt_solar_evening_night"],
                     inp_dat["C_to_O_evening_night"], pressures_evening_night,
                     t_evening_night, inp_dat['species_evening_night']
                 )
@@ -836,7 +834,7 @@ def call_pRT_limbs(inp_dat,
         if mode in ["full", "morning"]:
             if inp_dat["use_easyCHEM_morning_day"]:
                 mass_fracs_morning, MMW_tot_morning = call_easyCHEM(
-                    inp_dat, inp_dat["Metallicity_wrt_solar_morning_day"],
+                    inp_dat["Metallicity_wrt_solar_morning_day"],
                     inp_dat["C_to_O_morning_day"], pressures_morning_day,
                     t_morning, inp_dat['species_morning_day'], easychem_CtoO_ret
                 )
@@ -847,7 +845,7 @@ def call_pRT_limbs(inp_dat,
         if mode in ["full", "evening"]:
             if inp_dat["use_easyCHEM_evening_day"]:
                 mass_fracs_evening, MMW_tot_evening = call_easyCHEM(
-                    inp_dat, inp_dat["Metallicity_wrt_solar_evening_day"],
+                    inp_dat["Metallicity_wrt_solar_evening_day"],
                     inp_dat["C_to_O_evening_day"], pressures_evening_day,
                     t_evening, inp_dat['species_evening_day'], easychem_CtoO_ret
                 )

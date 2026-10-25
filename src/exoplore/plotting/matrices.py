@@ -569,14 +569,15 @@ def plot_mat_with_collapse(x, y, z, inp_dat, h, name,
 
 
 def plot_steps(
-    inp_dat, wave_ins, n_panels, mat_list, spec_idx, phase,
+    wave_ins, n_panels, mat_list, spec_idx, phase,
     with_signal, useful_spectral_points
     ):
-    """
-    exosims.plot_steps(
-        inp_dat, wave_ins, 4, [spec_mat, mat_noise[0], mat_res[0]],
-        3, phase, with_signal, useful_spectral_points
-    )
+    """Display one spectrum and the selected spectral-matrix stages.
+
+    wave_ins supplies wavelengths in microns. mat_list contains n_panels - 1
+    exposure-by-wavelength arrays. spec_idx selects the spectrum in the top
+    panel. with_signal selects the exposures shown in the image panels and
+    useful_spectral_points selects their wavelength columns.
     """
     if len(mat_list) != n_panels - 1:
         raise Exception("Provide as many matrices as n_panels-1")

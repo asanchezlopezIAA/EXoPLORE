@@ -11,13 +11,26 @@ from exoplore.planets.models import PlanetParameters
 from exoplore.planets.catalog import load_planet
 
 
+def _planet(**overrides):
+    """Build a complete test system and apply the parameters under test."""
+    from dataclasses import fields
+    source = Path(__file__).parent.parent / "planet_params/HD189733b.json"
+    raw = json.loads(source.read_text())
+    inputs = {item.name: raw[item.name] for item in fields(PlanetParameters)
+              if item.init and item.name in raw}
+    for derived in ("kp_kms", "stellar_rv_semiamplitude_kms", "transit_duration_hours"):
+        inputs.pop(derived, None)
+    inputs.update(overrides)
+    return PlanetParameters(**inputs)
+
+
 # ---------------------------------------------------------------------------
 # PlanetParameters model
 # ---------------------------------------------------------------------------
 
 def test_planet_kp_computed():
     """Kp should be computed from orbital parameters when not supplied."""
-    planet = PlanetParameters(
+    planet = _planet(
         name="test",
         orbital_period_days=2.218575,
         semi_major_axis_au=0.03099,
@@ -30,7 +43,7 @@ def test_planet_kp_computed():
 
 def test_planet_transit_duration_computed():
     """Transit duration should be computed from orbital geometry."""
-    planet = PlanetParameters(
+    planet = _planet(
         name="test",
         orbital_period_days=2.218575,
         semi_major_axis_au=0.03099,
@@ -46,7 +59,7 @@ def test_planet_transit_duration_computed():
 
 def test_planet_kp_explicit():
     """Explicit Kp should override computed value."""
-    planet = PlanetParameters(
+    planet = _planet(
         name="test",
         orbital_period_days=3.524,
         semi_major_axis_au=0.04707,
@@ -77,6 +90,8 @@ def _write_si_unit_json(path: Path) -> None:
         "T_star": 6065.0,
         "logg": 4.36,
         "met": 0.02,
+        "v_rotsini": 0.0,
+        "limb_darkening_coeffs": [0.3, 0.1],
         "V_sys": -14.7,
         "T_equ": 1450.0,
         "T_int": 200.0,
@@ -197,40 +212,14 @@ def test_new_format_stellar_ks_computed():
 
 
 # ---------------------------------------------------------------------------
-# to_inp_dat()
+# Physical-unit conversions
 # ---------------------------------------------------------------------------
 
-def test_to_inp_dat_keys():
-    """to_inp_dat() should produce all expected inp_dat keys."""
-    planet = PlanetParameters(
-        name="TestPlanet",
-        orbital_period_days=2.218575,
-        semi_major_axis_au=0.03099,
-        inclination_deg=85.71,
-        planet_radius_rjup=1.138,
-        stellar_radius_rsun=0.756,
-        planet_mass_mjup=1.138,
-        stellar_mass_msun=0.806,
-        equilibrium_temperature_K=1200.0,
-        systemic_velocity_kms=-2.361,
-    )
-    d = planet.to_inp_dat()
-
-    for key in ("Exoplanet_name", "Period", "T_0", "a", "incl",
-                "eccentricity", "R_pl", "R_star", "M_pl", "M_star",
-                "T_star", "V_sys", "K_p", "T_equ", "Kappa_IR",
-                "Gamma", "T_int", "limb_darkening_coeffs"):
-        assert key in d, f"Missing key: {key}"
 
 
-def test_to_inp_dat_units():
-    """to_inp_dat() should return CGS units for sizes (matching pRT convention).
-
-    to_inp_dat() uses CGS because call_pRT computes surface gravity as
-    cst.G * M_pl / R_pl**2 where cst.G = 6.674e-8 cm³ g⁻¹ s⁻².
-    Semi-major axis is in km (a_au * 1.496e8 km/AU).
-    """
-    planet = PlanetParameters(
+def test_planet_physical_unit_properties():
+    """Convert the supplied masses, radii, orbit and inclination to calculation units."""
+    planet = _planet(
         name="TestPlanet",
         orbital_period_days=2.218575,
         semi_major_axis_au=0.03099,
@@ -240,29 +229,27 @@ def test_to_inp_dat_units():
         planet_mass_mjup=1.0,
         stellar_mass_msun=1.0,
     )
-    d = planet.to_inp_dat()
 
     # R_pl should be in cm (1 R_Jup ~ 7.15e9 cm)
-    assert 7.0e9 < d["R_pl"] < 7.3e9
+    assert 7.0e9 < planet.R_pl < 7.3e9
     # R_star should be in cm (1 R_sun ~ 6.96e10 cm)
-    assert 6.8e10 < d["R_star"] < 7.1e10
+    assert 6.8e10 < planet.R_star < 7.1e10
     # a should be in km (0.03099 AU * 1.496e8 km/AU ~ 4.64e6 km)
-    assert d["a"] > 1e6
+    assert planet.a > 1e6
     # incl should be in radians
-    assert 0 < d["incl"] < math.pi
+    assert 0 < planet.inc < math.pi
 
 
-def test_to_inp_dat_roundtrip():
+def test_loaded_planet_preserves_physical_fields():
     """Loading then converting back should preserve key values."""
     with tempfile.TemporaryDirectory() as td:
         p = Path(td) / "NewFormatPlanet.json"
         _write_new_format_json(p)
         planet = load_planet(p)
 
-    d = planet.to_inp_dat()
-    assert d["Exoplanet_name"] == "NewFormatPlanet"
-    assert abs(d["Period"] - 2.21857567) < 1e-6
-    assert abs(d["V_sys"] - (-2.361)) < 1e-6
+    assert planet.name == "NewFormatPlanet"
+    assert abs(planet.orbital_period_days - 2.21857567) < 1e-6
+    assert abs(planet.systemic_velocity_kms - (-2.361)) < 1e-6
 
 
 # ---------------------------------------------------------------------------
@@ -301,3 +288,84 @@ def test_load_hd209458b_bundled():
     assert planet.stellar_teff_K == 6117.0
     assert planet.kp_kms is not None
     assert planet.transit_duration_hours is not None
+
+
+# Physical inputs must be supplied for the system being loaded.
+_REQUIRED_INPUTS = [
+    ("orbital_period_days", "Period"),
+    ("transit_epoch_bjd", "T_0"),
+    ("semi_major_axis_au", "a"),
+    ("inclination_deg", "incl"),
+    ("eccentricity", "eccentricity"),
+    ("argument_of_periastron_deg", "long_periastron_w"),
+    ("planet_radius_rjup", "R_pl"),
+    ("planet_mass_mjup", "M_pl"),
+    ("stellar_radius_rsun", "R_star"),
+    ("stellar_mass_msun", "M_star"),
+    ("stellar_teff_K", "T_star"),
+    ("stellar_logg", "logg"),
+    ("stellar_metallicity", "met"),
+    ("v_rotsini_kms", "v_rotsini"),
+    ("systemic_velocity_kms", "V_sys"),
+    ("equilibrium_temperature_K", "T_equ"),
+    ("t_int_K", "T_int"),
+    ("kappa_ir", "Kappa_IR"),
+    ("gamma_guillot", "Gamma"),
+    ("limb_darkening_coeffs", "limb_darkening_coeffs"),
+]
+
+
+@pytest.mark.parametrize("format_index", [0, 1], ids=["named-units", "si-units"])
+@pytest.mark.parametrize("keys", _REQUIRED_INPUTS, ids=[pair[0] for pair in _REQUIRED_INPUTS])
+@pytest.mark.parametrize("missing", [True, False], ids=["absent", "null"])
+def test_required_physical_input_reports_field_and_file(tmp_path, format_index, keys, missing):
+    """Reject incomplete systems with an actionable field and source-file error."""
+    path = tmp_path / "planet.json"
+    (_write_new_format_json if format_index == 0 else _write_si_unit_json)(path)
+    raw = json.loads(path.read_text())
+    key = keys[format_index]
+    if missing:
+        raw.pop(key)
+    else:
+        raw[key] = None
+    path.write_text(json.dumps(raw))
+    with pytest.raises(ValueError) as error:
+        load_planet(path)
+    assert key in str(error.value)
+    assert str(path) in str(error.value)
+
+
+@pytest.mark.parametrize("value", [True, "invalid", float("nan"), float("inf")])
+def test_invalid_stellar_temperature_is_rejected(tmp_path, value):
+    path = tmp_path / "planet.json"
+    _write_new_format_json(path)
+    raw = json.loads(path.read_text())
+    raw["stellar_teff_K"] = value
+    path.write_text(json.dumps(raw))
+    with pytest.raises(ValueError, match="stellar_teff_K"):
+        load_planet(path)
+
+
+def test_explicit_zero_and_empty_limb_coefficients_are_retained(tmp_path):
+    """Keep explicitly supplied values, including a uniform-illumination input."""
+    path = tmp_path / "planet.json"
+    _write_new_format_json(path)
+    raw = json.loads(path.read_text())
+    raw.update(stellar_metallicity=0.0, v_rotsini_kms=0.0,
+               systemic_velocity_kms=0.0, limb_darkening_coeffs=[])
+    path.write_text(json.dumps(raw))
+    planet = load_planet(path)
+    assert planet.stellar_metallicity == 0.0
+    assert planet.v_rotsini_kms == 0.0
+    assert planet.systemic_velocity_kms == 0.0
+    assert planet.limb_darkening_coeffs == []
+
+
+def test_direct_construction_requires_physical_inputs():
+    with pytest.raises(TypeError, match="stellar_teff_K"):
+        PlanetParameters(name="Incomplete")
+
+
+def test_direct_construction_rejects_null_physical_input():
+    with pytest.raises(ValueError, match="stellar_teff_K"):
+        _planet(stellar_teff_K=None)

@@ -40,7 +40,7 @@ from __future__ import annotations
 
 
 import os as _os
-from .base import InstrumentInfo
+from .base import InstrumentInfo, InstrumentInputs
 
 # Bundled wavelength grid (44 orders × 4096 pixels, µm)
 _PKG_DATA = _os.path.join(_os.path.dirname(__file__), "data", "wave_CARMENES_VIS.fits")
@@ -50,35 +50,27 @@ _RES      = 94_600.0
 _OBS      = "lasilla"   # CAHA is treated as La Silla altitude class in SkyCalc
 
 
-def get_instrument_info(inp_dat: dict) -> InstrumentInfo:
+def get_instrument_info(request: InstrumentInputs) -> InstrumentInfo:
     """Return instrument metadata for CARMENES VIS (0.514 to 0.822 µm, 44 orders).
 
-    Selects Mode A, B, or C automatically based on flags in *inp_dat*.
+    Selects Mode A, B, or C automatically based on the observing choices in *request*.
 
     Parameters
     ----------
-    inp_dat : dict
-        Simulation input dictionary.  Relevant keys:
-
-        ``inputs_dir``       Base path for input files.
-        ``specific_event``   True → use real JD/airmass from reference night.
-        ``different_nights`` True → load per-night JD/airmass/SNR files.
-        ``n_nights``         Number of nights (used when different_nights=True).
-        ``Exoplanet_name``   Planet name for ETC file lookup (Mode A).
-        ``fixed_snr``        If > 0, constant SNR is used (overrides all files).
-        ``use_real_data``    True → Mode C (real-data analysis).
+    inputs : InstrumentInputs
+        Input directory, target name, observing configuration and constant S/N.
 
     Returns
     -------
     InstrumentInfo
         Named tuple with file paths and instrument parameters.
     """
-    inputs = inp_dat.get("inputs_dir", "inputs/")
+    inputs = request.inputs_dir
     ref    = _os.path.join(inputs, "reference_night")
-    planet = inp_dat.get("Exoplanet_name", "")
+    planet = request.planet_name
 
-    different_nights = inp_dat.get("different_nights", False) or inp_dat.get("Different_nights", False)
-    n_nights       = inp_dat.get("n_nights", 1)
+    different_nights = request.observation.different_nights
+    n_nights       = request.observation.n_nights
 
     # --- wavelength grid ---
     user_clean = _os.path.join(inputs, "wave_CARMENES_VIS.fits")
@@ -88,8 +80,8 @@ def get_instrument_info(inp_dat: dict) -> InstrumentInfo:
         wave_file = _PKG_DATA
 
     # --- Mode A: no specific event, no real data ---
-    if not inp_dat.get("specific_event", False) and not inp_dat.get("use_real_data", False):
-        fixed_snr = inp_dat.get("fixed_snr", 0)
+    if not request.observation.specific_event and not request.observation.use_real_data:
+        fixed_snr = request.fixed_snr
         if fixed_snr and fixed_snr > 0:
             snr_file = ""
         else:

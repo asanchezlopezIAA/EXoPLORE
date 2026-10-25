@@ -142,7 +142,7 @@ class TestSignatures:
         from exoplore.plotting import plot_steps
         sig = inspect.signature(plot_steps)
         params = list(sig.parameters)
-        assert "inp_dat" in params
+        assert params[0] == "wave_ins"
         assert "wave_ins" in params
         assert "n_panels" in params
         assert "mat_list" in params
@@ -201,6 +201,6 @@ class TestPlotKpVrestValidation:
         mat = np.random.randn(20, 100)
         with pytest.raises(Exception, match="n_panels-1"):
             plot_steps(
-                {}, wave_ins, 3, [mat],  # n_panels=3 but only 1 matrix
+                wave_ins, 3, [mat],  # n_panels=3 but only 1 matrix
                 5, phase, with_signal, usp
             )

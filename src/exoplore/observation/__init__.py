@@ -32,7 +32,6 @@ from exoplore.observation.timing import (
     transit_contact_times,
     # public API
     get_event,
-    get_event_v2,
     find_nights_with_extrema,
     get_transit,
     dayside_fraction,

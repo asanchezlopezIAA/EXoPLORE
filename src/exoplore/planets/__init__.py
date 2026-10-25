@@ -22,11 +22,6 @@ Quick start
 >>> round(p.transit_duration_hours, 2)
 1.94
 
-inp_dat conversion
-------------------
->>> inp_dat = p.to_inp_dat()
->>> inp_dat["K_p"]   # km/s, ready to pass to the simulator
-149.4...
 """
 
 # Reading these imports

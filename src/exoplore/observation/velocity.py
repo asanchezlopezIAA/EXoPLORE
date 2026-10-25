@@ -220,32 +220,23 @@ def get_V_eccentric(Kp, phases, e, omega, berv, v_sys, v_wind=0.0):
     return Kp * bracket - berv + v_sys + v_wind
 
 
-def compute_Kp(inp_dat):
-    """Compute Kp from orbital parameters in inp_dat.
+def compute_Kp(*, semi_major_axis_km, orbital_period_days, eccentricity, inclination_rad):
+    """Calculate the orbital radial-velocity amplitude in km/s.
 
-    Parameters
-    ----------
-    inp_dat : dict  Needs ``"a"`` (cm), ``"Period"`` (days),
-                    ``"eccentricity"``, ``"incl"`` (radians).
-
-    Returns
-    -------
-    float  Kp in km/s.
+    Supply the semi-major axis in km, orbital period in days, eccentricity
+    and inclination in radians.
     """
     return (
-        (2.0 * np.pi * inp_dat["a"])
-        / (inp_dat["Period"] * 24.0 * 3600.0 * np.sqrt(1.0 - inp_dat["eccentricity"]**2))
-        * np.sin(inp_dat["incl"])
+        (2.0 * np.pi * semi_major_axis_km)
+        / (orbital_period_days * 24.0 * 3600.0 * np.sqrt(1.0 - eccentricity**2))
+        * np.sin(inclination_rad)
     )
 
 
-def get_phase(julian_date, inp_dat, transit_mid_JD):
-    """Orbital phase from Julian date.
+def get_phase(julian_date, orbital_period_days, transit_mid_JD):
+    """Calculate orbital phase relative to the supplied event midpoint.
 
-    Parameters
-    ----------
-    julian_date : array  JD array.
-    inp_dat : dict  Needs ``"Period"`` (days).
-    transit_mid_JD : float  Mid-transit JD.
+    julian_date and transit_mid_JD share the input time convention.
+    orbital_period_days is measured in days.
     """
-    return (julian_date - transit_mid_JD) / inp_dat['Period']
+    return (julian_date - transit_mid_JD) / orbital_period_days
