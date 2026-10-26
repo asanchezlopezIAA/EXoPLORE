@@ -61,6 +61,11 @@ emcee:
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import emcee
+
 import os
 from pathlib import Path
 from typing import Callable, Optional, Sequence

@@ -7,6 +7,8 @@ reused. No SYSREM or uncertainty resampling is applied.
 """
 from __future__ import annotations
 
+from exoplore.pipelines.models import PreparationInputs
+
 # Role in the calculation
 # Prepare observed CARMENES helium spectra: select exposures, apply the configured OH
 # and telluric corrections and construct the transmission spectrum with the shared
@@ -84,29 +86,42 @@ def _write_inputs(directory: Path,night: dict) -> None:
         fits.writeto(directory/f'observations_night_0_order_{order}.fits',night['flux'][:,order])
 
 
-def preparing_pipeline_adapter(inp_dat,data,noise,wave,mask,masks,correct_uncertainties,retrieval):
+def preparing_pipeline_adapter(
+    inputs: PreparationInputs,
+    data,
+    noise,
+    wave,
+    mask,
+    masks,
+    correct_uncertainties,
+    retrieval,
+):
     """Prepare an already corrected, native-masked order through the dispatcher."""
-    treatment=inp_dat.get('oh_treatment','mask')
-    if retrieval or inp_dat.get('telluric_corrected') is not True:
+    observation = inputs.helium_observation
+    if observation is None:
+        raise ValueError("Observed helium preparation requires exposure information")
+
+    treatment=observation.oh_treatment
+    if retrieval or observation.telluric_corrected is not True:
         raise ValueError('Palle2020 array preparation requires telluric-corrected spectra')
     if treatment not in ('ignore','mask','fiber_b_matched_extraction','fiber_b_calibrated','fiber_a_oot_profile'):
         raise ValueError('Unknown Palle2020 OH treatment')
-    if treatment=='mask' and inp_dat.get('oh_mask_applied') is not True:
+    if treatment=='mask' and observation.oh_mask_applied is not True:
         raise ValueError('Palle2020 mask mode requires the native OH mask before interpolation')
-    if uses_sky_fibre(treatment) and inp_dat.get('oh_treatment_applied')!=treatment:
+    if uses_sky_fibre(treatment) and observation.oh_treatment_applied!=treatment:
         raise ValueError('Apply the selected fibre-B subtraction upstream of array preparation')
-    science=inp_dat['palle2020_config']
+    science=inputs.pipeline.carmenes_helium
     if isinstance(science,dict):
         science=CarmenesHeliumConfig(**science)
     science=replace(science,oh_mode='mask' if treatment=='mask' else 'baseline')
-    bjd=np.asarray(inp_dat['julian_date'])
-    duration=np.broadcast_to(inp_dat['exposure_time_seconds'],bjd.shape)
+    bjd=np.asarray(observation.julian_date)
+    duration=np.broadcast_to(observation.exposure_time_seconds,bjd.shape)
     science,_,_,_,_=selection(science,bjd,duration)
     flux=np.array(data,float,copy=True);error=np.array(noise,float,copy=True)
     flux[:,np.asarray(mask,int)]=np.nan;error[:,np.asarray(mask,int)]=np.nan
     wavelengths=np.broadcast_to(wave,flux.shape)
-    result=prepare_carmenes_transmission(wavelengths,flux,error,np.asarray(inp_dat['berv_kms']),
-                                         np.asarray(inp_dat['planet_rv_kms']),science)
+    result=prepare_carmenes_transmission(wavelengths,flux,error,np.asarray(observation.berv_kms),
+                                         np.asarray(observation.planet_rv_kms),science)
     prepared=result['stellar_transmission'].copy()
     propagated=np.sqrt(np.maximum(result['stellar_marginal_variance'],0))
     bad=np.flatnonzero(np.any(~np.isfinite(prepared)|~np.isfinite(propagated)|(propagated<=0),axis=0))

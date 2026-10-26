@@ -35,7 +35,14 @@ otherwise.  Radii are in **cm**, pressures in **bar**.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from petitRADTRANS.radtrans import Radtrans
+
 from typing import Dict, List, Optional, Tuple
+
+from exoplore.atmosphere.models import RadiativeTransferInputs
 
 import numpy as np
 from scipy.ndimage import gaussian_filter
@@ -491,7 +498,7 @@ def call_easyCHEM(metallicity, C_to_O, pressures, t, species,
     return mass_fracs, MMW_tot
 
 
-def call_pRT(inp_dat, pressures, prt_object, species, vmr, MMW, p0,
+def call_pRT(model_inputs: RadiativeTransferInputs, pressures, prt_object, species, vmr, MMW, p0,
              isothermal, iso_T_value, two_point_T, p_points, t_points,
              kappa, gamma, T_equil, metallicity, C_to_O,
              use_easyCHEM=False, P_cloud=None,
@@ -500,8 +507,8 @@ def call_pRT(inp_dat, pressures, prt_object, species, vmr, MMW, p0,
 
     Parameters
     ----------
-    inp_dat : dict
-        Full simulation input dictionary.
+    model_inputs : RadiativeTransferInputs
+        Physical system quantities and observing mode in explicit units.
     pressures : array
         Pressure grid in bar.
     prt_object : Radtrans
@@ -533,7 +540,7 @@ def call_pRT(inp_dat, pressures, prt_object, species, vmr, MMW, p0,
 
     Returns
     -------
-    wave_pRT : array  Wavelength in μm (actually Å * 1e4 from pRT).
+    wave_pRT : array  Wavelength in μm.
     spec_conv : array  Convolved spectrum.
     mass_fracs : dict  Mass fractions from chemistry.
     MMW_tot : array  Mean molecular weight profile.
@@ -547,17 +554,17 @@ def call_pRT(inp_dat, pressures, prt_object, species, vmr, MMW, p0,
     from petitRADTRANS import physical_constants as cst
     from exoplore.atmosphere.temperature import calculate_temperature_structure
 
-    gravity = (inp_dat['Gravity']
-               if inp_dat['Gravity'] is not None
-               else cst.G * inp_dat['M_pl'] / inp_dat['R_pl'] ** 2)
+    gravity = (model_inputs.gravity_cgs
+               if model_inputs.gravity_cgs is not None
+               else cst.G * model_inputs.planet_mass_g / model_inputs.planet_radius_cm ** 2)
 
     if MMW is None and not use_easyCHEM:
         raise ValueError("Mean molecular weight should be indicated for pRT!")
-    if inp_dat['event'] == 'dayside' and inp_dat['T_star'] is None:
+    if model_inputs.event_type == 'dayside' and model_inputs.stellar_teff_K is None:
         raise ValueError("T_star should be indicated for dayside simulations!")
 
     t = calculate_temperature_structure(
-        inp_dat, pressures, gravity, isothermal, iso_T_value,
+        model_inputs.internal_temperature_K, pressures, gravity, isothermal, iso_T_value,
         T_equil, two_point_T, p_points, t_points, kappa, gamma, None
     )
 
@@ -594,13 +601,13 @@ def call_pRT(inp_dat, pressures, prt_object, species, vmr, MMW, p0,
             mass_fractions=mf,
             mean_molar_masses=mmw,
             reference_gravity=gravity,
-            planet_radius=inp_dat['R_pl'],
+            planet_radius=model_inputs.planet_radius_cm,
             reference_pressure=p0_val,
         )
         if P_cl is not None:
             kwargs["opaque_cloud_top_pressure"] = P_cl
         wavelengths, transit_radii, _ = prt_obj.calculate_transit_radii(**kwargs)
-        spec = transit_radii ** 2 / inp_dat['R_star'] ** 2
+        spec = transit_radii ** 2 / model_inputs.stellar_radius_cm ** 2
         wave_pRT = wavelengths * 1e4
         return wave_pRT, spec
 
@@ -608,83 +615,60 @@ def call_pRT(inp_dat, pressures, prt_object, species, vmr, MMW, p0,
         prt_object.calc_flux(t_profile, mf, gravity, mmw)
         spec = prt_object.flux
         wave_pRT = cst.c / prt_object.freq / 1e-4
-        stellar_spec = cst.get_PHOENIX_spec(inp_dat["T_star"])
+        stellar_spec = cst.get_PHOENIX_spec(model_inputs.stellar_teff_K)
         wave_star = stellar_spec[:, 0] / 1e-4
         spec_star = stellar_spec[:, 1]
         spec_star = np.interp(wave_pRT, wave_star, spec_star)
-        spec *= (inp_dat['R_pl'] / inp_dat['R_star']) ** 2
+        spec *= (model_inputs.planet_radius_cm / model_inputs.stellar_radius_cm) ** 2
         return wave_pRT, spec, spec_star
 
-    if inp_dat['event'] == 'transit':
+    if model_inputs.event_type == 'transit':
         wave_pRT, spec = _transit(t, mass_fracs, MMW_tot, prt_object, p0,
                                   P_cloud)
         spec_star = np.zeros_like(spec)
-    elif inp_dat['event'] == 'dayside':
+    elif model_inputs.event_type == 'dayside':
         wave_pRT, spec, spec_star = _dayside(t, mass_fracs, MMW_tot)
 
-    if inp_dat['res'] is None:
+    if model_inputs.resolving_power is None:
         raise ValueError(
-            "Please provide the resolving power. inp_dat['res'] cannot be None!"
+            "Please provide the resolving power. model_inputs.resolving_power cannot be None!"
         )
     return (wave_pRT,
-            convolve(wave_pRT, spec, inp_dat['res']),
+            convolve(wave_pRT, spec, model_inputs.resolving_power),
             mass_fracs,
             MMW_tot,
-            convolve(wave_pRT, spec_star, inp_dat['res']),
+            convolve(wave_pRT, spec_star, model_inputs.resolving_power),
             t)
 
 
-def call_pRT_limbs(inp_dat,
+def call_pRT_limbs(model_inputs: RadiativeTransferInputs, atmosphere,
                    pressures_morning_day, pressures_morning_night,
                    pressures_evening_day, pressures_evening_night,
                    prt_object_morning_day, prt_object_morning_night,
                    prt_object_evening_day, prt_object_evening_night,
-                   mode="full", retrieval=False, inp_dat_ret=None,
+                   mode="full", retrieval_atmosphere=None,
                    easychem_CtoO_ret=False, haze_fac=None):
-    """Run petitRADTRANS for limb-asymmetric atmospheres.
+    """Calculate spectra for the requested morning/evening atmospheric regions.
 
-    Supports ``Limb_divisions`` modes ``"gradual"``, ``"asymmetric"``, and ``"simplified_step"``.
+    model_inputs supplies the physical system in explicit units. atmosphere
+    contains the injected regions and their chemistry choices. Supply
+    retrieval_atmosphere to select the trial species, manual abundances and
+    temperature profiles during retrieval. Pressure grids and pRT objects
+    are supplied separately for each region. mode selects full, morning or
+    evening evaluation.
 
-    Parameters
-    ----------
-    inp_dat : dict
-        Simulation input dictionary (contains per-limb chemistry/T-P
-        parameters).
-    pressures_* : array
-        Pressure grids for each limb component (morning/evening ×
-        day/night).
-    prt_object_* : Radtrans
-        Initialised petitRADTRANS objects for each limb component.
-    mode : str
-        ``"full"``, ``"morning"``, or ``"evening"``.
-    retrieval : bool
-        If True, use ``inp_dat_ret`` for species and VMR.
-    inp_dat_ret : dict or None
-        Retrieval parameter dictionary (used when ``retrieval=True``).
-    easychem_CtoO_ret : bool
-        Symmetric C/O modification for EasyChem.
-    haze_fac : float or None
-        Reserved.
-
-    Returns
-    -------
-    tuple
-        (wave_pRT, spec_morning_day, spec_morning_night, spec_evening_day,
-        spec_evening_night, mass_fracs_morning_day, mass_fracs_morning_night,
-        MMW_morning_day, MMW_morning_night, mass_fracs_evening_day,
-        mass_fracs_evening_night, MMW_evening_day, MMW_evening_night,
-        syn_star, t_morning_day, t_morning_night, t_evening_day, t_evening_night)
-
-        Night values are ``None`` in ``"gradual"`` mode.
+    Return wavelengths, four regional spectra, abundances and mean molecular
+    weights, the stellar spectrum and four temperature profiles. Night-side
+    slots are None for the two-limb modes.
     """
     from petitRADTRANS import physical_constants as cst
     from exoplore.atmosphere.temperature import (
         calculate_temperature_structure_limbs,
     )
 
-    gravity = (inp_dat['Gravity']
-               if inp_dat['Gravity'] is not None
-               else cst.G * inp_dat['M_pl'] / inp_dat['R_pl'] ** 2)
+    gravity = (model_inputs.gravity_cgs
+               if model_inputs.gravity_cgs is not None
+               else cst.G * model_inputs.planet_mass_g / model_inputs.planet_radius_cm ** 2)
 
     def _calc_mass_fracs(vmr_list, species_list, temperatures):
         if len(vmr_list) != len(species_list):
@@ -692,7 +676,7 @@ def call_pRT_limbs(inp_dat,
                 "You did not supply the VMR of all compounds. "
                 "len(vmr) != len(species)"
             )
-        MMW_tot = inp_dat['MMW'] * np.ones_like(temperatures)
+        MMW_tot = atmosphere.planet_model.mean_molecular_weight * np.ones_like(temperatures)
         mass_fracs = {
             sp: vmr_list[cont] * np.ones_like(temperatures)
             for cont, sp in enumerate(species_list)
@@ -705,102 +689,102 @@ def call_pRT_limbs(inp_dat,
             mass_fractions=mf,
             mean_molar_masses=mmw,
             reference_gravity=gravity,
-            planet_radius=inp_dat['R_pl'],
+            planet_radius=model_inputs.planet_radius_cm,
             reference_pressure=p0_val,
         )
-        spec = transit_radii ** 2 / inp_dat['R_star'] ** 2
+        spec = transit_radii ** 2 / model_inputs.stellar_radius_cm ** 2
         wave_pRT = wavelengths * 1e4
         return wave_pRT, spec
 
-    if inp_dat["Limb_divisions"] == "quarters":
-        species_morning_day = inp_dat['species_morning_day']
-        species_morning_night = inp_dat['species_morning_night']
-        species_evening_day = inp_dat['species_evening_day']
-        species_evening_night = inp_dat['species_evening_night']
-        vmr_morning_day = inp_dat['vmr_morning_day']
-        vmr_morning_night = inp_dat['vmr_morning_night']
-        vmr_evening_day = inp_dat['vmr_evening_day']
-        vmr_evening_night = inp_dat['vmr_evening_night']
+    if atmosphere.limb_divisions == "quarters":
+        species_morning_day = atmosphere.morning_day.species
+        species_morning_night = atmosphere.morning_night.species
+        species_evening_day = atmosphere.evening_day.species
+        species_evening_night = atmosphere.evening_night.species
+        vmr_morning_day = atmosphere.morning_day.vmr
+        vmr_morning_night = atmosphere.morning_night.vmr
+        vmr_evening_day = atmosphere.evening_day.vmr
+        vmr_evening_night = atmosphere.evening_night.vmr
 
-        if inp_dat['MMW_morning_day'] is None and not inp_dat["use_easyCHEM_morning_day"]:
+        if atmosphere.morning_day.mean_molecular_weight is None and not atmosphere.morning_day.use_easychem:
             raise ValueError("Mean molecular weight should be indicated for pRT!")
-        if inp_dat['MMW_morning_night'] is None and not inp_dat["use_easyCHEM_morning_night"]:
+        if atmosphere.morning_night.mean_molecular_weight is None and not atmosphere.morning_night.use_easychem:
             raise ValueError("Mean molecular weight should be indicated for pRT!")
-        if inp_dat['MMW_evening_day'] is None and not inp_dat["use_easyCHEM_evening_day"]:
+        if atmosphere.evening_day.mean_molecular_weight is None and not atmosphere.evening_day.use_easychem:
             raise ValueError("Mean molecular weight should be indicated for pRT!")
-        if inp_dat['MMW_evening_night'] is None and not inp_dat["use_easyCHEM_evening_night"]:
+        if atmosphere.evening_night.mean_molecular_weight is None and not atmosphere.evening_night.use_easychem:
             raise ValueError("Mean molecular weight should be indicated for pRT!")
-        if inp_dat['event'] == 'dayside' and inp_dat['T_star'] is None:
+        if model_inputs.event_type == 'dayside' and model_inputs.stellar_teff_K is None:
             raise ValueError("T_star should be indicated for dayside simulations!")
 
         t_morning_day, t_morning_night, t_evening_day, t_evening_night = \
             calculate_temperature_structure_limbs(
-                inp_dat,
+                atmosphere, model_inputs.internal_temperature_K,
                 pressures_morning_day, pressures_morning_night,
                 pressures_evening_day, pressures_evening_night,
                 gravity, mode
             )
 
         if mode in ["full", "morning"]:
-            if inp_dat["use_easyCHEM_morning_day"]:
+            if atmosphere.morning_day.use_easychem:
                 mass_fracs_morning_day, MMW_tot_morning_day = call_easyCHEM(
-                    inp_dat["Metallicity_wrt_solar_morning_day"],
-                    inp_dat["C_to_O_morning_day"], pressures_morning_day,
-                    t_morning_day, inp_dat['species_morning_day']
+                    atmosphere.morning_day.metallicity_wrt_solar,
+                    atmosphere.morning_day.carbon_to_oxygen_ratio, pressures_morning_day,
+                    t_morning_day, atmosphere.morning_day.species
                 )
             else:
                 mass_fracs_morning_day, MMW_tot_morning_day = _calc_mass_fracs(
                     vmr_morning_day, species_morning_day, t_morning_day)
-            if inp_dat["use_easyCHEM_morning_night"]:
+            if atmosphere.morning_night.use_easychem:
                 mass_fracs_morning_night, MMW_tot_morning_night = call_easyCHEM(
-                    inp_dat["Metallicity_wrt_solar_morning_night"],
-                    inp_dat["C_to_O_morning_night"], pressures_morning_night,
-                    t_morning_night, inp_dat['species_morning_night']
+                    atmosphere.morning_night.metallicity_wrt_solar,
+                    atmosphere.morning_night.carbon_to_oxygen_ratio, pressures_morning_night,
+                    t_morning_night, atmosphere.morning_night.species
                 )
             else:
                 mass_fracs_morning_night, MMW_tot_morning_night = _calc_mass_fracs(
                     vmr_morning_night, species_morning_night, t_morning_night)
 
         if mode in ["full", "evening"]:
-            if inp_dat["use_easyCHEM_evening_day"]:
+            if atmosphere.evening_day.use_easychem:
                 mass_fracs_evening_day, MMW_tot_evening_day = call_easyCHEM(
-                    inp_dat["Metallicity_wrt_solar_evening_day"],
-                    inp_dat["C_to_O_evening_day"], pressures_evening_day,
-                    t_evening_day, inp_dat['species_evening_day']
+                    atmosphere.evening_day.metallicity_wrt_solar,
+                    atmosphere.evening_day.carbon_to_oxygen_ratio, pressures_evening_day,
+                    t_evening_day, atmosphere.evening_day.species
                 )
             else:
                 mass_fracs_evening_day, MMW_tot_evening_day = _calc_mass_fracs(
                     vmr_evening_day, species_evening_day, t_evening_day)
-            if inp_dat["use_easyCHEM_evening_night"]:
+            if atmosphere.evening_night.use_easychem:
                 mass_fracs_evening_night, MMW_tot_evening_night = call_easyCHEM(
-                    inp_dat["Metallicity_wrt_solar_evening_night"],
-                    inp_dat["C_to_O_evening_night"], pressures_evening_night,
-                    t_evening_night, inp_dat['species_evening_night']
+                    atmosphere.evening_night.metallicity_wrt_solar,
+                    atmosphere.evening_night.carbon_to_oxygen_ratio, pressures_evening_night,
+                    t_evening_night, atmosphere.evening_night.species
                 )
             else:
                 mass_fracs_evening_night, MMW_tot_evening_night = _calc_mass_fracs(
                     vmr_evening_night, species_evening_night, t_evening_night)
 
-            if inp_dat['event'] == 'transit':
+            if model_inputs.event_type == 'transit':
                 syn_star = None
                 if mode in ["full", "morning"]:
                     wave_pRT, spec_morning_day = _transit(
                         t_morning_day, mass_fracs_morning_day,
                         MMW_tot_morning_day, prt_object_morning_day,
-                        inp_dat["p0_morning_day"])
+                        atmosphere.morning_day.reference_pressure_bar)
                     wave_pRT, spec_morning_night = _transit(
                         t_morning_night, mass_fracs_morning_night,
                         MMW_tot_morning_night, prt_object_morning_night,
-                        inp_dat["p0_morning_night"])
+                        atmosphere.morning_night.reference_pressure_bar)
                 if mode in ["full", "evening"]:
                     wave_pRT, spec_evening_day = _transit(
                         t_evening_day, mass_fracs_evening_day,
                         MMW_tot_evening_day, prt_object_evening_day,
-                        inp_dat["p0_evening_day"])
+                        atmosphere.evening_day.reference_pressure_bar)
                     wave_pRT, spec_evening_night = _transit(
                         t_evening_night, mass_fracs_evening_night,
                         MMW_tot_evening_night, prt_object_evening_night,
-                        inp_dat["p0_evening_night"])
+                        atmosphere.evening_night.reference_pressure_bar)
 
             return (wave_pRT,
                     spec_morning_day, spec_morning_night,
@@ -812,57 +796,59 @@ def call_pRT_limbs(inp_dat,
                     syn_star,
                     t_morning_day, t_morning_night, t_evening_day, t_evening_night)
 
-    elif inp_dat["Limb_divisions"] in ("gradual", "asymmetric", "simplified_step"):
-        if not retrieval:
-            species_morning = inp_dat['species_morning_day']
-            species_evening = inp_dat['species_evening_day']
-            vmr_morning = inp_dat['vmr_morning_day']
-            vmr_evening = inp_dat['vmr_evening_day']
+    elif atmosphere.limb_divisions in ("gradual", "asymmetric", "simplified_step"):
+        if retrieval_atmosphere is None:
+            species_morning = atmosphere.morning_day.species
+            species_evening = atmosphere.evening_day.species
+            vmr_morning = atmosphere.morning_day.vmr
+            vmr_evening = atmosphere.evening_day.vmr
         else:
-            species_morning = inp_dat_ret['species_ret_morning']
-            species_evening = inp_dat_ret['species_ret_evening']
-            vmr_morning = inp_dat_ret['vmr_morning_day']
-            vmr_evening = inp_dat_ret['vmr_evening_day']
+            species_morning = retrieval_atmosphere.morning_day.species
+            species_evening = retrieval_atmosphere.evening_day.species
+            vmr_morning = retrieval_atmosphere.morning_day.vmr
+            vmr_evening = retrieval_atmosphere.evening_day.vmr
 
-        inp_dat_t = inp_dat_ret if retrieval else inp_dat
+        temperature_atmosphere = (retrieval_atmosphere if retrieval_atmosphere is not None
+                                  else atmosphere)
         t_morning, _, t_evening, _ = calculate_temperature_structure_limbs(
-            inp_dat_t, pressures_morning_day, None, pressures_evening_day, None,
+            temperature_atmosphere, model_inputs.internal_temperature_K,
+            pressures_morning_day, None, pressures_evening_day, None,
             gravity, mode
         )
-        del inp_dat_t
+        del temperature_atmosphere
 
         if mode in ["full", "morning"]:
-            if inp_dat["use_easyCHEM_morning_day"]:
+            if atmosphere.morning_day.use_easychem:
                 mass_fracs_morning, MMW_tot_morning = call_easyCHEM(
-                    inp_dat["Metallicity_wrt_solar_morning_day"],
-                    inp_dat["C_to_O_morning_day"], pressures_morning_day,
-                    t_morning, inp_dat['species_morning_day'], easychem_CtoO_ret
+                    atmosphere.morning_day.metallicity_wrt_solar,
+                    atmosphere.morning_day.carbon_to_oxygen_ratio, pressures_morning_day,
+                    t_morning, atmosphere.morning_day.species, easychem_CtoO_ret
                 )
             else:
                 mass_fracs_morning, MMW_tot_morning = _calc_mass_fracs(
                     vmr_morning, species_morning, t_morning)
 
         if mode in ["full", "evening"]:
-            if inp_dat["use_easyCHEM_evening_day"]:
+            if atmosphere.evening_day.use_easychem:
                 mass_fracs_evening, MMW_tot_evening = call_easyCHEM(
-                    inp_dat["Metallicity_wrt_solar_evening_day"],
-                    inp_dat["C_to_O_evening_day"], pressures_evening_day,
-                    t_evening, inp_dat['species_evening_day'], easychem_CtoO_ret
+                    atmosphere.evening_day.metallicity_wrt_solar,
+                    atmosphere.evening_day.carbon_to_oxygen_ratio, pressures_evening_day,
+                    t_evening, atmosphere.evening_day.species, easychem_CtoO_ret
                 )
             else:
                 mass_fracs_evening, MMW_tot_evening = _calc_mass_fracs(
                     vmr_evening, species_evening, t_evening)
 
-        if inp_dat['event'] == 'transit':
+        if model_inputs.event_type == 'transit':
             syn_star = None
             if mode in ["full", "morning"]:
                 wave_pRT, spec_morning = _transit(
                     t_morning, mass_fracs_morning, MMW_tot_morning,
-                    prt_object_morning_day, inp_dat["p0_morning_day"])
+                    prt_object_morning_day, atmosphere.morning_day.reference_pressure_bar)
             if mode in ["full", "evening"]:
                 wave_pRT, spec_evening = _transit(
                     t_evening, mass_fracs_evening, MMW_tot_evening,
-                    prt_object_evening_day, inp_dat["p0_evening_day"])
+                    prt_object_evening_day, atmosphere.evening_day.reference_pressure_bar)
 
         return (wave_pRT,
                 spec_morning, None, spec_evening, None,
@@ -872,7 +858,7 @@ def call_pRT_limbs(inp_dat,
                 t_morning, None, t_evening, None)
 
 
-def pRT_LRES_stellar_model(inp_dat, prt_object):
+def pRT_LRES_stellar_model(model_inputs: RadiativeTransferInputs, prt_object):
     """Compute a low-resolution Planck stellar model on the pRT frequency grid.
 
     Builds a blackbody stellar spectrum using the petitRADTRANS Planck
@@ -881,10 +867,8 @@ def pRT_LRES_stellar_model(inp_dat, prt_object):
 
     Parameters
     ----------
-    inp_dat : dict
-        Simulation input dictionary.  Must contain ``'T_star'``
-        (stellar effective temperature in K), ``'conv'`` (bool flag),
-        and ``'res'`` (resolving power).
+    model_inputs : RadiativeTransferInputs
+        Stellar temperature, resolving power and convolution choice.
     prt_object : petitRADTRANS.Radtrans
         Initialised pRT object whose ``freq`` attribute provides the
         frequency grid.
@@ -894,15 +878,15 @@ def pRT_LRES_stellar_model(inp_dat, prt_object):
     wave_pRT : numpy.ndarray
         Wavelength array in microns corresponding to ``prt_object.freq``.
     spec_star : numpy.ndarray
-        Stellar flux spectrum (convolved if ``inp_dat['conv']`` is True,
+        Stellar flux spectrum (convolved if ``model_inputs.convolve_to_resolution`` is True,
         raw Planck otherwise).
     """
     from petitRADTRANS import physical_constants as cst
     wave_pRT = cst.c / prt_object.freq / 1.e-4
     freq = cst.c / (wave_pRT * 1e-4)
-    planck = cst.b(inp_dat['T_star'], freq)
+    planck = cst.b(model_inputs.stellar_teff_K, freq)
     spec_star = np.pi * planck
-    if inp_dat['conv']:
-        return wave_pRT, convolve(wave_pRT, spec_star, inp_dat['res'])
+    if model_inputs.convolve_to_resolution:
+        return wave_pRT, convolve(wave_pRT, spec_star, model_inputs.resolving_power)
     else:
         return spec_star

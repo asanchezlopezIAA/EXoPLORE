@@ -232,60 +232,96 @@ class TestSpecToMatFraction:
         fraction = np.where(
             np.isin(np.arange(n_spec), with_signal), 0.01, 0.0
         )
-        inp_dat = {
-            "event": "transit",
-            "Limb_asymmetries": False,
-            "Scale_inj": 1.0,
-            "Inject_Scale_Factor": 1.0,
-        }
-        return inp_dat, v, wave, wave_prt, spec, mat_stellar, with_signal, without_signal, fraction
+        return "transit", v, wave, wave_prt, spec, mat_stellar, with_signal, without_signal, fraction
 
     def test_transit_shape(self):
-        inp_dat, v, wave, wave_prt, spec, mat_stellar, with_signal, without_signal, fraction = (
+        event_type, v, wave, wave_prt, spec, mat_stellar, with_signal, without_signal, fraction = (
             self._make_inputs()
         )
         mat, mat_shift = spec_to_mat_fraction(
-            inp_dat, None, None, v, wave, wave_prt,
-            spec, mat_stellar, with_signal, without_signal, fraction
+            v,
+            wave,
+            wave_prt,
+            spec,
+            mat_stellar,
+            with_signal,
+            without_signal,
+            fraction,
+            event_type=event_type,
+            signal_scale=1.0,
+            limb_asymmetries=False,
+            limb_divisions=None,
+            resolving_power=None,
         )
         assert mat.shape == (len(v), len(wave))
         assert mat_shift.shape == mat.shape
 
     def test_dayside_shape(self):
-        inp_dat, v, wave, wave_prt, spec, mat_stellar, with_signal, without_signal, fraction = (
+        event_type, v, wave, wave_prt, spec, mat_stellar, with_signal, without_signal, fraction = (
             self._make_inputs()
         )
-        inp_dat["event"] = "dayside"
+        event_type = "dayside"
         mat, mat_shift = spec_to_mat_fraction(
-            inp_dat, None, None, v, wave, wave_prt,
-            spec, mat_stellar, with_signal, without_signal, fraction
+            v,
+            wave,
+            wave_prt,
+            spec,
+            mat_stellar,
+            with_signal,
+            without_signal,
+            fraction,
+            event_type=event_type,
+            signal_scale=1.0,
+            limb_asymmetries=False,
+            limb_divisions=None,
+            resolving_power=None,
         )
         assert mat.shape == mat_stellar.shape
 
     def test_transit_no_signal_outside_transit(self):
         """Out-of-transit rows with include_star=True should equal mat_stellar."""
-        inp_dat, v, wave, wave_prt, spec, mat_stellar, with_signal, without_signal, fraction = (
+        event_type, v, wave, wave_prt, spec, mat_stellar, with_signal, without_signal, fraction = (
             self._make_inputs()
         )
         mat, _ = spec_to_mat_fraction(
-            inp_dat, None, None, v, wave, wave_prt,
-            spec, mat_stellar, with_signal, without_signal, fraction,
-            include_star=True
+            v,
+            wave,
+            wave_prt,
+            spec,
+            mat_stellar,
+            with_signal,
+            without_signal,
+            fraction,
+            event_type=event_type,
+            signal_scale=1.0,
+            limb_asymmetries=False,
+            limb_divisions=None,
+            resolving_power=None,
+            include_star=True,
         )
         for i in range(len(v)):
             if i not in with_signal:
                 np.testing.assert_allclose(mat[i], mat_stellar[i], rtol=1e-10)
 
     def test_no_intransit_raises(self):
-        inp_dat, v, wave, wave_prt, spec, mat_stellar, with_signal, without_signal, fraction = (
+        event_type, v, wave, wave_prt, spec, mat_stellar, with_signal, without_signal, fraction = (
             self._make_inputs()
         )
         with pytest.raises(Exception, match="No spectra in-transit"):
             spec_to_mat_fraction(
-                inp_dat, None, None, v, wave, wave_prt,
-                spec, mat_stellar,
-                np.array([], dtype=int),   # empty with_signal
-                without_signal, fraction
+                v,
+                wave,
+                wave_prt,
+                spec,
+                mat_stellar,
+                np.array([], dtype=int),  # empty with_signal
+                without_signal,
+                fraction,
+                event_type=event_type,
+                signal_scale=1.0,
+                limb_asymmetries=False,
+                limb_divisions=None,
+                resolving_power=None,
             )
 
 

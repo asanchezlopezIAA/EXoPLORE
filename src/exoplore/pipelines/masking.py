@@ -256,14 +256,13 @@ def _merge_masks(mask1, mask2, n_pixels):
     return mask, useful_spectral_points
 
 
-def mask_tellurics(inp_dat, data, mask_snr):
+def mask_tellurics(data, mask_snr, *, threshold):
     """Mask spectral columns with flux below the telluric threshold.
 
     Parameters
     ----------
-    inp_dat : dict
-        Simulation input dictionary.  Key used: ``"telluric_mask"``
-        (float threshold, columns with flux < threshold are masked).
+    threshold
+        Flux threshold below which a wavelength column is masked.
     data : ndarray
         Spectral matrix, shape ``(n_spectra, n_pixels)``.
     mask_snr : ndarray
@@ -276,7 +275,7 @@ def mask_tellurics(inp_dat, data, mask_snr):
     useful_spectral_points : ndarray
         Integer indices of unmasked columns.
     """
-    mask_tel = data < inp_dat['telluric_mask']
+    mask_tel = data < threshold
     mask_tel_indices = np.argwhere(mask_tel)
     for j in mask_tel_indices[:, 1]:
         mask_tel[:, j] = True
@@ -284,14 +283,15 @@ def mask_tellurics(inp_dat, data, mask_snr):
     return _merge_masks(mask_snr, mask_tel, data.shape[1])
 
 
-def mask_tellurics_window(inp_dat, data, mask_snr):
+def mask_tellurics_window(data, mask_snr, *, threshold, safety_window_pixels):
     """Mask telluric columns with an optional safety window.
 
     Parameters
     ----------
-    inp_dat : dict
-        Simulation input dictionary.  Keys used: ``"telluric_mask"``,
-        ``"safety_window"``.
+    threshold
+        Flux threshold for telluric masking.
+    safety_window_pixels
+        Width of the masking window in pixels.
     data : ndarray
         Spectral matrix, shape ``(n_spectra, n_pixels)``.
     mask_snr : ndarray
@@ -304,14 +304,14 @@ def mask_tellurics_window(inp_dat, data, mask_snr):
     useful_spectral_points : ndarray
         Integer indices of unmasked columns.
     """
-    if inp_dat["safety_window"] != 1:
-        mask_tel = data < inp_dat['telluric_mask']
+    if safety_window_pixels != 1:
+        mask_tel = data < threshold
         mask_tel_indices = np.argwhere(mask_tel)
 
         for idx in mask_tel_indices:
             row_idx, col_idx = idx
             mask_tel[row_idx, col_idx] = True
-            half_width = inp_dat["safety_window"] // 2
+            half_width = safety_window_pixels // 2
             start_col = max(0, col_idx - half_width)
             end_col = min(data.shape[1], col_idx + half_width + 1)
             mask_tel[row_idx, start_col:end_col] = True
@@ -320,7 +320,11 @@ def mask_tellurics_window(inp_dat, data, mask_snr):
         return _merge_masks(mask_snr, mask_tel_columns, data.shape[1])
     else:
         print("Your safety window is 1, which means NO window around the pixel that triggered the mask")
-        return mask_tellurics(inp_dat, data, mask_snr)
+        return mask_tellurics(
+            data,
+            mask_snr,
+            threshold=threshold,
+        )
 
 
 def mask_columns(data, mask):

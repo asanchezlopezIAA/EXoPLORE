@@ -33,6 +33,11 @@ Adding a new instrument
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from exoplore.config.models import SimulationConfig
+
 from .base import InstrumentInfo, InstrumentInputs
 
 # Per-instrument get_instrument_info() functions

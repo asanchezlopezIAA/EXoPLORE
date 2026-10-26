@@ -377,17 +377,35 @@ def prepare_animation_data(diagnostics, result, nominal_kp):
         if (ki, vi) not in trials:
             trials.append((ki, vi))
     kp_indices = sorted({ki for ki, vi in trials})
-    options = {'significant_eccentricity': False,
-               'CCF_SNR_exclude': d.metadata['snr_exclude_kms']}
     step = float(np.median(np.diff(d.velocity)))
     half_width = (len(d.v_rest) - 1) // 2
     shifted = get_shifted_ccf_matrix(
-        options, d.with_signal, d.v_rest, d.velocity, result.kp_grid[kp_indices],
-        d.phase, d.metadata['systemic_velocity_kms'], d.berv,
-        half_width, step, d.ccf)
+        d.with_signal,
+        d.v_rest,
+        d.velocity,
+        result.kp_grid[kp_indices],
+        d.phase,
+        d.metadata["systemic_velocity_kms"],
+        d.berv,
+        half_width,
+        step,
+        d.ccf,
+        significant_eccentricity=False,
+        eccentricity=None,
+        argument_of_periastron_deg=None,
+        sysrem_iterations=0,
+    )
     coadded = np.nansum(shifted, axis=1)
-    normalised = get_max_CCF_peak(options, coadded, d.v_rest,
-                                  result.kp_grid[kp_indices])[0]
+    normalised = get_max_CCF_peak(
+        coadded,
+        d.v_rest,
+        result.kp_grid[kp_indices],
+        snr_exclude_kms=d.metadata["snr_exclude_kms"],
+        sysrem_iterations=0,
+        exclude_around="peak",
+        noise_source="peak_row",
+        noise_kp_exclude_kms=120.0,
+    )[0]
     expected = result.snr_map[:, kp_indices]
     np.testing.assert_allclose(normalised, expected, rtol=1e-9, atol=1e-9)
     error = float(np.max(abs(normalised - expected)))

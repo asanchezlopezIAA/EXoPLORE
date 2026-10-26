@@ -12,7 +12,6 @@ units are part of the field names, and defaults are conservative.
 Design rules
 ------------
 - Field names carry units where relevant (e.g. ``velocity_max_kms``).
-- No ``inp_dat`` dictionary keys leak into this layer.
 - Every field has a default so partial configs are accepted gracefully.
 """
 

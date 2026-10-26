@@ -136,12 +136,12 @@ class TestSignatures:
     def test_statistical_study_params(self):
         from exoplore.analysis import statistical_study
         params = list(inspect.signature(statistical_study).parameters)
-        assert "inp_dat" in params
+        assert "inputs" in params
 
     def test_get_CCvalues_dist_params(self):
         from exoplore.analysis import get_CCvalues_dist
         params = list(inspect.signature(get_CCvalues_dist).parameters)
-        assert "inp_dat" in params
+        assert "systemic_velocity_kms" in params
         assert "ccf_matrix" in params
         assert "v_ccf" in params
         assert "v_rest" in params
@@ -149,14 +149,14 @@ class TestSignatures:
     def test_compare_KpVr_dist_params(self):
         from exoplore.analysis import compare_KpVr_dist
         params = list(inspect.signature(compare_KpVr_dist).parameters)
-        assert "inp_dat" in params
+        assert "reference_kp_kms" in params
         assert "v_rest" in params
         assert "ccf_matrix" in params
 
     def test_plot_time_resolved_1D_CCFs_params(self):
         from exoplore.analysis import plot_time_resolved_1D_CCFs
         params = list(inspect.signature(plot_time_resolved_1D_CCFs).parameters)
-        assert "inp_dat" in params
+        assert "inputs" in params
         assert "ccf_values_shift" in params
         assert "v_rest" in params
         assert "kp_range" in params
@@ -164,7 +164,7 @@ class TestSignatures:
     def test_plot_time_resolved_withHRLRS_params(self):
         from exoplore.analysis import plot_time_resolved_1D_CCFs_withHRLRS
         params = list(inspect.signature(plot_time_resolved_1D_CCFs_withHRLRS).parameters)
-        assert "inp_dat" in params
+        assert "inputs" in params
         assert "ccf_values_shift" in params
         assert "v_rest" in params
         assert "kp_range" in params
@@ -192,6 +192,6 @@ class TestSignatures:
         """perform_correlations_with_noise has the expected parameters."""
         from exoplore.analysis import perform_correlations_with_noise
         params = list(inspect.signature(perform_correlations_with_noise).parameters)
-        assert "inp_dat" in params
+        assert "noise_scaling_factor" in params
         assert "stats" in params
         assert "stats_noise" in params

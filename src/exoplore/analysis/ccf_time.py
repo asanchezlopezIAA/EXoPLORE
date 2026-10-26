@@ -5,6 +5,8 @@ exoplore.analysis.ccf_time
 Time-resolved 1D CCF analysis for high-resolution transit/eclipse spectroscopy.
 """
 
+from exoplore.ccf.models import TimeResolvedCCFInputs
+
 # Role in the calculation
 # Select time intervals from CCF products, combine their information and plot the
 # resulting profiles. Exposure selections and velocity frames determine which parts of
@@ -22,7 +24,7 @@ from exoplore.atmosphere.prt import convolve
 from exoplore.ccf.compute import get_max_CCF_peak
 from exoplore.instruments.wavegrid import make_log_wave_grid
 
-def plot_time_resolved_1D_CCFs(inp_dat,
+def plot_time_resolved_1D_CCFs(inputs: TimeResolvedCCFInputs,
     ccf_values_shift,
     v_rest,
     kp_range,
@@ -64,8 +66,8 @@ def plot_time_resolved_1D_CCFs(inp_dat,
 
     Parameters
     ----------
-    inp_dat : dict
-        Input dictionary.
+    inputs : TimeResolvedCCFInputs
+        Normalisation, output location and resolving power.
 
     ccf_values_shift : ndarray
         Shifted CCF cube with shape:
@@ -145,7 +147,7 @@ def plot_time_resolved_1D_CCFs(inp_dat,
 
         "resolution":
             Use c/R, where R is read from one of:
-            inp_dat["Resolving_power"], inp_dat["R"], inp_dat["resolution"].
+            inputs.resolving_power.
             If none is found, no resolution floor is applied.
 
     error_xlim : tuple, optional
@@ -180,7 +182,7 @@ def plot_time_resolved_1D_CCFs(inp_dat,
     HD18:
     
     results = exosims.plot_time_resolved_1D_CCFs(
-        inp_dat=inp_dat,
+        inputs=inputs,
         ccf_values_shift=ccf_values_shift,
         v_rest=v_rest,
         kp_range=kp_range,
@@ -189,10 +191,10 @@ def plot_time_resolved_1D_CCFs(inp_dat,
         egress_n=22,
         xlim=(-100, 100),
         error_xlim=(-30, 30),
-        output_file=f"{inp_dat['plots_dir']}time_resolved_1D_CCFs.pdf",
+        output_file=f"{inputs.plots_dir}time_resolved_1D_CCFs.pdf",
         show_plot=True,
         save_plot=True,
-        sysrem_opt=inp_dat["Opt_PCA_its_ord_by_ord"],
+        sysrem_opt=False,
         colors={
             "Ingress": "tab:cyan",
             "First half": "tab:cyan",
@@ -214,7 +216,7 @@ def plot_time_resolved_1D_CCFs(inp_dat,
     W76b:
         
     results = exosims.plot_time_resolved_1D_CCFs(
-        inp_dat=inp_dat,
+        inputs=inputs,
         ccf_values_shift=ccf_values_shift,
         v_rest=v_rest,
         kp_range=kp_range,
@@ -223,10 +225,10 @@ def plot_time_resolved_1D_CCFs(inp_dat,
         egress_n=22,
         xlim=(-100, 100),
         error_xlim=(-30, 30),
-        output_file=f"{inp_dat['plots_dir']}time_resolved_1D_CCFs.pdf",
+        output_file=f"{inputs.plots_dir}time_resolved_1D_CCFs.pdf",
         show_plot=True,
         save_plot=True,
-        sysrem_opt=inp_dat["Opt_PCA_its_ord_by_ord"],
+        sysrem_opt=False,
         colors={
             "Ingress": "tab:cyan",
             "First half": "tab:cyan",
@@ -248,7 +250,7 @@ def plot_time_resolved_1D_CCFs(inp_dat,
     W127b:
         
     results = exosims.plot_time_resolved_1D_CCFs(
-        inp_dat=inp_dat,
+        inputs=inputs,
         ccf_values_shift=ccf_values_shift,
         v_rest=v_rest,
         kp_range=kp_range,
@@ -257,10 +259,10 @@ def plot_time_resolved_1D_CCFs(inp_dat,
         egress_n=22,
         xlim=(-100, 100),
         error_xlim=(-30, 30),
-        output_file=f"{inp_dat['plots_dir']}time_resolved_1D_CCFs.pdf",
+        output_file=f"{inputs.plots_dir}time_resolved_1D_CCFs.pdf",
         show_plot=True,
         save_plot=True,
-        sysrem_opt=inp_dat["Opt_PCA_its_ord_by_ord"],
+        sysrem_opt=False,
         colors={
             "Ingress": "tab:cyan",
             "First half": "tab:cyan",
@@ -433,14 +435,10 @@ def plot_time_resolved_1D_CCFs(inp_dat,
                 return 0.0
 
             if mode == "resolution":
-                R = None
-                for key in ["Resolving_power", "R", "resolution", "Resolution"]:
-                    if key in inp_dat:
-                        try:
-                            R = float(inp_dat[key])
-                            break
-                        except Exception:
-                            pass
+                try:
+                    R = float(inputs.resolving_power)
+                except (TypeError, ValueError):
+                    R = None
 
                 if R is not None and np.isfinite(R) and R > 0:
                     c_kms = 299792.458
@@ -449,7 +447,7 @@ def plot_time_resolved_1D_CCFs(inp_dat,
                 if diagnostic:
                     print(
                         "[diagnostic warning] velocity_error_floor='resolution' "
-                        "was requested, but no valid resolving power was found in inp_dat. "
+                        "requires a finite, positive inputs.resolving_power. "
                         "No resolution floor applied."
                     )
                 return 0.0
@@ -713,14 +711,18 @@ def plot_time_resolved_1D_CCFs(inp_dat,
 
             try:
                 ccf_boot_sig, boot_max_sig, boot_max_kp_idx, boot_max_v_wind, _ = get_max_CCF_peak(
-                    inp_dat,
                     ccf_boot,
                     v_rest,
                     kp_range,
                     b=None,
                     stats=None,
                     sysrem_opt=sysrem_opt,
-                    CCF_Noise=False
+                    CCF_Noise=False,
+                    snr_exclude_kms=inputs.cross_correlation.snr_exclude_kms,
+                    sysrem_iterations=inputs.sysrem_iterations,
+                    exclude_around=inputs.exclude_around,
+                    noise_source=inputs.cross_correlation.snr_noise_source,
+                    noise_kp_exclude_kms=inputs.cross_correlation.snr_noise_kp_exclude_kms,
                 )
 
                 boot_max_kp_idx = _as_int_scalar(boot_max_kp_idx)
@@ -818,14 +820,18 @@ def plot_time_resolved_1D_CCFs(inp_dat,
     full_ccf_tot = np.sum(ccf_values_shift, axis=1)
 
     full_ccf_sig, full_max_sig, full_max_kp_idx, full_max_v_wind, _ = get_max_CCF_peak(
-        inp_dat,
         full_ccf_tot,
         v_rest,
         kp_range,
         b=None,
         stats=None,
         sysrem_opt=sysrem_opt,
-        CCF_Noise=False
+        CCF_Noise=False,
+        snr_exclude_kms=inputs.cross_correlation.snr_exclude_kms,
+        sysrem_iterations=inputs.sysrem_iterations,
+        exclude_around=inputs.exclude_around,
+        noise_source=inputs.cross_correlation.snr_noise_source,
+        noise_kp_exclude_kms=inputs.cross_correlation.snr_noise_kp_exclude_kms,
     )
 
     full_max_sig = _as_scalar(full_max_sig)
@@ -1021,14 +1027,18 @@ def plot_time_resolved_1D_CCFs(inp_dat,
         ccf_interval = np.sum(ccf_values_shift[:, idx, :], axis=1)
 
         ccf_interval_sig, max_sig, interval_max_kp_idx, max_v_wind, _ = get_max_CCF_peak(
-            inp_dat,
             ccf_interval,
             v_rest,
             kp_range,
             b=None,
             stats=None,
             sysrem_opt=sysrem_opt,
-            CCF_Noise=False
+            CCF_Noise=False,
+            snr_exclude_kms=inputs.cross_correlation.snr_exclude_kms,
+            sysrem_iterations=inputs.sysrem_iterations,
+            exclude_around=inputs.exclude_around,
+            noise_source=inputs.cross_correlation.snr_noise_source,
+            noise_kp_exclude_kms=inputs.cross_correlation.snr_noise_kp_exclude_kms,
         )
 
         max_sig = _as_scalar(max_sig)
@@ -1323,7 +1333,7 @@ def plot_time_resolved_1D_CCFs(inp_dat,
 
     if save_plot:
         if output_file is None:
-            output_file = f"{inp_dat['plots_dir']}time_resolved_1D_CCFs.pdf"
+            output_file = f"{inputs.plots_dir}time_resolved_1D_CCFs.pdf"
         fig.savefig(output_file, dpi=300, bbox_inches="tight")
 
     if show_plot:
@@ -1337,7 +1347,7 @@ def plot_time_resolved_1D_CCFs(inp_dat,
     return results
 
 
-def plot_time_resolved_1D_CCFs_withHRLRS(inp_dat,
+def plot_time_resolved_1D_CCFs_withHRLRS(inputs: TimeResolvedCCFInputs,
     ccf_values_shift,
     v_rest,
     kp_range,
@@ -1384,8 +1394,8 @@ def plot_time_resolved_1D_CCFs_withHRLRS(inp_dat,
 
     Parameters
     ----------
-    inp_dat : dict
-        Input dictionary.
+    inputs : TimeResolvedCCFInputs
+        Normalisation, output location and resolving power.
 
     ccf_values_shift : ndarray
         Shifted CCF cube with shape:
@@ -1465,7 +1475,7 @@ def plot_time_resolved_1D_CCFs_withHRLRS(inp_dat,
 
         "resolution":
             Use c/R, where R is read from one of:
-            inp_dat["Resolving_power"], inp_dat["R"], inp_dat["resolution"].
+            inputs.resolving_power.
             If none is found, no resolution floor is applied.
 
     error_xlim : tuple, optional
@@ -1524,7 +1534,7 @@ def plot_time_resolved_1D_CCFs_withHRLRS(inp_dat,
     HD18:
     
     results = exosims.plot_time_resolved_1D_CCFs_withHRLRS(
-        inp_dat=inp_dat,
+        inputs=inputs,
         ccf_values_shift=ccf_values_shift,
         v_rest=v_rest,
         kp_range=kp_range,
@@ -1533,10 +1543,10 @@ def plot_time_resolved_1D_CCFs_withHRLRS(inp_dat,
         egress_n=22,
         xlim=(-100, 100),
         error_xlim=(-30, 30),
-        output_file=f"{inp_dat['plots_dir']}time_resolved_1D_CCFs.pdf",
+        output_file=f"{inputs.plots_dir}time_resolved_1D_CCFs.pdf",
         show_plot=True,
         save_plot=True,
-        sysrem_opt=inp_dat["Opt_PCA_its_ord_by_ord"],
+        sysrem_opt=False,
         colors={
             "Ingress": "tab:cyan",
             "First half": "tab:cyan",
@@ -1558,7 +1568,7 @@ def plot_time_resolved_1D_CCFs_withHRLRS(inp_dat,
     W76b:
         
     results = exosims.plot_time_resolved_1D_CCFs_withHRLRS(
-        inp_dat=inp_dat,
+        inputs=inputs,
         ccf_values_shift=ccf_values_shift,
         v_rest=v_rest,
         kp_range=kp_range,
@@ -1567,10 +1577,10 @@ def plot_time_resolved_1D_CCFs_withHRLRS(inp_dat,
         egress_n=22,
         xlim=(-100, 100),
         error_xlim=(-30, 30),
-        output_file=f"{inp_dat['plots_dir']}time_resolved_1D_CCFs.pdf",
+        output_file=f"{inputs.plots_dir}time_resolved_1D_CCFs.pdf",
         show_plot=True,
         save_plot=True,
-        sysrem_opt=inp_dat["Opt_PCA_its_ord_by_ord"],
+        sysrem_opt=False,
         colors={
             "Ingress": "tab:cyan",
             "First half": "tab:cyan",
@@ -1592,7 +1602,7 @@ def plot_time_resolved_1D_CCFs_withHRLRS(inp_dat,
     W127b:
         
     results = exosims.plot_time_resolved_1D_CCFs_withHRLRS(
-        inp_dat=inp_dat,
+        inputs=inputs,
         ccf_values_shift=ccf_values_shift,
         v_rest=v_rest,
         kp_range=kp_range,
@@ -1601,10 +1611,10 @@ def plot_time_resolved_1D_CCFs_withHRLRS(inp_dat,
         egress_n=22,
         xlim=(-100, 100),
         error_xlim=(-30, 30),
-        output_file=f"{inp_dat['plots_dir']}time_resolved_1D_CCFs.pdf",
+        output_file=f"{inputs.plots_dir}time_resolved_1D_CCFs.pdf",
         show_plot=True,
         save_plot=True,
-        sysrem_opt=inp_dat["Opt_PCA_its_ord_by_ord"],
+        sysrem_opt=False,
         colors={
             "Ingress": "tab:cyan",
             "First half": "tab:cyan",
@@ -1777,14 +1787,10 @@ def plot_time_resolved_1D_CCFs_withHRLRS(inp_dat,
                 return 0.0
 
             if mode == "resolution":
-                R = None
-                for key in ["Resolving_power", "R", "resolution", "Resolution"]:
-                    if key in inp_dat:
-                        try:
-                            R = float(inp_dat[key])
-                            break
-                        except Exception:
-                            pass
+                try:
+                    R = float(inputs.resolving_power)
+                except (TypeError, ValueError):
+                    R = None
 
                 if R is not None and np.isfinite(R) and R > 0:
                     c_kms = 299792.458
@@ -1793,7 +1799,7 @@ def plot_time_resolved_1D_CCFs_withHRLRS(inp_dat,
                 if diagnostic:
                     print(
                         "[diagnostic warning] velocity_error_floor='resolution' "
-                        "was requested, but no valid resolving power was found in inp_dat. "
+                        "requires a finite, positive inputs.resolving_power. "
                         "No resolution floor applied."
                     )
                 return 0.0
@@ -2057,14 +2063,18 @@ def plot_time_resolved_1D_CCFs_withHRLRS(inp_dat,
 
             try:
                 ccf_boot_sig, boot_max_sig, boot_max_kp_idx, boot_max_v_wind, _ = get_max_CCF_peak(
-                    inp_dat,
                     ccf_boot,
                     v_rest,
                     kp_range,
                     b=None,
                     stats=None,
                     sysrem_opt=sysrem_opt,
-                    CCF_Noise=False
+                    CCF_Noise=False,
+                    snr_exclude_kms=inputs.cross_correlation.snr_exclude_kms,
+                    sysrem_iterations=inputs.sysrem_iterations,
+                    exclude_around=inputs.exclude_around,
+                    noise_source=inputs.cross_correlation.snr_noise_source,
+                    noise_kp_exclude_kms=inputs.cross_correlation.snr_noise_kp_exclude_kms,
                 )
 
                 boot_max_kp_idx = _as_int_scalar(boot_max_kp_idx)
@@ -2355,14 +2365,18 @@ def plot_time_resolved_1D_CCFs_withHRLRS(inp_dat,
     full_ccf_tot = np.sum(ccf_values_shift, axis=1)
 
     full_ccf_sig, full_max_sig, full_max_kp_idx, full_max_v_wind, _ = get_max_CCF_peak(
-        inp_dat,
         full_ccf_tot,
         v_rest,
         kp_range,
         b=None,
         stats=None,
         sysrem_opt=sysrem_opt,
-        CCF_Noise=False
+        CCF_Noise=False,
+        snr_exclude_kms=inputs.cross_correlation.snr_exclude_kms,
+        sysrem_iterations=inputs.sysrem_iterations,
+        exclude_around=inputs.exclude_around,
+        noise_source=inputs.cross_correlation.snr_noise_source,
+        noise_kp_exclude_kms=inputs.cross_correlation.snr_noise_kp_exclude_kms,
     )
 
     full_max_sig = _as_scalar(full_max_sig)
@@ -2558,14 +2572,18 @@ def plot_time_resolved_1D_CCFs_withHRLRS(inp_dat,
         ccf_interval = np.sum(ccf_values_shift[:, idx, :], axis=1)
 
         ccf_interval_sig, max_sig, interval_max_kp_idx, max_v_wind, _ = get_max_CCF_peak(
-            inp_dat,
             ccf_interval,
             v_rest,
             kp_range,
             b=None,
             stats=None,
             sysrem_opt=sysrem_opt,
-            CCF_Noise=False
+            CCF_Noise=False,
+            snr_exclude_kms=inputs.cross_correlation.snr_exclude_kms,
+            sysrem_iterations=inputs.sysrem_iterations,
+            exclude_around=inputs.exclude_around,
+            noise_source=inputs.cross_correlation.snr_noise_source,
+            noise_kp_exclude_kms=inputs.cross_correlation.snr_noise_kp_exclude_kms,
         )
 
         max_sig = _as_scalar(max_sig)
@@ -2910,7 +2928,7 @@ def plot_time_resolved_1D_CCFs_withHRLRS(inp_dat,
 
     if save_plot:
         if output_file is None:
-            output_file = f"{inp_dat['plots_dir']}time_resolved_1D_CCFs.pdf"
+            output_file = f"{inputs.plots_dir}time_resolved_1D_CCFs.pdf"
         fig.savefig(output_file, dpi=300, bbox_inches="tight")
 
     if show_plot:
@@ -2922,289 +2940,3 @@ def plot_time_resolved_1D_CCFs_withHRLRS(inp_dat,
     results["figure"] = fig
 
     return results
-
-
-
-
-       
-"""           
-# BLOCK TO POTENTIALLY SIMULATE NYQUIST-SAMPLED INSTRUMENTS AVOIDING
-# THE CARMENES ORIGINAL GRID AS A STARTING POINT, HENCE AVOIDING
-# PROBLEMS WITH SAMPLING WHEN INCREASING OR DECREASING THE RESOLUTION R     
-
-def make_log_wave_grid(lambda_min, lambda_max, R, oversample=2):
-dlog_lambda = 1. / (R * oversample)
-log_lambda = np.arange(np.log(lambda_min), np.log(lambda_max) + dlog_lambda, dlog_lambda)
-return np.exp(log_lambda)
-
-
-def simulate_instrument(wave_hi,     # 1D array at R~1e6
-flux_hi,     # matching flux
-R_target,
-oversample=2 # Nyquist sampled
-):
-# 1) build new grid
-wave_new = make_log_wave_grid(wave_hi[0], wave_hi[-1], R_target, oversample)
-# 2) smooth high-res flux
-flux_smooth = convolve(wave_hi, flux_hi, R_target)
-# 3) interpolate to new grid
-flux_inst   = np.interp(wave_new, wave_hi, flux_smooth)
-
-# Example:
-#wave_hi = np.linspace(5000, 6000, 200000)        # R~1e6 sampling
-#flux_hi = my_hires_model(wave_hi)               # your function
-#wave_50k, flux_50k = simulate_instrument(wave_hi, flux_hi, R_target=50_000)
-#wave_100k, flux_100k = simulate_instrument(wave_hi, flux_hi, R_target=100_000)
-
-
-return wave_new, flux_inst
-"""
-
-"""
-# FROM BLAIN ET AL. 2024
-import astropy.units as u
-from astropy.coordinates import (EarthLocation, 
-                             SkyCoord)
-from astropy.time import Time
-
-site_name = "CAHA"  # Calar Alto astropy site name
-ra = 300.1821223 * u.deg  # (degree) for HD 189733
-dec = 22.7097759 * u.deg  # (degree) for HD 189733
-
-times_utc = ...  # placeholder to load MJD_UTC times
-
-observer_location = EarthLocation.of_site(site_name)
-
-target_coordinates = SkyCoord(
-ra=ra,
-dec=dec
-)
-
-times_utc = Time(times_utc, format="jd", scale="utc")
-times_tdb = (
-    times_utc.tdb
-    + times_utc.light_travel_time(
-        target_coordinates,
-        location=observer_location
-    )
-)
-"""
-
-"""
-inp_dat['n_nights']=200
-scaling_factors = np.asarray([0.2, 0.5, 1., 2., 3., 4., 5.])
-
-simulation_name = "BL19_with_signal_n_nights_200_stdnoisex"
-filepath = str(
-    __import__('pathlib').Path(inp_dat['home_dir']).parent
-    / simulation_name / 'matrices'
-)
-       
-       
-mean_SNR = np.zeros((len(scaling_factors)), float)
-mean_SNR_error = np.zeros((len(scaling_factors)), float)
-mean_SNR_gauss = np.zeros((len(scaling_factors)), float)
-mean_SNR_error_gauss = np.zeros((len(scaling_factors)), float)
-pearson_coeff_SNR = np.zeros((len(scaling_factors)), float)
-pearson_coeff_SNR_error = np.zeros((len(scaling_factors)), float)
-corr_coeff_noise = np.zeros((inp_dat["n_orders"], len(scaling_factors)), float)
-corr_coeff_noise_error = np.zeros((inp_dat["n_orders"], len(scaling_factors)), float)
-corr_coeff_data_TC = np.zeros((inp_dat["n_orders"], len(scaling_factors)), float)
-corr_coeff_data_TC_error = np.zeros((inp_dat["n_orders"], len(scaling_factors)), float)
-corr_coeff_data_NTC = np.zeros((inp_dat["n_orders"], len(scaling_factors)), float)
-corr_coeff_data_NTC_error = np.zeros((inp_dat["n_orders"], len(scaling_factors)), float)
-
-for sf_idx, sf in enumerate(scaling_factors):
-print(f"Running {sf_idx+1}/{len(scaling_factors)} (scaling_factor = {sf})")
-filename_flag = exosims.format_number(sf)
-mat_res = np.zeros(
-    (inp_dat['n_orders'], inp_dat['n_nights'], 
-     n_spectra, n_pixels), float
-    )
-for h in range(inp_dat['n_orders']):
-    filename = f"{filepath}{filename_flag}/mat_res_order_{h}_{simulation_name}{filename_flag}" 
-    mat_res[h, :] = np.load(f"{filename}.npz")['a']
-
-mat_noise = np.zeros(
-    (inp_dat['n_orders'], inp_dat['n_nights'], 
-     n_spectra, n_pixels), float
-    )
-for h in range(inp_dat['n_orders']):
-    filename = f"{filepath}{filename_flag}/mat_noise_order_{h}_{simulation_name}{filename_flag}" 
-    mat_noise[h, :] = np.load(f"{filename}.npz")['a']
-
-gauss_noise = np.zeros(
-    (inp_dat['n_orders'], inp_dat['n_nights'], 
-     n_spectra, n_pixels), float
-    )
-for h in range(inp_dat['n_orders']):
-    filename = f"{filepath}{filename_flag}/gauss_noise_order_{h}_{simulation_name}{filename_flag}" 
-    gauss_noise[h, :] = np.load(f"{filename}.npz")['a']
-
-mat_cc = np.zeros(
-    (inp_dat['n_orders'],
-     n_spectra, n_pixels), float
-    )
-for h in range(inp_dat['n_orders']):
-    filename = f"{filepath}{filename_flag}/mat_cc_order_{h}_{simulation_name}{filename_flag}" 
-    mat_cc[h, :] = np.load(f"{filename}.npz")['a']
-    
-filename = f"{filepath}{filename_flag}/stats_{simulation_name}{filename_flag}" 
-stats = np.load(f"{filename}.npz")['a']
-mean_SNR[sf_idx] = np.mean(stats[:, 0])
-mean_SNR_error[sf_idx] = np.std(stats[:, 0])
-mean_SNR_gauss[sf_idx], mean_SNR_error_gauss[sf_idx] = norm.fit(stats[1:,0])
-night_min = np.where(stats[:,0] == stats[:,0].min())[0][0]
-night_max = np.where(stats[1:,0] == stats[1:,0].max())[0][0]+1
-
-filename = f"{filepath}{filename_flag}/stats_noise_{simulation_name}{filename_flag}" 
-stats_noise = np.load(f"{filename}.npz")['a']
-
-
-for h in range(inp_dat["n_orders"]):
-    # These are correlations per order, so we might need to run all orders!
-    corr_coeff_noise[h,sf_idx], corr_coeff_noise_error[h,sf_idx] = exosims.get_corr_coeff(
-        inp_dat, with_signal, gauss_noise, mat_cc, range(inp_dat['n_nights']-1), 
-        h, stats,"", night_max, night_min, phase, 
-        plotname = "", CC_2D=True,show_plot = False, save_plot = False
-        )
-
-    corr_coeff_data_TC[h,sf_idx], corr_coeff_data_TC_error[h,sf_idx] = exosims.get_corr_coeff(
-        inp_dat, with_signal, mat_res, mat_cc, range(inp_dat['n_nights']-1), 
-        h, stats,"", night_max, night_min, phase,
-        plotname = "", CC_2D=True,show_plot = False, save_plot = False
-        )
-
-    corr_coeff_data_NTC[h,sf_idx], corr_coeff_data_NTC_error[h,sf_idx] = exosims.get_corr_coeff(
-        inp_dat, with_signal, mat_noise, mat_cc, range(inp_dat['n_nights']-1), 
-        h, stats,"", night_max, night_min, phase,
-        plotname = "", CC_2D=True,show_plot = False, save_plot = False
-        )
-
-
-#corr_coeff_dataNTC, corr_coeff_dataNTC_uncertainty = exosims.compare_correlations(
-#    inp_dat, corr_coeff_noise, corr_coeff_data_NTC, stats[1:, 0], 
-#    xlabel="Corr. Coeff. Noise", ylabel="Corr. Coeff. Data After TC", 
-#    colorbar_title="S/N CCF Data After TC", plot_lims=[-0.012,0.014]
-#    )
-#corr_coeff_dataTC, corr_coeff_dataTC_uncertainty = exosims.compare_correlations(
-#    inp_dat, corr_coeff_noise, corr_coeff_data_TC, stats[1:, 0], 
-#    xlabel="Corr. Coeff. Noise", ylabel="Corr. Coeff. Data After TC", 
-#    colorbar_title="S/N CCF Data After TC", plot_lims=[-0.012,0.014]
-#    )
-#corr_coeff_noise_dataTC, corr_coeff_noise_dataTC_uncertainty = exosims.compare_correlations(
-#    inp_dat, corr_coeff_noise, corr_coeff_data_after_TC, stats[1:, 0], 
-#    xlabel="Corr. Coeff. Noise", ylabel="Corr. Coeff. Data After TC", 
-#    colorbar_title="S/N CCF Data After TC", plot_lims=[-0.012,0.014]
-#    ) 
-
-# This is the Pearson corr. of the S/N of the MSS of simulated data with
-# the S/N of the CCF obtained from noise spectral matrix vs. template
-# at the MSS Kp-Vrest
-pearson_coeff_SNR[sf_idx], pearson_coeff_SNR_error[sf_idx] = exosims.compare_correlations(
-    inp_dat, stats_noise[1:,0], stats[1:,0],
-    plotname = "",
-    xlabel="S/N Noise", ylabel="S/N Data After TC", 
-    show_plot= False, save_plot = False,
-    plot_lims=[-5,7]
-    )
-
-
-# Create a figure with two panels
-fig, (ax1, ax2, ax3) = plt.subplots(3,1, sharex=True, figsize=(8, 6))
-
-# Adjust the spacing between the two panels
-plt.subplots_adjust(hspace=0)
-
-# Plot on the first panel
-ax1.errorbar(scaling_factors, pearson_coeff_SNR, yerr=pearson_coeff_SNR_error, 
-         fmt='o', color='k', markersize=8, capsize=9, zorder=2,
-         label = "S/N Data_TC vs. S/N Noise")
-ax1.set_ylabel("Corr.", fontsize=15, multialignment='center')
-ax1.axvline(x=1, color='firebrick', alpha=0.6, zorder=1)
-ax1.grid(True, alpha=0.6, zorder=0)  # Add a grid behind everything
-ax1.legend(loc='upper right')
-
-# Plot on the second panel
-scatter1 = ax2.errorbar(scaling_factors, np.mean(corr_coeff_data_NTC, axis=0), 
-         yerr=np.mean(corr_coeff_data_NTC_error, axis=0), fmt='o', 
-         color='k', linewidth=1, markersize=8, capsize=9, zorder=2,
-         label="Data Before TC") 
-scatter2 = ax2.errorbar(scaling_factors, np.mean(corr_coeff_data_TC, axis=0), 
-         yerr=np.mean(corr_coeff_data_TC_error, axis=0), fmt='o', 
-         color='goldenrod', linewidth=1, markersize=8, capsize=9, zorder=2,
-         label="Data After TC") 
-scatter3 = ax2.errorbar(scaling_factors, np.mean(corr_coeff_noise, axis=0), 
-         yerr=np.mean(corr_coeff_noise_error, axis=0), fmt='o', 
-         color='dodgerblue', linewidth=1, markersize=8, capsize=9, zorder=2,
-         label="Noise spectral matrix") 
-
-ax2.set_ylabel("Corr.", fontsize=15, multialignment='center')
-ax2.axvline(x=1, color='firebrick', label='Real uncertainties', alpha=0.6, zorder=1)
-ax2.grid(True, alpha=0.6, zorder=0)  # Add a grid behind everything
-ax2.legend(handles=[scatter1, scatter2, scatter3], loc='upper right')
-
-# Plot on the second panel
-scatter4 = ax3.errorbar(scaling_factors, mean_SNR, yerr=mean_SNR_error, 
-                    fmt='o', color='k', markersize=8, capsize=9,
-                    zorder=2)
-scatter5 = ax3.errorbar(scaling_factors, mean_SNR_gauss, 
-                    yerr=mean_SNR_error_gauss,  fmt='o', 
-                    color='k', markersize=8, capsize=9, 
-                    zorder=2)
-ax3.set_xlabel("Noise scaling factor", fontsize = 15)
-ax3.set_xlabel("Noise scaling factor", fontsize = 15)
-ax3.set_ylabel("<S/N>", fontsize = 15, multialignment='center')
-ax3.axvline(x=1, color='firebrick', label='Nominal case', alpha=0.6, zorder=1)
-ax3.grid(True, alpha=0.6, zorder=0)  # Add a grid behind everything
-# Define the tick locations you want
-ytick_locations = [0, 5, 10, 15, 20, 25, 30]
-# Set the yticks for ax3
-ax3.set_yticks(ytick_locations)
-
-plt.tick_params(axis='both', width=1.5, direction='in', labelsize=15)
-
-# Show the plot
-plt.show()
-"""
-
-
-
-"""
-import matplotlib.pyplot as plt
-
-# Create a figure and axis
-fig, ax = plt.subplots(figsize=(4, 3))  # Adjust the figsize as needed
-
-# Define your equation
-equation = r'$F_{scaled} (\lambda) = 1 + \left(\frac{F_P (\lambda)}{F_{s} (\lambda)}\right) \left(\frac{R_P}{R_{s}}\right)^2$'
-
-# Hide axes
-ax.axis('off')
-
-# Add the equation as text
-ax.text(0.5, 0.5, equation, ha='center', va='center', fontsize=20)
-
-# Save the figure as a PNG with transparent background
-plt.savefig('dayside_flux_equation.png', transparent=True)
-plt.show()
-
-import matplotlib.pyplot as plt
-
-# Create a figure and axis
-fig, ax = plt.subplots(figsize=(4, 3))  # Adjust the figsize as needed
-
-# Define your equation
-equation = r'$R_{scaled} (\lambda) = 1 - \left(\frac{R_P (\lambda)}{R_{s} (\lambda)}\right)^2$'
-
-# Hide axes
-ax.axis('off')
-
-# Add the equation as text
-ax.text(0.5, 0.5, equation, ha='center', va='center', fontsize=20)
-
-# Save the figure as a PNG with transparent background
-plt.savefig('transit_radius_equation.png', transparent=True)
-plt.show()
-"""
-

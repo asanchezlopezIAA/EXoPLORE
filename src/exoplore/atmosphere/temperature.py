@@ -213,14 +213,15 @@ def create_pressure_temperature_structure2(p1, t1, p2, t2, pressures):
 
 
 def create_temperature_profile(
-    inp_dat, gravity, isothermal, isothermal_value, T_equ,
+    internal_temperature_K, gravity, isothermal, isothermal_value, T_equ,
     two_point_T, p_points, t_points, kappa, gamma, pressures
 ):
     """Choose and compute a temperature profile from simulation inputs.
 
     Parameters
     ----------
-    inp_dat : dict  Must contain key ``"T_int"`` for the Guillot profile.
+    internal_temperature_K : float
+        Internal temperature in K for the Guillot profile.
     gravity : float  Surface gravity (cm/s²).
     isothermal : bool  Use an isothermal profile.
     isothermal_value : float or None
@@ -244,7 +245,7 @@ def create_temperature_profile(
         return np.full_like(pressures, T_use)
     elif not two_point_T:
         return temperature_profile_function_guillot_global(
-            pressures, kappa, gamma, gravity, inp_dat["T_int"], T_equ
+            pressures, kappa, gamma, gravity, internal_temperature_K, T_equ
         )
     else:
         return create_pressure_temperature_structure(
@@ -253,7 +254,7 @@ def create_temperature_profile(
 
 
 def calculate_temperature_structure(
-    inp_dat, pressures, gravity, isothermal, isothermal_value,
+    internal_temperature_K, pressures, gravity, isothermal, isothermal_value,
     T_equil, two_point_T, p_points, t_points, kappa, gamma, mode
 ):
     """Compute the temperature-pressure profile for a 1-D (non-limb) atmosphere.
@@ -264,15 +265,14 @@ def calculate_temperature_structure(
       (``isothermal_value`` K, or ``T_equil`` if ``isothermal_value`` is None).
     * ``isothermal=False, two_point_T=False``  → analytic Guillot (2010)
       profile computed by petitRADTRANS, parameterised by ``kappa``,
-      ``gamma``, ``gravity``, and ``inp_dat["T_int"]``.
+      ``gamma``, ``gravity``, and ``internal_temperature_K``.
     * ``isothermal=False, two_point_T=True``  → linear interpolation in
       log10(P) between two anchor points (``p_points``, ``t_points``).
 
     Parameters
     ----------
-    inp_dat : dict
-        Simulation input dictionary.  Must contain ``"T_int"`` (internal
-        temperature in K) when the Guillot profile is selected.
+    internal_temperature_K : float
+        Internal temperature in K used by the Guillot profile.
     pressures : numpy.ndarray
         Pressure grid in bar, shape ``(n_pressure_levels,)``.
     gravity : float
@@ -308,159 +308,111 @@ def calculate_temperature_structure(
         Temperature array in K, shape ``(n_pressure_levels,)``.
     """
     return create_temperature_profile(
-        inp_dat, gravity, isothermal, isothermal_value,
+        internal_temperature_K, gravity, isothermal, isothermal_value,
         T_equil, two_point_T, p_points, t_points, kappa, gamma, pressures
     )
 
 
 def calculate_temperature_structure_limbs(
-    inp_dat,
+    atmosphere, internal_temperature_K,
     pressures_morning_day, pressures_morning_night,
     pressures_evening_day, pressures_evening_night,
     gravity, mode
 ):
-    """Compute separate T-P profiles for morning and evening limb components.
+    """Calculate the temperature profile of each requested atmospheric region.
 
-    Used in 3-D limb-asymmetric transit simulations, where the terminator
-    is divided into a morning limb (planet rotation brings it toward the
-    observer at ingress) and an evening limb (receding at egress).  Each
-    limb is further split into a day-side and night-side sector when
-    ``inp_dat["Limb_divisions"] == "quarters"``.
+    atmosphere supplies the named morning/evening region configurations and
+    limb-division choice. internal_temperature_K is the internal temperature
+    in K. Each pressure grid is in bar and gravity is in cm/s².
 
-    The profile family for each sector is selected independently via the
-    corresponding ``isothermal_*``, ``two_point_T_*``, ``T_equ_*``,
-    ``p_points_*``, ``t_points_*``, ``Kappa_IR_*``, and ``Gamma_*`` keys
-    in ``inp_dat``.
-
-    Parameters
-    ----------
-    inp_dat : dict
-        Simulation input dictionary.  Must contain:
-
-        * ``"Limb_divisions"``, ``"quarters"`` or ``"gradual"``.
-        * Per-sector profile flags and parameters (``isothermal_morning_day``,
-          ``T_equ_morning_day``, ``p_points_morning_day``, …, and the
-          corresponding ``_morning_night``, ``_evening_day``,
-          ``_evening_night`` variants for the quarters case).
-        * ``"T_int"``, internal temperature in K (Guillot profiles).
-
-    pressures_morning_day : numpy.ndarray
-        Pressure grid for the morning-day sector in bar,
-        shape ``(n_pressure_levels,)``.
-    pressures_morning_night : numpy.ndarray
-        Pressure grid for the morning-night sector in bar.
-        Unused when ``Limb_divisions == "gradual"``.
-    pressures_evening_day : numpy.ndarray
-        Pressure grid for the evening-day sector in bar.
-    pressures_evening_night : numpy.ndarray
-        Pressure grid for the evening-night sector in bar.
-        Unused when ``Limb_divisions == "gradual"``.
-    gravity : float
-        Surface gravity in cm/s² (CGS).
-    mode : str
-        Which limb(s) to compute:
-
-        * ``'full'``, compute both morning and evening.
-        * ``'morning'``, compute morning only. evening arrays are None.
-        * ``'evening'``, compute evening only. morning arrays are None.
-
-    Returns
-    -------
-    tuple
-        **If** ``inp_dat["Limb_divisions"] == "quarters"``:
-            ``(t_morning_day, t_morning_night, t_evening_day, t_evening_night)``
-, 4-tuple of numpy arrays, shape ``(n_pressure_levels,)`` each.
-            Arrays not requested by ``mode`` are ``None``.
-
-        **If** ``inp_dat["Limb_divisions"] == "gradual"``:
-            ``(t_morning, None, t_evening, None)``
-, 4-tuple where the night-side slots are always ``None``
-            and only day-side pressure grids are used.
+    mode selects full, morning or evening evaluation. The result contains
+    morning-day, morning-night, evening-day and evening-night profiles.
+    Unrequested profiles are None. Two-limb modes use the day-region profiles.
     """
     t_morning, t_evening = None, None
 
-    if inp_dat["Limb_divisions"] == "quarters":
+    if atmosphere.limb_divisions == "quarters":
         t_morning_day = t_morning_night = t_evening_day = t_evening_night = None
 
         if mode in ["full", "morning"]:
             t_morning_day = create_temperature_profile(
-                inp_dat, gravity,
-                inp_dat['isothermal_morning_day'],
-                inp_dat['isothermal_T_value_morning_day'],
-                inp_dat["T_equ_morning_day"],
-                inp_dat['two_point_T_morning_day'],
-                inp_dat['p_points_morning_day'],
-                inp_dat['t_points_morning_day'],
-                inp_dat['Kappa_IR_morning_day'],
-                inp_dat['Gamma_morning_day'],
+                internal_temperature_K, gravity,
+                atmosphere.morning_day.isothermal,
+                atmosphere.morning_day.isothermal_temperature_K,
+                atmosphere.morning_day.equilibrium_temperature_K,
+                atmosphere.morning_day.two_point,
+                atmosphere.morning_day.two_point_pressures_bar,
+                atmosphere.morning_day.two_point_temperatures_K,
+                atmosphere.morning_day.kappa_ir,
+                atmosphere.morning_day.gamma_guillot,
                 pressures_morning_day,
             )
             t_morning_night = create_temperature_profile(
-                inp_dat, gravity,
-                inp_dat['isothermal_morning_night'],
-                inp_dat['isothermal_T_value_morning_night'],
-                inp_dat["T_equ_morning_night"],
-                inp_dat['two_point_T_morning_night'],
-                inp_dat['p_points_morning_night'],
-                inp_dat['t_points_morning_night'],
-                inp_dat['Kappa_IR_morning_night'],
-                inp_dat['Gamma_morning_night'],
+                internal_temperature_K, gravity,
+                atmosphere.morning_night.isothermal,
+                atmosphere.morning_night.isothermal_temperature_K,
+                atmosphere.morning_night.equilibrium_temperature_K,
+                atmosphere.morning_night.two_point,
+                atmosphere.morning_night.two_point_pressures_bar,
+                atmosphere.morning_night.two_point_temperatures_K,
+                atmosphere.morning_night.kappa_ir,
+                atmosphere.morning_night.gamma_guillot,
                 pressures_morning_night,
             )
 
         if mode in ["full", "evening"]:
             t_evening_day = create_temperature_profile(
-                inp_dat, gravity,
-                inp_dat['isothermal_evening_day'],
-                inp_dat['isothermal_T_value_evening_day'],
-                inp_dat["T_equ_evening_day"],
-                inp_dat['two_point_T_evening_day'],
-                inp_dat['p_points_evening_day'],
-                inp_dat['t_points_evening_day'],
-                inp_dat['Kappa_IR_evening_day'],
-                inp_dat['Gamma_evening_day'],
+                internal_temperature_K, gravity,
+                atmosphere.evening_day.isothermal,
+                atmosphere.evening_day.isothermal_temperature_K,
+                atmosphere.evening_day.equilibrium_temperature_K,
+                atmosphere.evening_day.two_point,
+                atmosphere.evening_day.two_point_pressures_bar,
+                atmosphere.evening_day.two_point_temperatures_K,
+                atmosphere.evening_day.kappa_ir,
+                atmosphere.evening_day.gamma_guillot,
                 pressures_evening_day,
             )
             t_evening_night = create_temperature_profile(
-                inp_dat, gravity,
-                inp_dat['isothermal_evening_night'],
-                inp_dat['isothermal_T_value_evening_night'],
-                inp_dat["T_equ_evening_night"],
-                inp_dat['two_point_T_evening_night'],
-                inp_dat['p_points_evening_night'],
-                inp_dat['t_points_evening_night'],
-                inp_dat['Kappa_IR_evening_night'],
-                inp_dat['Gamma_evening_night'],
+                internal_temperature_K, gravity,
+                atmosphere.evening_night.isothermal,
+                atmosphere.evening_night.isothermal_temperature_K,
+                atmosphere.evening_night.equilibrium_temperature_K,
+                atmosphere.evening_night.two_point,
+                atmosphere.evening_night.two_point_pressures_bar,
+                atmosphere.evening_night.two_point_temperatures_K,
+                atmosphere.evening_night.kappa_ir,
+                atmosphere.evening_night.gamma_guillot,
                 pressures_evening_night,
             )
 
         return t_morning_day, t_morning_night, t_evening_day, t_evening_night
 
-    elif inp_dat["Limb_divisions"] in ("gradual", "asymmetric", "simplified_step"):
+    elif atmosphere.limb_divisions in ("gradual", "asymmetric", "simplified_step"):
         if mode in ["full", "morning"]:
             t_morning = create_temperature_profile(
-                inp_dat, gravity,
-                inp_dat['isothermal_morning_day'],
-                inp_dat['isothermal_T_value_morning_day'],
-                inp_dat["T_equ_morning_day"],
-                inp_dat['two_point_T_morning_day'],
-                inp_dat['p_points_morning_day'],
-                inp_dat['t_points_morning_day'],
-                inp_dat['Kappa_IR_morning_day'],
-                inp_dat['Gamma_morning_day'],
+                internal_temperature_K, gravity,
+                atmosphere.morning_day.isothermal,
+                atmosphere.morning_day.isothermal_temperature_K,
+                atmosphere.morning_day.equilibrium_temperature_K,
+                atmosphere.morning_day.two_point,
+                atmosphere.morning_day.two_point_pressures_bar,
+                atmosphere.morning_day.two_point_temperatures_K,
+                atmosphere.morning_day.kappa_ir,
+                atmosphere.morning_day.gamma_guillot,
                 pressures_morning_day,
             )
         if mode in ["full", "evening"]:
             t_evening = create_temperature_profile(
-                inp_dat, gravity,
-                inp_dat['isothermal_evening_day'],
-                inp_dat['isothermal_T_value_evening_day'],
-                inp_dat["T_equ_evening_day"],
-                inp_dat['two_point_T_evening_day'],
-                inp_dat['p_points_evening_day'],
-                inp_dat['t_points_evening_day'],
-                inp_dat['Kappa_IR_evening_day'],
-                inp_dat['Gamma_evening_day'],
+                internal_temperature_K, gravity,
+                atmosphere.evening_day.isothermal,
+                atmosphere.evening_day.isothermal_temperature_K,
+                atmosphere.evening_day.equilibrium_temperature_K,
+                atmosphere.evening_day.two_point,
+                atmosphere.evening_day.two_point_pressures_bar,
+                atmosphere.evening_day.two_point_temperatures_K,
+                atmosphere.evening_day.kappa_ir,
+                atmosphere.evening_day.gamma_guillot,
                 pressures_evening_day,
             )
         return t_morning, None, t_evening, None

@@ -28,7 +28,7 @@ these stages to the modules that perform each calculation.
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Optional
 
@@ -45,6 +45,7 @@ from exoplore.results import CCFResult, DetectionMapResult
 # at import time.
 # ---------------------------------------------------------------------------
 from exoplore.atmosphere.prt import call_pRT, call_pRT_limbs, convolve
+from exoplore.atmosphere.models import RadiativeTransferInputs
 from exoplore.atmosphere.winds import (
     atmospheric_scale_height,
     convolve_spectrum_with_kernel,
@@ -62,7 +63,8 @@ from exoplore.ccf.compute import (
     get_max_CCF_peak,
     get_shifted_ccf_matrix,
 )
-from exoplore.ccf.statistics import Welch_ttest_map
+from exoplore.ccf.statistics import Welch_ttest_map, statistical_study
+from exoplore.ccf.models import NightStudyInputs
 from exoplore.instruments.wavegrid import (
     From1OrderTo1Detector,
     get_WaveGrid,
@@ -83,6 +85,7 @@ from exoplore.observation.timing import (
 from exoplore.observation.velocity import get_V, get_V_eccentric
 from exoplore.pipelines.masking import Correct_NaN, Remove_Outliers, merge_masks, _merge_masks
 from exoplore.pipelines.prepare import injection, preparing_pipeline
+from exoplore.pipelines.models import PreparationInputs
 from exoplore.pipelines.sysrem import (
     SYSREM_filtering_projector,
     SYSREM_filtering_projector_singleorder,
@@ -91,8 +94,10 @@ from exoplore.pipelines.sysrem import (
 )
 from exoplore.pipelines.tellurics import Load_Telluric_Transmittances, validate_telluric_file
 from exoplore.plotting.kpvsys import plot_1D_CCF, plot_Kp_Vrest
+from exoplore.plotting.models import DetectionPlotSettings
+from exoplore.retrieval.models import LimbRetrievalState
 from exoplore.plotting.matrices import CCF_matrix_ERF
-from exoplore.analysis.stats import statistical_study, plot_stats
+from exoplore.analysis.stats import plot_stats
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -1118,92 +1123,22 @@ class ExoploreSimulator:
                            else np.asarray(cfg.instrument.order_indices))
         n_orders = len(order_selection)
 
-        # Mini dicts for the functions that still take an inp_dat-style
-        # argument: each carries only the keys that function actually
-        # reads, built directly from the config.
+        # The named limb regions supply the atmospheric spectra and their
+        # chemistry. Their system quantities are shared with trial models.
         _md = cfg.atmosphere.morning_day
         _ed = cfg.atmosphere.evening_day
-        _mini_prt = {
-            "event":          cfg.observation.event_type,
-            "Gravity":        None,   # call_pRT computes from M/R
-            "M_pl":           planet.M_pl,
-            "R_pl":           planet.R_pl,
-            "R_star":         planet.R_star,
-            "T_star":         planet.stellar_teff_K,
-            "conv":           cfg.instrument.convolve_to_resolution,
-            "res":            inst.res,
-            "T_int":          planet.t_int_K,
-            "Limb_divisions": cfg.atmosphere.limb_divisions,
-        }
-        _mini_limbs = {
-            **_mini_prt,
-            "Limb_divisions":                    cfg.atmosphere.limb_divisions,
-            "MMW":                               pm.mean_molecular_weight,
-            "species_morning_day":               _md.species,
-            "species_morning_night":             cfg.atmosphere.morning_night.species,
-            "species_evening_day":               _ed.species,
-            "species_evening_night":             cfg.atmosphere.evening_night.species,
-            "vmr_morning_day":                   _md.vmr,
-            "vmr_morning_night":                 cfg.atmosphere.morning_night.vmr,
-            "vmr_evening_day":                   _ed.vmr,
-            "vmr_evening_night":                 cfg.atmosphere.evening_night.vmr,
-            "MMW_morning_day":                   _md.mean_molecular_weight,
-            "MMW_morning_night":                 cfg.atmosphere.morning_night.mean_molecular_weight,
-            "MMW_evening_day":                   _ed.mean_molecular_weight,
-            "MMW_evening_night":                 cfg.atmosphere.evening_night.mean_molecular_weight,
-            "p0_morning_day":                    _md.reference_pressure_bar,
-            "p0_morning_night":                  cfg.atmosphere.morning_night.reference_pressure_bar,
-            "p0_evening_day":                    _ed.reference_pressure_bar,
-            "p0_evening_night":                  cfg.atmosphere.evening_night.reference_pressure_bar,
-            "use_easyCHEM_morning_day":          _md.use_easychem,
-            "use_easyCHEM_morning_night":        cfg.atmosphere.morning_night.use_easychem,
-            "use_easyCHEM_evening_day":          _ed.use_easychem,
-            "use_easyCHEM_evening_night":        cfg.atmosphere.evening_night.use_easychem,
-            "Metallicity_wrt_solar_morning_day": _md.metallicity_wrt_solar,
-            "Metallicity_wrt_solar_morning_night": cfg.atmosphere.morning_night.metallicity_wrt_solar,
-            "Metallicity_wrt_solar_evening_day": _ed.metallicity_wrt_solar,
-            "Metallicity_wrt_solar_evening_night": cfg.atmosphere.evening_night.metallicity_wrt_solar,
-            "C_to_O_morning_day":                _md.carbon_to_oxygen_ratio,
-            "C_to_O_morning_night":              cfg.atmosphere.morning_night.carbon_to_oxygen_ratio,
-            "C_to_O_evening_day":                _ed.carbon_to_oxygen_ratio,
-            "C_to_O_evening_night":              cfg.atmosphere.evening_night.carbon_to_oxygen_ratio,
-            # Temperature structure keys (needed by calculate_temperature_structure_limbs)
-            "T_equ_morning_day":                 _md.equilibrium_temperature_K,
-            "T_equ_morning_night":               cfg.atmosphere.morning_night.equilibrium_temperature_K,
-            "T_equ_evening_day":                 _ed.equilibrium_temperature_K,
-            "T_equ_evening_night":               cfg.atmosphere.evening_night.equilibrium_temperature_K,
-            "T_int":                             planet.t_int_K,
-            "isothermal_morning_day":            _md.isothermal,
-            "isothermal_morning_night":          cfg.atmosphere.morning_night.isothermal,
-            "isothermal_evening_day":            _ed.isothermal,
-            "isothermal_evening_night":          cfg.atmosphere.evening_night.isothermal,
-            "isothermal_T_value_morning_day":    _md.isothermal_temperature_K,
-            "isothermal_T_value_morning_night":  cfg.atmosphere.morning_night.isothermal_temperature_K,
-            "isothermal_T_value_evening_day":    _ed.isothermal_temperature_K,
-            "isothermal_T_value_evening_night":  cfg.atmosphere.evening_night.isothermal_temperature_K,
-            "Kappa_IR_morning_day":              _md.kappa_ir,
-            "Kappa_IR_morning_night":            cfg.atmosphere.morning_night.kappa_ir,
-            "Kappa_IR_evening_day":              _ed.kappa_ir,
-            "Kappa_IR_evening_night":            cfg.atmosphere.evening_night.kappa_ir,
-            "Gamma_morning_day":                 _md.gamma_guillot,
-            "Gamma_morning_night":               cfg.atmosphere.morning_night.gamma_guillot,
-            "Gamma_evening_day":                 _ed.gamma_guillot,
-            "Gamma_evening_night":               cfg.atmosphere.evening_night.gamma_guillot,
-            "two_point_T_morning_day":           _md.two_point,
-            "two_point_T_morning_night":         cfg.atmosphere.morning_night.two_point,
-            "two_point_T_evening_day":           _ed.two_point,
-            "two_point_T_evening_night":         cfg.atmosphere.evening_night.two_point,
-            "p_points_morning_day":              _md.two_point_pressures_bar,
-            "p_points_morning_night":            cfg.atmosphere.morning_night.two_point_pressures_bar,
-            "p_points_evening_day":              _ed.two_point_pressures_bar,
-            "p_points_evening_night":            cfg.atmosphere.evening_night.two_point_pressures_bar,
-            "t_points_morning_day":              _md.two_point_temperatures_K,
-            "t_points_morning_night":            cfg.atmosphere.morning_night.two_point_temperatures_K,
-            "t_points_evening_day":              _ed.two_point_temperatures_K,
-            "t_points_evening_night":            cfg.atmosphere.evening_night.two_point_temperatures_K,
-        }
-        # _mini_* dictionaries translate configuration fields and derived geometry
-        # into the inp_dat keys expected by the atmospheric functions.
+        # These quantities are shared by the injected spectrum and trial models.
+        rt_inputs = RadiativeTransferInputs(
+            event_type=cfg.observation.event_type,
+            planet_mass_g=planet.M_pl,
+            planet_radius_cm=planet.R_pl,
+            stellar_radius_cm=planet.R_star,
+            stellar_teff_K=planet.stellar_teff_K,
+            resolving_power=inst.res,
+            internal_temperature_K=planet.t_int_K,
+            gravity_cgs=None,
+            convolve_to_resolution=cfg.instrument.convolve_to_resolution,
+        )
 
         # Limb scaling factors are computed once (h==0) and reused each order
         _sf_morning  = None
@@ -1389,7 +1324,7 @@ class ExoploreSimulator:
                     )
                     (wave_pRT, syn_spec, mass_fractions,
                      MMW, syn_star, temperature) = call_pRT(
-                        _mini_prt, p, atmosphere,
+                        rt_inputs, p, atmosphere,
                         pm.species, pm.vmr,
                         pm.mean_molecular_weight, pm.reference_pressure_bar,
                         pm.isothermal, pm.isothermal_temperature_K,
@@ -1475,7 +1410,7 @@ class ExoploreSimulator:
                          syn_star,
                          t_morning, _, t_evening, _,
                          ) = call_pRT_limbs(
-                            _mini_limbs,
+                            rt_inputs, cfg.atmosphere,
                             p_morning_day, None,
                             p_evening_day, None,
                             atmosphere_morning, None,
@@ -1629,15 +1564,6 @@ class ExoploreSimulator:
             # observation, preparation and CCF products. Block 7 combines them.
             per_order_results.append(_order_result)
 
-            # Mini-dict for spec_to_mat_fraction (6 keys only)
-            _mini_stmf = {
-                "event":               cfg.observation.event_type,
-                "Scale_inj":           cfg.observation.scale_injection,
-                "Inject_Scale_Factor": cfg.pipeline.inject_scale_factor,
-                "Limb_asymmetries":    cfg.atmosphere.limb_asymmetries,
-                "Limb_divisions":      cfg.atmosphere.limb_divisions,
-                "res":                 inst.res,
-            }
 
             # ----------------------------------------------------------
             # Block 4a, stellar matrix (every order)
@@ -1840,9 +1766,19 @@ class ExoploreSimulator:
                 if not cfg.observation.different_nights:
                     spec_mat, spec_mat_shift = \
                         spec_to_mat_fraction(
-                            _mini_stmf, syn_jd, T_0, _v_inject,
-                            wave_ins, wave_pRT, syn_spec, mat_star,
-                            with_signal, without_signal, fraction,
+                            _v_inject,
+                            wave_ins,
+                            wave_pRT,
+                            syn_spec,
+                            mat_star,
+                            with_signal,
+                            without_signal,
+                            fraction,
+                            event_type=cfg.observation.event_type,
+                            signal_scale=cfg.observation.scale_injection,
+                            limb_asymmetries=cfg.atmosphere.limb_asymmetries,
+                            limb_divisions=cfg.atmosphere.limb_divisions,
+                            resolving_power=inst.res,
                             include_star=False,
                         )
                 else:
@@ -1850,10 +1786,20 @@ class ExoploreSimulator:
                     spec_mat_shift = []
                     for n in range(cfg.observation.n_nights):
                         _a, _b = spec_to_mat_fraction(
-                            _mini_stmf, syn_jd[n], transit_mid_JD[n],
-                            v_planet[n], wave_ins, wave_pRT, syn_spec,
-                            mat_star[n], with_signal[n], without_signal[n],
-                            fraction[n], include_star=False,
+                            v_planet[n],
+                            wave_ins,
+                            wave_pRT,
+                            syn_spec,
+                            mat_star[n],
+                            with_signal[n],
+                            without_signal[n],
+                            fraction[n],
+                            event_type=cfg.observation.event_type,
+                            signal_scale=cfg.observation.scale_injection,
+                            limb_asymmetries=cfg.atmosphere.limb_asymmetries,
+                            limb_divisions=cfg.atmosphere.limb_divisions,
+                            resolving_power=inst.res,
+                            include_star=False,
                         )
                         spec_mat.append(_a)
                         spec_mat_shift.append(_b)
@@ -1861,12 +1807,27 @@ class ExoploreSimulator:
             else:   # limb asymmetries
                 spec_mat, spec_mat_shift = \
                     spec_to_mat_fraction(
-                        _mini_stmf, syn_jd, T_0, v_planet,
-                        wave_ins, wave_pRT, syn_spec, mat_star,
-                        with_signal, without_signal, fraction,
-                        syn_spec_morning_rot, None,
-                        syn_spec_evening_rot, None,
-                        _sf_evening, None, _sf_morning, None,
+                        v_planet,
+                        wave_ins,
+                        wave_pRT,
+                        syn_spec,
+                        mat_star,
+                        with_signal,
+                        without_signal,
+                        fraction,
+                        syn_spec_morning_rot,
+                        None,
+                        syn_spec_evening_rot,
+                        None,
+                        _sf_evening,
+                        None,
+                        _sf_morning,
+                        None,
+                        event_type=cfg.observation.event_type,
+                        signal_scale=cfg.observation.scale_injection,
+                        limb_asymmetries=cfg.atmosphere.limb_asymmetries,
+                        limb_divisions=cfg.atmosphere.limb_divisions,
+                        resolving_power=inst.res,
                     )
 
             # ----------------------------------------------------------
@@ -1970,7 +1931,7 @@ class ExoploreSimulator:
                             _cpix_dn = np.where(
                                 wave_ins == find_nearest(
                                     wave_ins,
-                                    _fits_dn.open(wave_file)[2].data[
+                                    _fits_dn.open(inst.wave_file)[2].data[
                                         _order_idx_dn
                                     ] * 1e-3,
                                 )
@@ -2127,7 +2088,7 @@ class ExoploreSimulator:
                     line_opacity_mode='lbl',
                 )
                 (wave_pRT_cc, spec_cc, _, _, _, _) = call_pRT(
-                    _mini_prt, p_cc, _atmosphere_cc,
+                    rt_inputs, p_cc, _atmosphere_cc,
                     cc.species, cc.vmr,
                     cc.mean_molecular_weight, cc.reference_pressure_bar,
                     cc.isothermal, cc.isothermal_temperature_K,
@@ -2334,9 +2295,8 @@ class ExoploreSimulator:
                         berv = _fits_b5d.open(
                             f"{_idir}reference_night/observations_berv_0.fits"
                         )[0].data
-                        # berv is consumed by Block 7's _mini_b7 init ("BERV": berv),
-                        # which runs later. No need to sync a dict that does not
-                        # exist yet on this real-data path.
+                        # The orbital alignment in Block 7 uses these
+                        # measured barycentric corrections for each exposure.
 
                     if not _dn:
                         _spec_tp, _std_noise_b5[b, :] = \
@@ -2464,47 +2424,15 @@ class ExoploreSimulator:
                 # Build mini-dicts here (inside loop) so berv reflects
                 # the current night's value after Different_nights restore
                 _opt = cfg.pipeline.optimize_sysrem_order_by_order
-                _mini_inj = {
-                    "Kp_Vrest_inj": cfg.pipeline.kp_vrest_injection,
-                    "BERV":         berv,
-                    "V_sys":        planet.systemic_velocity_kms,
-                    "event":              cfg.observation.event_type,
-                    "Scale_inj":          cfg.observation.scale_injection,
-                    "Inject_Scale_Factor": cfg.pipeline.inject_scale_factor,
-                    "Limb_asymmetries":   cfg.atmosphere.limb_asymmetries,
-                    "Limb_divisions":     cfg.atmosphere.limb_divisions,
-                    "res":                inst.res,
-                }
-                _mini_pp = {
-                    "preparing_pipeline":    cfg.pipeline.name,
-                    "continuum_method":      cfg.pipeline.continuum_method,
-                    "detrend_method":        cfg.pipeline.detrend_method,
-                    "BERV":                  berv,
-                    "V_sys":                 planet.systemic_velocity_kms,
-                    "sysrem_its":            _si,
-                    "Opt_PCA_its_ord_by_ord": _opt,
-                    "Opt_criterion":         cfg.pipeline.optimize_criterion,
-                    "sysrem_delta_sigma_threshold": cfg.pipeline.sysrem_delta_sigma_threshold,
-                    "SYSREM_robust_halt":    cfg.pipeline.sysrem_robust_halt,
-                    "Use_real_data":         _urd,
-                    "Kp_Vrest_inj":          cfg.pipeline.kp_vrest_injection,
-                    "telluric_variation":    cfg.tellurics.include_tellurics,
-                    "telluric_mask":         cfg.tellurics.mask_threshold,
-                    "safety_window":         cfg.tellurics.safety_window_pixels,
-                    "Different_nights":      _dn,
-                    "n_nights":              _nn,
-                    "n_orders":              n_orders,
-                    "nortmann_telluric_order": (
-                        _telluric_model[order_selection[h]]
-                        if _telluric_model is not None else None),
-                }
-                _mini_sysrem = {
-                    "Different_nights": _dn,
-                    "Kp_Vrest_inj":     cfg.pipeline.kp_vrest_injection,
-                    "n_nights":         _nn,
-                    "n_orders":         n_orders,
-                    "sysrem_its":       _si,
-                }
+                preparation_inputs = PreparationInputs(
+                    pipeline=cfg.pipeline,
+                    tellurics=cfg.tellurics,
+                    use_real_data=_urd,
+                    sysrem_iterations=_si,
+                    telluric_transmission=(
+                        _telluric_model[order_selection[h]] if _telluric_model is not None else None
+                    ),
+                )
 
                 # Optional: inject test signal for order-by-order optimisation.
                 # DeltaSigma is model-independent, no injection needed.
@@ -2520,18 +2448,45 @@ class ExoploreSimulator:
                         # the Block 4d injection does (line ~1476).  Indexing
                         # mat_star[b] here would collapse it to 1D.
                         _mat_noise_inj_b5[b, :] = injection(
-                            _mini_inj, wave_ins,
-                            _mat_noise_inj_b5[b, :], wave_pRT, syn_spec,
-                            with_signal, without_signal, fraction, phase,
-                            mat_star, T_0, syn_jd,
+                            wave_ins,
+                            _mat_noise_inj_b5[b, :],
+                            wave_pRT,
+                            syn_spec,
+                            with_signal,
+                            without_signal,
+                            fraction,
+                            phase,
+                            mat_star,
+                            event_type=cfg.observation.event_type,
+                            signal_scale=cfg.pipeline.inject_scale_factor,
+                            limb_asymmetries=cfg.atmosphere.limb_asymmetries,
+                            limb_divisions=cfg.atmosphere.limb_divisions,
+                            resolving_power=inst.res,
+                            kp_kms=cfg.pipeline.kp_vrest_injection[0],
+                            vrest_kms=cfg.pipeline.kp_vrest_injection[1],
+                            berv_kms=berv,
+                            systemic_velocity_kms=planet.systemic_velocity_kms,
                         )
                     else:
                         _mat_noise_inj_b5[b, :] = injection(
-                            _mini_inj, wave_ins,
+                            wave_ins,
                             _mat_noise_inj_b5[b, :n_spectra, :],
-                            wave_pRT, syn_spec,
-                            with_signal, without_signal, fraction, phase,
-                            mat_star, transit_mid_JD[b], syn_jd,
+                            wave_pRT,
+                            syn_spec,
+                            with_signal,
+                            without_signal,
+                            fraction,
+                            phase,
+                            mat_star,
+                            event_type=cfg.observation.event_type,
+                            signal_scale=cfg.pipeline.inject_scale_factor,
+                            limb_asymmetries=cfg.atmosphere.limb_asymmetries,
+                            limb_divisions=cfg.atmosphere.limb_divisions,
+                            resolving_power=inst.res,
+                            kp_kms=cfg.pipeline.kp_vrest_injection[0],
+                            vrest_kms=cfg.pipeline.kp_vrest_injection[1],
+                            berv_kms=berv,
+                            systemic_velocity_kms=planet.systemic_velocity_kms,
                         )
                     _inj_slice_b5 = (
                         _mat_noise_inj_b5[b, :n_spectra, :] if _dn
@@ -2598,13 +2553,22 @@ class ExoploreSimulator:
                 # detrending information needed later by CCFs and retrieval.
                 _sl = slice(None, n_spectra) if _dn else slice(None)
                 _pp_result = preparing_pipeline(
-                    _mini_pp, _mat_noise_b5[b, _sl],
-                    _std_noise_b5[b, _sl], wave_ins,
-                    _useful_snr, _mask_snr_1d, airmass, phase,
-                    without_signal, None, _inj_slice_b5,
+                    preparation_inputs,
+                    _mat_noise_b5[b, _sl],
+                    _std_noise_b5[b, _sl],
+                    wave_ins,
+                    _useful_snr,
+                    _mask_snr_1d,
+                    airmass,
+                    phase,
+                    without_signal,
+                    None,
+                    _inj_slice_b5,
                     tell_mask_threshold_Blain24=0.8,
-                    max_fit_BL19=False, sysrem_division=False,
-                    masks=True, correct_uncertainties=True,
+                    max_fit_BL19=False,
+                    sysrem_division=False,
+                    masks=True,
+                    correct_uncertainties=True,
                 )
                 if not cfg.pipeline.sysrem_robust_halt:
                     (
@@ -2689,12 +2653,20 @@ class ExoploreSimulator:
                                         if cfg.pipeline.name == "Cheverall26"
                                         else with_signal)
                             _mat_cc_b5, _ = spec_to_mat_fraction(
-                                _mini_stmf, syn_jd,
-                                planet.transit_epoch_bjd, _v_cc_b5,
-                                wave_ins, wave_pRT_cc, spec_cc, mat_star,
-                                _ws_ccf0, without_signal,
+                                _v_cc_b5,
+                                wave_ins,
+                                wave_pRT_cc,
+                                spec_cc,
+                                mat_star,
+                                _ws_ccf0,
+                                without_signal,
                                 np.ones_like(fraction),
-                                include_star=False, ccf_setup=True,
+                                event_type=cfg.observation.event_type,
+                                signal_scale=cfg.observation.scale_injection,
+                                limb_asymmetries=False,
+                                limb_divisions=cfg.atmosphere.limb_divisions,
+                                resolving_power=inst.res,
+                                include_star=False,
                             )
 
                             if cfg.pipeline.prepare_template:
@@ -2711,8 +2683,6 @@ class ExoploreSimulator:
                                         if _sysrem_passes_per_order is not None
                                         else _si
                                     )
-                                    _mini_sysrem_h = dict(_mini_sysrem)
-                                    _mini_sysrem_h["sysrem_its"] = _n_proj
                                     _syn_mat_res_b5 = np.ones(
                                         (n_spectra, n_pixels), float)
                                     _Pf = np.zeros(
@@ -2725,8 +2695,11 @@ class ExoploreSimulator:
                                     _Uf[0, :, :, :] = _U_sysrem[:, :, :_n_proj]
                                     _Pf[0, 0, :, :] = (
                                         SYSREM_filtering_projector_singleorder(
-                                            _mini_sysrem_h, n_spectra,
-                                            _Nf, _Uf,
+                                            n_spectra,
+                                            _Nf,
+                                            _Uf,
+                                            n_nights=_nn,
+                                            sysrem_iterations=_n_proj,
                                         ))
                                     _syn_mat_res_b5 = (
                                         filter_model_singleorder(
@@ -2736,11 +2709,16 @@ class ExoploreSimulator:
                                     del _Pf, _Uf, _Nf
                                 else:
                                     _syn_mat_res_b5 = preparing_pipeline(
-                                        _mini_pp, _mat_cc_b5,
-                                        _std_noise_b5[b, :], wave_ins,
+                                        preparation_inputs,
+                                        _mat_cc_b5,
+                                        _std_noise_b5[b, :],
+                                        wave_ins,
                                         _useful_spectral_points_b5,
-                                        _mask_b5, airmass, phase,
-                                        without_signal, _sysrem_pass_b5,
+                                        _mask_b5,
+                                        airmass,
+                                        phase,
+                                        without_signal,
+                                        _sysrem_pass_b5,
                                         None,
                                         tell_mask_threshold_Blain24=0.8,
                                         max_fit_BL19=False,
@@ -2813,12 +2791,20 @@ class ExoploreSimulator:
                         _mat_cc_b5   = np.zeros((n_spectra, n_pixels), float)
                         _mat_back_b5 = np.zeros_like(_mat_cc_b5)
                         _mat_cc_b5, _ = spec_to_mat_fraction(
-                            _mini_stmf, syn_jd,
-                            planet.transit_epoch_bjd, _v_cc_b5,
-                            wave_ins, wave_pRT_cc, spec_cc, mat_star,
-                            with_signal, without_signal,
+                            _v_cc_b5,
+                            wave_ins,
+                            wave_pRT_cc,
+                            spec_cc,
+                            mat_star,
+                            with_signal,
+                            without_signal,
                             fraction,
-                            include_star=False, ccf_setup=True,
+                            event_type=cfg.observation.event_type,
+                            signal_scale=cfg.observation.scale_injection,
+                            limb_asymmetries=False,
+                            limb_divisions=cfg.atmosphere.limb_divisions,
+                            resolving_power=inst.res,
+                            include_star=False,
                         )
 
                         if cfg.pipeline.prepare_template:
@@ -2837,8 +2823,12 @@ class ExoploreSimulator:
                                     _U_sysrem[b, :n_spectra, :])
                                 _Pf[0, 0, :, :] = (
                                     SYSREM_filtering_projector_singleorder(
-                                        _mini_sysrem, n_spectra, _Nf, _Uf,
+                                        n_spectra,
+                                        _Nf,
+                                        _Uf,
                                         no_night_loop=True,
+                                        n_nights=_nn,
+                                        sysrem_iterations=_si,
                                     ))
                                 _syn_mat_res_b5 = (
                                     filter_model_singleorder(
@@ -2848,12 +2838,17 @@ class ExoploreSimulator:
                                 del _Pf, _Uf, _Nf
                             else:
                                 _syn_mat_res_b5 = preparing_pipeline(
-                                    _mini_pp, _mat_cc_b5,
+                                    preparation_inputs,
+                                    _mat_cc_b5,
                                     _std_noise_b5[b, :n_spectra, :],
                                     wave_ins,
                                     _useful_spectral_points_b5,
-                                    _mask_b5, airmass, phase,
-                                    without_signal, _sysrem_pass_b5, None,
+                                    _mask_b5,
+                                    airmass,
+                                    phase,
+                                    without_signal,
+                                    _sysrem_pass_b5,
+                                    None,
                                     tell_mask_threshold_Blain24=0.8,
                                     max_fit_BL19=False,
                                     sysrem_division=False,
@@ -3411,130 +3406,62 @@ class ExoploreSimulator:
         #   7g  Opt_PCA_its_ord_by_ord: optimise SYSREM iterations
         #   7h  Statistical study (n_nights > 1)
         #   NOTE: Study_velocity_ranges and Noise_statistical_study are
-        #         specialised optional analyses that require gauss_noise to
-        #         be persisted per-order. These are not yet wired. Set
-        #         inp_dat["Study_velocity_ranges"] = False and
-        #         inp_dat["Noise_statistical_study"] = False to skip.
+        #         specialised optional analyses requiring saved per-order
+        #         noise arrays. The current runner does not execute them.
         # ================================================================
 
-        # Mini-dict for Block 7/8/9 functions that still take inp_dat.
-        # Covers all keys used by ccf/, plotting/, and analysis/ modules.
-        # CCF_SNR and Welch_ttest start from config. All_significance_metrics
-        # path temporarily flips them, update _mini_b7 at those points.
-        _mini_b7: dict = {
-            "BERV":                  berv,
-            "CCF_SNR":               cfg.cross_correlation.ccf_snr,
-            "CCF_SNR_exclude":       cfg.cross_correlation.snr_exclude_kms,
-            "CCF_SNR_noise_source":  cfg.cross_correlation.snr_noise_source,
-            "CCF_SNR_kp_exclude":    cfg.cross_correlation.snr_noise_kp_exclude_kms,
-            "ccf_snr_exclude_around": ("point"
-                                       if cfg.pipeline.name == "Cheverall26"
-                                       else "peak"),
-            "CCF_V_STEP":            cfg.cross_correlation.velocity_step_kms,
-            "Different_nights":      _dn,
-            "K_p":                   planet.kp_kms,
-            "MAX_CCF_V_STD":         cfg.cross_correlation.noise_velocity_max_kms,
-            "Opt_PCA_its_ord_by_ord": _opt,
-            "Opt_crit":              cfg.pipeline.optimize_criterion,
-            "PLOT_CCF_XSTEP":        cfg.cross_correlation.plot_ccf_xstep,
-            "Simulation_name":       sim_name,
-            "Stack_Group_Size":      cfg.statistics.stack_group_size,
-            "V_sys":                 planet.systemic_velocity_kms,
-            "V_wind":                pm.wind_velocity_kms,
-            "Welch_ttest":           cfg.cross_correlation.welch_ttest,
-            "All_significance_metrics": cfg.cross_correlation.all_significance_metrics,
-            "SSIM_metric":           cfg.cross_correlation.ssim_metric,
-            "Study_velocity_ranges": cfg.cross_correlation.study_velocity_ranges,
-            "arg_periastron_w":      planet.argument_of_periastron_deg,
-            "eccentricity":          planet.eccentricity,
-            "event":                 cfg.observation.event_type,
-            "first_night_noiseless": cfg.observation.first_night_noiseless,
-            "in_trail_left_right":   cfg.cross_correlation.in_trail_left_right,
-            "kp_max":                cfg.cross_correlation.kp_max_kms,
-            "n_nights":              _nn,
-            "n_orders":              n_orders,
-            "order_selection":       order_selection,
-            "plots_dir":             str(dirs["plots"]) + "/",
-            "matrix_dir":            str(dirs["matrices"]) + "/",
-            "home_dir":              str(dirs["root"]) + "/",
-            "correlations_dir":      str(dirs["correlations"]) + "/",
-            "warnings_dir":          str(dirs["warnings"]) + "/",
-            "significant_eccentricity": cfg.observation.significant_eccentricity,
-            "sysrem_its":            _si,
-            "Kp_Vrest_inj":          cfg.pipeline.kp_vrest_injection,
-            "Noise_scaling_factor":  cfg.observation.noise_scaling_factor,
-            "T_equ":                 pm.equilibrium_temperature_K,
-            "vmr":                   pm.vmr,
-            "R":                     inst.res,
-            "Resolving_power":       inst.res,
-            "resolution":            inst.res,
-            # Retrieval (Block 9)
-            "Perform_retrieval":     cfg.retrieval.enabled,
-            "Ret_dim":               cfg.retrieval.dimensionality,
-            "logL_choice":           cfg.retrieval.log_likelihood,
-            "ret_error_model":       getattr(cfg.retrieval, "error_model", "propagated"),
-            "model_reprocessing":    getattr(cfg.retrieval, "model_reprocessing", "bare"),
-            # Convert the sampler name to the spelling used by the sampling branch
-            "Sampler_choice":        (
-                "Nested_sampling"
-                if cfg.retrieval.sampler.lower().replace("-", "_")
-                   in ("nested_sampling", "multinest", "nested")
-                else "MCMC"
-            ),
-            "Retrieval_choice":      cfg.retrieval.retrieval_choice,
-            "Multinest_live_points": cfg.retrieval.live_points,
-            "Multinest_Constant_Eff_Mode": cfg.retrieval.constant_efficiency_mode,
-            "n_walkers":             cfg.retrieval.n_walkers,
-            "n_steps_MCMC":          cfg.retrieval.n_steps,
-            "MCMC_burnin":           cfg.retrieval.burnin,
-            "PRIOR_BOUNDS":          cfg.retrieval.prior_bounds,
-            "Limb_asymmetries":      cfg.atmosphere.limb_asymmetries,
-            "SYSREM_robust_halt":    cfg.pipeline.sysrem_robust_halt,
-            "prepare_template":      cfg.pipeline.prepare_template,
-            "preparing_pipeline":    cfg.pipeline.name,
-            # Keys required by preparing_pipeline when called inside loglike
-            "telluric_variation":    cfg.tellurics.include_tellurics,
-            "telluric_mask":         cfg.tellurics.mask_threshold,
-            "safety_window":         cfg.tellurics.safety_window_pixels,
-            "Use_real_data":         cfg.observation.use_real_data,
-            "Opt_PCA_its_ord_by_ord": cfg.pipeline.optimize_sysrem_order_by_order,
-            "Opt_criterion":         cfg.pipeline.optimize_criterion,
-            "sysrem_delta_sigma_threshold": cfg.pipeline.sysrem_delta_sigma_threshold,
-            "T_equ_morning_day":     _md.equilibrium_temperature_K,
-            "T_equ_evening_day":     _ed.equilibrium_temperature_K,
-            "species_ret_morning":   _md.species,
-            "species_ret_evening":   _ed.species,
-            "vmr_morning_day":       _md.vmr,
-            "vmr_evening_day":       _ed.vmr,
-            # Retrieval atmosphere (ret_atm = ret.atmosphere or planet_model)
-            "species_ret":           (cfg.retrieval.atmosphere.species
-                                      if cfg.retrieval.atmosphere is not None
-                                      else pm.species),
-            "MMW_ret":               (cfg.retrieval.atmosphere.mean_molecular_weight
-                                      if cfg.retrieval.atmosphere is not None
-                                      else pm.mean_molecular_weight),
-            "p0_ret":                (cfg.retrieval.atmosphere.reference_pressure_bar
-                                      if cfg.retrieval.atmosphere is not None
-                                      else pm.reference_pressure_bar),
-            "isothermal_ret":        (cfg.retrieval.atmosphere.isothermal
-                                      if cfg.retrieval.atmosphere is not None
-                                      else pm.isothermal),
-            "two_point_T_ret":       (cfg.retrieval.atmosphere.two_point
-                                      if cfg.retrieval.atmosphere is not None
-                                      else pm.two_point),
-            "p_points_ret":          (cfg.retrieval.atmosphere.two_point_pressures_bar
-                                      if cfg.retrieval.atmosphere is not None
-                                      else pm.two_point_pressures_bar),
-            "t_points_ret":          (cfg.retrieval.atmosphere.two_point_temperatures_K
-                                      if cfg.retrieval.atmosphere is not None
-                                      else pm.two_point_temperatures_K),
-            "Kappa_IR_ret":          (cfg.retrieval.atmosphere.kappa_ir
-                                      if cfg.retrieval.atmosphere is not None
-                                      else pm.kappa_ir),
-            "Gamma_ret":             (cfg.retrieval.atmosphere.gamma_guillot
-                                      if cfg.retrieval.atmosphere is not None
-                                      else pm.gamma_guillot),
-        }
+        # Shared plot settings keep the same labels and reference motion across
+        # the CCF trail, detection map and velocity slices.
+        night_study = NightStudyInputs(
+            cross_correlation=cfg.cross_correlation,
+            pipeline=cfg.pipeline,
+            n_orders=n_orders,
+            n_nights=_nn,
+            stack_group_size=cfg.statistics.stack_group_size,
+            berv_kms=berv,
+            systemic_velocity_kms=planet.systemic_velocity_kms,
+            reference_kp_kms=planet.kp_kms,
+            reference_vrest_kms=pm.wind_velocity_kms,
+            sysrem_iterations=_si,
+            exclude_around="point" if cfg.pipeline.name == "Cheverall26" else "peak",
+        )
+
+        detection_plot = DetectionPlotSettings(
+            simulation_name=sim_name,
+            plots_dir=str(dirs["plots"]) + "/",
+            reference_kp_kms=planet.kp_kms,
+            kp_max_kms=cfg.cross_correlation.kp_max_kms,
+            velocity_half_range_kms=cfg.cross_correlation.noise_velocity_max_kms,
+            velocity_tick_step_kms=cfg.cross_correlation.plot_ccf_xstep,
+            sysrem_iterations=_si,
+            optimize_sysrem=_opt,
+            event_type=cfg.observation.event_type,
+        )
+
+        # Read atmospheric and analysis choices from their configuration objects.
+        # Local labels and selections below can change as products are saved or
+        # fully masked orders are removed from the retrieval.
+        retrieval_atmosphere_config = (
+            cfg.retrieval.atmosphere
+            if cfg.retrieval.atmosphere is not None else pm
+        )
+        sampling_method = (
+            "Nested_sampling"
+            if cfg.retrieval.sampler.lower().replace("-", "_")
+            in ("nested_sampling", "multinest", "nested") else "MCMC"
+        )
+        use_snr_statistic = cfg.cross_correlation.ccf_snr
+        use_welch_statistic = cfg.cross_correlation.welch_ttest
+        plot_name = sim_name
+        prepare_retrieval_template = cfg.pipeline.prepare_template
+        analysis_order_count = n_orders
+        retrieval_orders = order_selection
+        retrieval_limb_asymmetries = cfg.atmosphere.limb_asymmetries
+        retrieval_species = retrieval_atmosphere_config.species
+        limb_retrieval = LimbRetrievalState(
+            morning_abundances=cfg.atmosphere.morning_day.vmr,
+            evening_abundances=cfg.atmosphere.evening_day.vmr,
+        )
 
         # Pre-Block-7 outputs (initialised to None, set only when paths run)
         ccf_values_shift = None
@@ -3622,15 +3549,8 @@ class ExoploreSimulator:
             else:
                 ccf_nights = np.zeros(
                     (_nn, _ccf_iterations, _max_nspec_b7), float)
-                _ord_dn = _mini_b7.get("order_selection_diffnights")
                 for _b7 in range(_nn):
-                    if _ord_dn is not None:
-                        _oi7 = [
-                            np.where(order_selection == _v7)[0][0]
-                            for _v7 in _ord_dn[_b7]
-                        ]
-                    else:
-                        _oi7 = list(range(n_orders))
+                    _oi7 = list(range(n_orders))
                     ccf_nights[_b7] = np.nansum(
                         _ccf_all_orders[_oi7, _b7, :], 0)
 
@@ -3643,23 +3563,33 @@ class ExoploreSimulator:
             if not _dn:
                 ccf_complete = np.nansum(ccf_nights, 0)
                 CCF_matrix_ERF(
-                    _mini_b7, _v_ccf, phase, ccf_complete,
-                    with_signal, without_signal, v_planet,
-                    show_plot=False, save_plot=True, CCF_Noise=False,
+                    replace(detection_plot, simulation_name=plot_name),
+                    _v_ccf,
+                    phase,
+                    ccf_complete,
+                    with_signal,
+                    without_signal,
+                    v_planet,
+                    show_plot=False,
+                    save_plot=True,
+                    CCF_Noise=False,
                     xlims=_erf_xlims,
                 )
             else:
                 ccf_complete = ccf_nights
                 for _bb7 in range(_nn):
                     CCF_matrix_ERF(
-                        _mini_b7, _v_ccf, phase[_bb7],
-                        ccf_complete[
-                            _bb7, :, :int(n_spectra[_bb7])
-                        ],
-                        with_signal[_bb7], without_signal[_bb7],
+                        replace(detection_plot, simulation_name=plot_name),
+                        _v_ccf,
+                        phase[_bb7],
+                        ccf_complete[_bb7, :, : int(n_spectra[_bb7])],
+                        with_signal[_bb7],
+                        without_signal[_bb7],
                         v_planet[_bb7],
-                        show_plot=False, save_plot=False,
-                        CCF_Noise=False, xlims=_erf_xlims,
+                        show_plot=False,
+                        save_plot=False,
+                        CCF_Noise=False,
+                        xlims=_erf_xlims,
                     )
 
             # -------------------------------------------------------
@@ -3691,8 +3621,8 @@ class ExoploreSimulator:
                 try:
                     from exoplore.pipelines.cheverall26 import (
                         chev26_duration_map, chev26_plot_duration_map)
-                    _kp_t  = float(_mini_b7["K_p"])
-                    _vs_t  = float(_mini_b7["V_sys"])
+                    _kp_t  = float(planet.kp_kms)
+                    _vs_t  = float(planet.systemic_velocity_kms)
                     _excl_t = float(cfg.cross_correlation.snr_exclude_kms)
                     _ncross = (int(np.size(with_signal))
                                if np.ndim(with_signal) == 1 else 14)
@@ -3716,7 +3646,7 @@ class ExoploreSimulator:
                         if _nn == 1 or _bt == 0:
                             np.savez(
                                 f"{_base_dir_b7}/ccf_timing_map_"
-                                f"{_mini_b7['Simulation_name']}.npz",
+                                f"{plot_name}.npz",
                                 snmap=_snm, vsys_axis=_vsa,
                                 vsys_expected=_vs_t, kp=_kp_t,
                                 n_in_cross=_ncross)
@@ -3745,7 +3675,7 @@ class ExoploreSimulator:
                             chev26_plot_duration_map(
                                 _snm, _vsa, _vs_t,
                                 f"{_plots_subdir_b7}/duration_test_fig4_"
-                                f"{_mini_b7['Simulation_name']}.png",
+                                f"{plot_name}.png",
                                 kp=_kp_t, n_in_expected=_ncross,
                                 species=_lbl_t)
                     save_compressed(
@@ -3763,22 +3693,42 @@ class ExoploreSimulator:
             # exposures. Summing first would discard the planet's changing RV.
             if not _dn:
                 ccf_values_shift = get_shifted_ccf_matrix(
-                    _mini_b7, with_signal, v_rest, _v_ccf, _kp_range,
-                    phase, planet.systemic_velocity_kms, berv,
-                    _pix_lr_b7, _ccf_v_step, ccf_complete,
+                    with_signal,
+                    v_rest,
+                    _v_ccf,
+                    _kp_range,
+                    phase,
+                    planet.systemic_velocity_kms,
+                    berv,
+                    _pix_lr_b7,
+                    _ccf_v_step,
+                    ccf_complete,
                     sysrem_opt=_opt_needs_injection,
+                    significant_eccentricity=cfg.observation.significant_eccentricity,
+                    eccentricity=planet.eccentricity,
+                    argument_of_periastron_deg=planet.argument_of_periastron_deg,
+                    sysrem_iterations=_si,
                 )
             else:
                 ccf_values_shift = []
                 for _b7 in range(_nn):
                     ccf_values_shift.append(
                         get_shifted_ccf_matrix(
-                            _mini_b7, with_signal[_b7], v_rest,
-                            _v_ccf, _kp_range, phase[_b7],
-                            planet.systemic_velocity_kms, berv[_b7],
-                            _pix_lr_b7, _ccf_v_step,
-                            ccf_complete[_b7, :, :int(n_spectra[_b7])],
+                            with_signal[_b7],
+                            v_rest,
+                            _v_ccf,
+                            _kp_range,
+                            phase[_b7],
+                            planet.systemic_velocity_kms,
+                            berv[_b7],
+                            _pix_lr_b7,
+                            _ccf_v_step,
+                            ccf_complete[_b7, :, : int(n_spectra[_b7])],
                             sysrem_opt=_opt_needs_injection,
+                            significant_eccentricity=cfg.observation.significant_eccentricity,
+                            eccentricity=planet.eccentricity,
+                            argument_of_periastron_deg=planet.argument_of_periastron_deg,
+                            sysrem_iterations=_si,
                         )
                     )
 
@@ -3790,10 +3740,19 @@ class ExoploreSimulator:
                     ccf_tot = np.nansum(ccf_values_shift, 1)
                     (ccf_tot_sig, max_sig, max_kp_idx,
                      max_v_wind, _) = get_max_CCF_peak(
-                        _mini_b7, ccf_tot, v_rest, _kp_range,
-                        b=None, stats=None,
-                        sysrem_opt=_opt_needs_injection, CCF_Noise=False,
-                    )
+                         ccf_tot,
+                         v_rest,
+                         _kp_range,
+                         b=None,
+                         stats=None,
+                         sysrem_opt=_opt_needs_injection,
+                         CCF_Noise=False,
+                         snr_exclude_kms=cfg.cross_correlation.snr_exclude_kms,
+                         sysrem_iterations=_si,
+                         exclude_around=("point" if cfg.pipeline.name == "Cheverall26" else "peak"),
+                         noise_source=cfg.cross_correlation.snr_noise_source,
+                         noise_kp_exclude_kms=cfg.cross_correlation.snr_noise_kp_exclude_kms,
+                     )
                     # Persist the Kp-Vrest S/N map (same as the all-metrics
                     # branch does) so the map array is available post-hoc for
                     # zoomed figures and significance sampling, CCF S/N only,
@@ -3803,7 +3762,7 @@ class ExoploreSimulator:
                         os.makedirs(_snr_mat_dir, exist_ok=True)
                         np.savez(
                             f"{_snr_mat_dir}/ccf_tot_sn_map_"
-                            f"{_mini_b7['Simulation_name']}.npz",
+                            f"{plot_name}.npz",
                             ccf_tot_sn=ccf_tot_sig, v_rest=v_rest,
                             kp_range=_kp_range,
                             sysrem_opt=bool(_opt_needs_injection),
@@ -3820,14 +3779,25 @@ class ExoploreSimulator:
                     except Exception as _e:
                         print(f"  NOTE: S/N map save skipped ({_e})")
                     plot_Kp_Vrest(
-                        _mini_b7, _kp_range, ccf_tot_sig, v_rest,
-                        show_plot=False, save_plot=True,
+                        replace(detection_plot, simulation_name=plot_name),
+                        _kp_range,
+                        ccf_tot_sig,
+                        v_rest,
+                        show_plot=False,
+                        save_plot=True,
                         sysrem_opt=_opt_needs_injection,
                     )
                     plot_1D_CCF(
-                        _mini_b7, v_rest, ccf_tot_sig, max_kp_idx,
-                        max_sig, _n_kp, max_v_wind, [-100, 100],
-                        show_plot=False, save_plot=True,
+                        replace(detection_plot, simulation_name=plot_name),
+                        v_rest,
+                        ccf_tot_sig,
+                        max_kp_idx,
+                        max_sig,
+                        _n_kp,
+                        max_v_wind,
+                        [-100, 100],
+                        show_plot=False,
+                        save_plot=True,
                         sysrem_opt=_opt_needs_injection,
                     )
                     if cfg.statistics.detectability_maps:
@@ -3860,29 +3830,47 @@ class ExoploreSimulator:
                     if _nn > 1:
                         _night_1d_slices = []
                         for _bco in range(_nn):
-                            _mini_b7["Simulation_name"] = (
+                            plot_name = (
                                 f"{sim_name}_night{_bco}")
                             _cvs_bco = get_shifted_ccf_matrix(
-                                _mini_b7, with_signal, v_rest, _v_ccf,
-                                _kp_range, phase,
-                                planet.systemic_velocity_kms, berv,
-                                _pix_lr_b7, _ccf_v_step, ccf_nights[_bco],
+                                with_signal,
+                                v_rest,
+                                _v_ccf,
+                                _kp_range,
+                                phase,
+                                planet.systemic_velocity_kms,
+                                berv,
+                                _pix_lr_b7,
+                                _ccf_v_step,
+                                ccf_nights[_bco],
                                 sysrem_opt=_opt_needs_injection,
+                                significant_eccentricity=cfg.observation.significant_eccentricity,
+                                eccentricity=planet.eccentricity,
+                                argument_of_periastron_deg=planet.argument_of_periastron_deg,
+                                sysrem_iterations=_si,
                             )
                             _ccf_tot_bco = np.nansum(_cvs_bco, 1)
                             (_cts_bco, _ms_bco, _mki_bco,
                              _mvw_bco, _) = get_max_CCF_peak(
-                                _mini_b7, _ccf_tot_bco, v_rest, _kp_range,
-                                b=None, stats=None,
-                                sysrem_opt=_opt_needs_injection,
-                                CCF_Noise=False,
-                            )
+                                 _ccf_tot_bco,
+                                 v_rest,
+                                 _kp_range,
+                                 b=None,
+                                 stats=None,
+                                 sysrem_opt=_opt_needs_injection,
+                                 CCF_Noise=False,
+                                 snr_exclude_kms=cfg.cross_correlation.snr_exclude_kms,
+                                 sysrem_iterations=_si,
+                                 exclude_around=("point" if cfg.pipeline.name == "Cheverall26" else "peak"),
+                                 noise_source=cfg.cross_correlation.snr_noise_source,
+                                 noise_kp_exclude_kms=cfg.cross_correlation.snr_noise_kp_exclude_kms,
+                             )
                             try:
                                 _snr_mdco = str(dirs["matrices"])
                                 os.makedirs(_snr_mdco, exist_ok=True)
                                 np.savez(
                                     f"{_snr_mdco}/ccf_tot_sn_map_"
-                                    f"{_mini_b7['Simulation_name']}.npz",
+                                    f"{plot_name}.npz",
                                     ccf_tot_sn=_cts_bco, v_rest=v_rest,
                                     kp_range=_kp_range,
                                     sysrem_opt=bool(_opt_needs_injection),
@@ -3892,49 +3880,70 @@ class ExoploreSimulator:
                                 print("  NOTE: per-night S/N map save "
                                       f"skipped ({_eco})")
                             plot_Kp_Vrest(
-                                _mini_b7, _kp_range, _cts_bco, v_rest,
-                                show_plot=False, save_plot=True,
+                                replace(detection_plot, simulation_name=plot_name),
+                                _kp_range,
+                                _cts_bco,
+                                v_rest,
+                                show_plot=False,
+                                save_plot=True,
                                 sysrem_opt=_opt_needs_injection,
                             )
                             plot_1D_CCF(
-                                _mini_b7, v_rest, _cts_bco, _mki_bco,
-                                _ms_bco, _n_kp, _mvw_bco, [-100, 100],
-                                show_plot=False, save_plot=True,
+                                replace(detection_plot, simulation_name=plot_name),
+                                v_rest,
+                                _cts_bco,
+                                _mki_bco,
+                                _ms_bco,
+                                _n_kp,
+                                _mvw_bco,
+                                [-100, 100],
+                                show_plot=False,
+                                save_plot=True,
                                 sysrem_opt=_opt_needs_injection,
                             )
                             _night_1d_slices.append(
                                 (_cts_bco[:, int(_mki_bco)], float(_ms_bco))
                             )
-                        _mini_b7["Simulation_name"] = sim_name  # restore
+                        plot_name = sim_name  # restore
                         from exoplore.plotting.kpvsys import (
                             plot_multi_night_1D_CCF)
                         plot_multi_night_1D_CCF(
-                            _mini_b7, v_rest,
+                            replace(detection_plot, simulation_name=plot_name),
+                            v_rest,
                             _night_1d_slices,
-                            (ccf_tot_sig[:, int(max_kp_idx)],
-                             float(max_sig)),
+                            (ccf_tot_sig[:, int(max_kp_idx)], float(max_sig)),
                             xlims=[-100, 100],
-                            show_plot=False, save_plot=True,
+                            show_plot=False,
+                            save_plot=True,
                         )
                 else:  # Different_nights
                     # Per-night Kp-Vsys maps (each saved with _nightN suffix)
                     _night_1d_slices = []
                     for _nn7 in range(_nn):
-                        _mini_b7["Simulation_name"] = (
+                        plot_name = (
                             f"{sim_name}_night{_nn7}")
                         ccf_tot = np.nansum(ccf_values_shift[_nn7], 1)
                         (ccf_tot_sig, max_sig, max_kp_idx,
                          max_v_wind, _) = get_max_CCF_peak(
-                            _mini_b7, ccf_tot, v_rest, _kp_range,
-                            b=None, stats=None,
-                            sysrem_opt=_opt_needs_injection, CCF_Noise=False,
-                        )
+                             ccf_tot,
+                             v_rest,
+                             _kp_range,
+                             b=None,
+                             stats=None,
+                             sysrem_opt=_opt_needs_injection,
+                             CCF_Noise=False,
+                             snr_exclude_kms=cfg.cross_correlation.snr_exclude_kms,
+                             sysrem_iterations=_si,
+                             exclude_around=("point" if cfg.pipeline.name == "Cheverall26" else "peak"),
+                             noise_source=cfg.cross_correlation.snr_noise_source,
+                             noise_kp_exclude_kms=cfg.cross_correlation.snr_noise_kp_exclude_kms,
+                         )
                         try:
                             _snr_md7 = str(dirs["matrices"])
                             os.makedirs(_snr_md7, exist_ok=True)
                             np.savez(
                                 f"{_snr_md7}/ccf_tot_sn_map_"
-                                f"{_mini_b7['Simulation_name']}.npz",
+                                f"{plot_name}.npz",
                                 ccf_tot_sn=ccf_tot_sig, v_rest=v_rest,
                                 kp_range=_kp_range,
                                 sysrem_opt=bool(_opt_needs_injection),
@@ -3947,20 +3956,31 @@ class ExoploreSimulator:
                         except Exception as _e7:
                             print(f"  NOTE: per-night S/N map save skipped ({_e7})")
                         plot_Kp_Vrest(
-                            _mini_b7, _kp_range, ccf_tot_sig, v_rest,
-                            show_plot=False, save_plot=True,
+                            replace(detection_plot, simulation_name=plot_name),
+                            _kp_range,
+                            ccf_tot_sig,
+                            v_rest,
+                            show_plot=False,
+                            save_plot=True,
                             sysrem_opt=_opt_needs_injection,
                         )
                         plot_1D_CCF(
-                            _mini_b7, v_rest, ccf_tot_sig, max_kp_idx,
-                            max_sig, _n_kp, max_v_wind, [-100, 100],
-                            show_plot=False, save_plot=True,
+                            replace(detection_plot, simulation_name=plot_name),
+                            v_rest,
+                            ccf_tot_sig,
+                            max_kp_idx,
+                            max_sig,
+                            _n_kp,
+                            max_v_wind,
+                            [-100, 100],
+                            show_plot=False,
+                            save_plot=True,
                             sysrem_opt=_opt_needs_injection,
                         )
                         _night_1d_slices.append(
                             (ccf_tot_sig[:, int(max_kp_idx)], float(max_sig))
                         )
-                    _mini_b7["Simulation_name"] = sim_name  # restore
+                    plot_name = sim_name  # restore
 
                     # Combined Kp-Vsys map: co-add all nights
                     # nansum over spectra per night then sum across nights, 
@@ -3971,16 +3991,25 @@ class ExoploreSimulator:
                     )
                     (ccf_tot_sig, max_sig, max_kp_idx,
                      max_v_wind, _) = get_max_CCF_peak(
-                        _mini_b7, _ccf_combined, v_rest, _kp_range,
-                        b=None, stats=None,
-                        sysrem_opt=_opt_needs_injection, CCF_Noise=False,
-                    )
+                         _ccf_combined,
+                         v_rest,
+                         _kp_range,
+                         b=None,
+                         stats=None,
+                         sysrem_opt=_opt_needs_injection,
+                         CCF_Noise=False,
+                         snr_exclude_kms=cfg.cross_correlation.snr_exclude_kms,
+                         sysrem_iterations=_si,
+                         exclude_around=("point" if cfg.pipeline.name == "Cheverall26" else "peak"),
+                         noise_source=cfg.cross_correlation.snr_noise_source,
+                         noise_kp_exclude_kms=cfg.cross_correlation.snr_noise_kp_exclude_kms,
+                     )
                     try:
                         _snr_mdc = str(dirs["matrices"])
                         os.makedirs(_snr_mdc, exist_ok=True)
                         np.savez(
                             f"{_snr_mdc}/ccf_tot_sn_map_"
-                            f"{_mini_b7['Simulation_name']}.npz",
+                            f"{plot_name}.npz",
                             ccf_tot_sn=ccf_tot_sig, v_rest=v_rest,
                             kp_range=_kp_range,
                             sysrem_opt=bool(_opt_needs_injection),
@@ -3997,24 +4026,37 @@ class ExoploreSimulator:
                     except Exception as _ec:
                         print(f"  NOTE: combined S/N map save skipped ({_ec})")
                     plot_Kp_Vrest(
-                        _mini_b7, _kp_range, ccf_tot_sig, v_rest,
-                        show_plot=False, save_plot=True,
+                        replace(detection_plot, simulation_name=plot_name),
+                        _kp_range,
+                        ccf_tot_sig,
+                        v_rest,
+                        show_plot=False,
+                        save_plot=True,
                         sysrem_opt=_opt_needs_injection,
                     )
                     plot_1D_CCF(
-                        _mini_b7, v_rest, ccf_tot_sig, max_kp_idx,
-                        max_sig, _n_kp, max_v_wind, [-100, 100],
-                        show_plot=False, save_plot=True,
+                        replace(detection_plot, simulation_name=plot_name),
+                        v_rest,
+                        ccf_tot_sig,
+                        max_kp_idx,
+                        max_sig,
+                        _n_kp,
+                        max_v_wind,
+                        [-100, 100],
+                        show_plot=False,
+                        save_plot=True,
                         sysrem_opt=_opt_needs_injection,
                     )
                     # Overlay: all individual nights + combined on one figure
                     from exoplore.plotting.kpvsys import plot_multi_night_1D_CCF
                     plot_multi_night_1D_CCF(
-                        _mini_b7, v_rest,
+                        replace(detection_plot, simulation_name=plot_name),
+                        v_rest,
                         _night_1d_slices,
                         (ccf_tot_sig[:, int(max_kp_idx)], float(max_sig)),
                         xlims=[-100, 100],
-                        show_plot=False, save_plot=True,
+                        show_plot=False,
+                        save_plot=True,
                     )
 
             elif (not cfg.cross_correlation.ccf_snr
@@ -4025,9 +4067,14 @@ class ExoploreSimulator:
                 (ccf_tot_sig, _, _, v_rest_ttest, max_sig,
                  max_kp_idx, max_v_wind,
                  _, _, _, _, _, _) = Welch_ttest_map(
-                    ccf_values_shift, v_rest, _kp_range,
-                    _mini_b7, CCF_Noise=False,
-                )
+                     ccf_values_shift,
+                     v_rest,
+                     _kp_range,
+                     CCF_Noise=False,
+                     in_trail_left_right=cfg.cross_correlation.in_trail_left_right,
+                     snr_exclude_kms=cfg.cross_correlation.snr_exclude_kms,
+                     velocity_step_kms=cfg.cross_correlation.velocity_step_kms,
+                 )
                 # Persist the Welch Kp-Vrest map for completeness (distinct
                 # name so it never collides with the CCF S/N map).
                 try:
@@ -4035,7 +4082,7 @@ class ExoploreSimulator:
                     os.makedirs(_snr_mat_dir, exist_ok=True)
                     np.savez(
                         f"{_snr_mat_dir}/ccf_tot_welch_map_"
-                        f"{_mini_b7['Simulation_name']}.npz",
+                        f"{plot_name}.npz",
                         ccf_tot_welch=ccf_tot_sig, v_rest=v_rest_ttest,
                         kp_range=_kp_range,
                         sysrem_opt=bool(_opt_needs_injection),
@@ -4048,13 +4095,26 @@ class ExoploreSimulator:
                 except Exception as _e:
                     print(f"  NOTE: Welch map save skipped ({_e})")
                 plot_Kp_Vrest(
-                    _mini_b7, _kp_range, ccf_tot_sig, v_rest_ttest,
-                    show_plot=False, save_plot=False, sysrem_opt=_opt_needs_injection,
+                    replace(detection_plot, simulation_name=plot_name),
+                    _kp_range,
+                    ccf_tot_sig,
+                    v_rest_ttest,
+                    show_plot=False,
+                    save_plot=False,
+                    sysrem_opt=_opt_needs_injection,
                 )
                 plot_1D_CCF(
-                    _mini_b7, v_rest_ttest, ccf_tot_sig, max_kp_idx,
-                    max_sig, _n_kp, max_v_wind, [-100, 100],
-                    show_plot=False, save_plot=False, sysrem_opt=_opt_needs_injection,
+                    replace(detection_plot, simulation_name=plot_name),
+                    v_rest_ttest,
+                    ccf_tot_sig,
+                    max_kp_idx,
+                    max_sig,
+                    _n_kp,
+                    max_v_wind,
+                    [-100, 100],
+                    show_plot=False,
+                    save_plot=False,
+                    sysrem_opt=_opt_needs_injection,
                 )
 
             elif cfg.cross_correlation.all_significance_metrics:
@@ -4062,14 +4122,23 @@ class ExoploreSimulator:
                 if not _dn:
                     ccf_tot = np.nansum(ccf_values_shift, 1)
                     # S/N branch
-                    _mini_b7["CCF_SNR"]    = True
-                    _mini_b7["Welch_ttest"] = False
+                    use_snr_statistic    = True
+                    use_welch_statistic = False
                     (ccf_tot_sn, max_sn, max_kp_idx_sn,
                      max_v_wind_sn, _) = get_max_CCF_peak(
-                        _mini_b7, ccf_tot, v_rest, _kp_range,
-                        b=None, stats=None,
-                        sysrem_opt=_opt_needs_injection, CCF_Noise=False,
-                    )
+                         ccf_tot,
+                         v_rest,
+                         _kp_range,
+                         b=None,
+                         stats=None,
+                         sysrem_opt=_opt_needs_injection,
+                         CCF_Noise=False,
+                         snr_exclude_kms=cfg.cross_correlation.snr_exclude_kms,
+                         sysrem_iterations=_si,
+                         exclude_around=("point" if cfg.pipeline.name == "Cheverall26" else "peak"),
+                         noise_source=cfg.cross_correlation.snr_noise_source,
+                         noise_kp_exclude_kms=cfg.cross_correlation.snr_noise_kp_exclude_kms,
+                     )
                     # Persist the combined Kp-Vrest S/N map so a zoomed figure
                     # and the S/N at a chosen velocity can be produced post-hoc.
                     try:
@@ -4077,7 +4146,7 @@ class ExoploreSimulator:
                         os.makedirs(_snr_mat_dir, exist_ok=True)
                         np.savez(
                             f"{_snr_mat_dir}/ccf_tot_sn_map_"
-                            f"{_mini_b7['Simulation_name']}.npz",
+                            f"{plot_name}.npz",
                             ccf_tot_sn=ccf_tot_sn, v_rest=v_rest,
                             kp_range=_kp_range,
                             sysrem_opt=bool(_opt_needs_injection),
@@ -4094,44 +4163,71 @@ class ExoploreSimulator:
                     except Exception as _e:
                         print(f"  NOTE: S/N map save skipped ({_e})")
                     plot_Kp_Vrest(
-                        _mini_b7, _kp_range, ccf_tot_sn, v_rest,
-                        show_plot=False, save_plot=True,
+                        replace(detection_plot, simulation_name=plot_name),
+                        _kp_range,
+                        ccf_tot_sn,
+                        v_rest,
+                        show_plot=False,
+                        save_plot=True,
                         sysrem_opt=_opt_needs_injection,
                     )
                     plot_1D_CCF(
-                        _mini_b7, v_rest, ccf_tot_sn, max_kp_idx_sn,
-                        max_sn, _n_kp, max_v_wind_sn, [-100, 100],
-                        show_plot=False, save_plot=True,
+                        replace(detection_plot, simulation_name=plot_name),
+                        v_rest,
+                        ccf_tot_sn,
+                        max_kp_idx_sn,
+                        max_sn,
+                        _n_kp,
+                        max_v_wind_sn,
+                        [-100, 100],
+                        show_plot=False,
+                        save_plot=True,
                         sysrem_opt=_opt_needs_injection,
                     )
                     # Welch branch, use a distinct Simulation_name so the
                     # Welch map doesn't overwrite the S/N map on disk.
-                    _mini_b7["CCF_SNR"]    = False
-                    _mini_b7["Welch_ttest"] = True
+                    use_snr_statistic    = False
+                    use_welch_statistic = True
                     (ccf_tot_sig, _, _, v_rest_ttest, max_sig,
                      max_kp_idx, max_v_wind,
                      _, _, _, _, _, _) = Welch_ttest_map(
-                        ccf_values_shift, v_rest, _kp_range,
-                        _mini_b7, CCF_Noise=False,
-                    )
-                    _sim_name_b7 = _mini_b7["Simulation_name"]
-                    _mini_b7["Simulation_name"] = f"{_sim_name_b7}_Welch"
+                         ccf_values_shift,
+                         v_rest,
+                         _kp_range,
+                         CCF_Noise=False,
+                         in_trail_left_right=cfg.cross_correlation.in_trail_left_right,
+                         snr_exclude_kms=cfg.cross_correlation.snr_exclude_kms,
+                         velocity_step_kms=cfg.cross_correlation.velocity_step_kms,
+                     )
+                    _sim_name_b7 = plot_name
+                    plot_name = f"{_sim_name_b7}_Welch"
                     # The Welch t-test map is collapsed to (n_v, n_kp) with a
                     # scalar max_kp and has no per-SYSREM-iteration axis, so it
                     # always uses the single-panel plot path (sysrem_opt=False),
                     # unlike the optimisation-aware CCF S/N map above.
                     plot_Kp_Vrest(
-                        _mini_b7, _kp_range, ccf_tot_sig, v_rest_ttest,
-                        show_plot=False, save_plot=True,
+                        replace(detection_plot, simulation_name=plot_name),
+                        _kp_range,
+                        ccf_tot_sig,
+                        v_rest_ttest,
+                        show_plot=False,
+                        save_plot=True,
                         sysrem_opt=False,
                     )
                     plot_1D_CCF(
-                        _mini_b7, v_rest_ttest, ccf_tot_sig, max_kp_idx,
-                        max_sig, _n_kp, max_v_wind, [-100, 100],
-                        show_plot=False, save_plot=True,
+                        replace(detection_plot, simulation_name=plot_name),
+                        v_rest_ttest,
+                        ccf_tot_sig,
+                        max_kp_idx,
+                        max_sig,
+                        _n_kp,
+                        max_v_wind,
+                        [-100, 100],
+                        show_plot=False,
+                        save_plot=True,
                         sysrem_opt=False,
                     )
-                    _mini_b7["Simulation_name"] = _sim_name_b7
+                    plot_name = _sim_name_b7
 
 
             # 7g, Injection-based per-order SYSREM iteration selection
@@ -4139,10 +4235,19 @@ class ExoploreSimulator:
             # prepare.py and does not need post-hoc CCF maximisation).
             if _opt_needs_injection:
                 sysrem_it_opt = get_SYSREM_its_ordbyord(
-                    _mini_b7, _ccf_all_orders, v_rest,
-                    with_signal, phase,
-                    berv, planet.systemic_velocity_kms,
-                    _pix_lr_b7, _ccf_v_step, _v_ccf,
+                    _ccf_all_orders,
+                    v_rest,
+                    with_signal,
+                    phase,
+                    berv,
+                    planet.systemic_velocity_kms,
+                    _pix_lr_b7,
+                    _ccf_v_step,
+                    _v_ccf,
+                    n_orders=analysis_order_count,
+                    n_nights=_nn,
+                    sysrem_iterations=_si,
+                    injection_velocity_kms=cfg.pipeline.kp_vrest_injection,
                 ).astype(int)
 
                 if (sysrem_it_opt.shape[0] == n_orders
@@ -4168,27 +4273,58 @@ class ExoploreSimulator:
                     _ccf_opt = np.nansum(_ccf_opt, axis=0)  # orders
                     _ccf_opt = np.nansum(_ccf_opt, axis=0)  # nights
                     _cvs_opt = get_shifted_ccf_matrix(
-                        _mini_b7, with_signal, v_rest, _v_ccf,
-                        _kp_range, phase, planet.systemic_velocity_kms,
-                        berv, _pix_lr_b7, _ccf_v_step,
-                        _ccf_opt, sysrem_opt=False,
+                        with_signal,
+                        v_rest,
+                        _v_ccf,
+                        _kp_range,
+                        phase,
+                        planet.systemic_velocity_kms,
+                        berv,
+                        _pix_lr_b7,
+                        _ccf_v_step,
+                        _ccf_opt,
+                        sysrem_opt=False,
+                        significant_eccentricity=cfg.observation.significant_eccentricity,
+                        eccentricity=planet.eccentricity,
+                        argument_of_periastron_deg=planet.argument_of_periastron_deg,
+                        sysrem_iterations=_si,
                     )
                     _ctot_opt = np.sum(_cvs_opt, 1)
                     (ccf_tot_sig, max_sig, max_kp_idx,
                      max_v_wind, _) = get_max_CCF_peak(
-                        _mini_b7, _ctot_opt, v_rest, _kp_range,
-                        b=None, stats=None,
-                        sysrem_opt=False, CCF_Noise=False,
-                    )
+                         _ctot_opt,
+                         v_rest,
+                         _kp_range,
+                         b=None,
+                         stats=None,
+                         sysrem_opt=False,
+                         CCF_Noise=False,
+                         snr_exclude_kms=cfg.cross_correlation.snr_exclude_kms,
+                         sysrem_iterations=_si,
+                         exclude_around=("point" if cfg.pipeline.name == "Cheverall26" else "peak"),
+                         noise_source=cfg.cross_correlation.snr_noise_source,
+                         noise_kp_exclude_kms=cfg.cross_correlation.snr_noise_kp_exclude_kms,
+                     )
                     plot_Kp_Vrest(
-                        _mini_b7, _kp_range, ccf_tot_sig, v_rest,
-                        show_plot=False, save_plot=True,
+                        replace(detection_plot, simulation_name=plot_name),
+                        _kp_range,
+                        ccf_tot_sig,
+                        v_rest,
+                        show_plot=False,
+                        save_plot=True,
                         sysrem_opt=False,
                     )
                     plot_1D_CCF(
-                        _mini_b7, v_rest, ccf_tot_sig, max_kp_idx,
-                        max_sig, _n_kp, max_v_wind, [-100, 100],
-                        show_plot=False, save_plot=True,
+                        replace(detection_plot, simulation_name=plot_name),
+                        v_rest,
+                        ccf_tot_sig,
+                        max_kp_idx,
+                        max_sig,
+                        _n_kp,
+                        max_v_wind,
+                        [-100, 100],
+                        show_plot=False,
+                        save_plot=True,
                         sysrem_opt=False,
                     )
                     _sysrem_opt_file = (
@@ -4203,22 +4339,41 @@ class ExoploreSimulator:
                 def _save_stats_corner(stats_arr, sig_map, name_suffix=""):
                     """Render the noise-study corner with plot_stats (best-effort)."""
                     try:
-                        _inp = dict(_mini_b7)
-                        if name_suffix:
-                            _inp["Simulation_name"] = f"{sim_name}{name_suffix}"
+                        corner_name = (
+                            f"{sim_name}{name_suffix}" if name_suffix else plot_name
+                        )
                         plot_stats(
                             stats_arr,
-                            kp_lim_inf=-350, kp_lim_sup=350, kp_step=175,
-                            vrest_lim_inf=-100, vrest_lim_sup=100, vrest_step=50,
-                            sn_lim_inf=1, sn_lim_sup=13, sn_lim_step=2,
-                            binwidth_sn=0.5, binwidth_kp=20, binwidth_v_rest=5,
-                            significance_metric=sig_map, inp_dat=_inp, v_rest=v_rest,
-                            auto_lims=True, mark_true_values=True,
+                            kp_lim_inf=-350,
+                            kp_lim_sup=350,
+                            kp_step=175,
+                            vrest_lim_inf=-100,
+                            vrest_lim_sup=100,
+                            vrest_step=50,
+                            sn_lim_inf=1,
+                            sn_lim_sup=13,
+                            sn_lim_step=2,
+                            binwidth_sn=0.5,
+                            binwidth_kp=20,
+                            binwidth_v_rest=5,
+                            significance_metric=sig_map,
+                            v_rest=v_rest,
+                            auto_lims=True,
+                            mark_true_values=True,
                             show_dist_CC_values=False,
-                            show_plot=False, save_plot=True, CCF_Noise=False,
+                            show_plot=False,
+                            save_plot=True,
+                            CCF_Noise=False,
+                            reference_kp_kms=planet.kp_kms,
+                            reference_vrest_kms=pm.wind_velocity_kms,
+                            plots_dir=str(dirs["plots"]) + "/",
+                            simulation_name=corner_name,
+                            kp_max_kms=cfg.cross_correlation.kp_max_kms,
+                            velocity_step_kms=cfg.cross_correlation.velocity_step_kms,
+                            systemic_velocity_kms=planet.systemic_velocity_kms,
                         )
                         print(f"  [stats] Corner plot saved: "
-                              f"Corner_plot_{_inp['Simulation_name']}.png")
+                              f"Corner_plot_{corner_name}.png")
                     except Exception as _e:
                         print(f"  [stats] Could not save corner plot: {_e}")
 
@@ -4229,15 +4384,30 @@ class ExoploreSimulator:
                      _, _, _, _,
                      _, _, shuffled_nights, v_rest_sigma) = (
                         statistical_study(
-                            _mini_b7, _ccf_v_step,
-                            _ccf_all_orders, _kp_range,
-                            phase, _v_ccf, v_rest, with_signal,
-                            _pix_lr_b7, sysrem_it_opt,
+                            replace(
+                                night_study,
+                                cross_correlation=replace(
+                                    cfg.cross_correlation,
+                                    ccf_snr=use_snr_statistic,
+                                    welch_ttest=use_welch_statistic,
+                                ),
+                            ),
+                            _ccf_v_step,
+                            _ccf_all_orders,
+                            _kp_range,
+                            phase,
+                            _v_ccf,
+                            v_rest,
+                            with_signal,
+                            _pix_lr_b7,
+                            sysrem_it_opt,
                             _ccf_iterations,
                             in_trail_pix=cfg.cross_correlation.in_trail_left_right,
-                            auto_lims=True, input_stats=None,
+                            auto_lims=True,
+                            input_stats=None,
                             verbose=True,
-                            show_plot=False, save_plot=True,
+                            show_plot=False,
+                            save_plot=True,
                             CCF_Noise=False,
                         )
                     )
@@ -4282,10 +4452,10 @@ class ExoploreSimulator:
                             if _chev_tim_pos is not None:
                                 _tim_pos, _tim_max = _chev_tim_pos, _chev_tim_max
                             else:
-                                _excl = float(_mini_b7.get("CCF_SNR_exclude", 15.0))
+                                _excl = float((cfg.cross_correlation.snr_exclude_kms))
                                 _tim_pos, _tim_max = chev26_timing_stats(
                                     _ccf_all_orders, _v_ccf, phase, berv,
-                                    _mini_b7["K_p"], _mini_b7["V_sys"], _nn,
+                                    planet.kp_kms, planet.systemic_velocity_kms, _nn,
                                     n_in_cross=14, exclude=_excl,
                                     vmax_noise=cfg.cross_correlation.noise_velocity_max_kms)
                                 save_compressed(
@@ -4317,7 +4487,7 @@ class ExoploreSimulator:
                             # data above stays in matrices/), matching the
                             # built-in Corner_plot convention.
                             _corner4 = (f"{str(dirs['plots'])}/Corner_4metric_"
-                                        f"{_mini_b7['Simulation_name']}.png")
+                                        f"{plot_name}.png")
                             chev26_fourmetric_corner(
                                 _metrics4, _corner4,
                                 title=f"Cheverall26 significance metrics: {sim_name}")
@@ -4328,45 +4498,75 @@ class ExoploreSimulator:
 
                 else:
                     # All_significance_metrics: run both S/N and Welch
-                    _mini_b7["CCF_SNR"]    = True
-                    _mini_b7["Welch_ttest"] = False
-                    _mini_b7["CCF_SNR"]    = True
-                    _mini_b7["Welch_ttest"] = False
+                    use_snr_statistic    = True
+                    use_welch_statistic = False
+                    use_snr_statistic    = True
+                    use_welch_statistic = False
                     (_, ccf_tot_sn_stat, _, _,
                      stats_sn, _, _,
                      stats_planet_pos_sn, stats_planet_area_sn,
                      _, _, _, _,
                      _, _, shuffled_nights_sn, _) = (
                         statistical_study(
-                            _mini_b7, _ccf_v_step,
-                            _ccf_all_orders, _kp_range,
-                            phase, _v_ccf, v_rest, with_signal,
-                            _pix_lr_b7, sysrem_it_opt,
+                            replace(
+                                night_study,
+                                cross_correlation=replace(
+                                    cfg.cross_correlation,
+                                    ccf_snr=use_snr_statistic,
+                                    welch_ttest=use_welch_statistic,
+                                ),
+                            ),
+                            _ccf_v_step,
+                            _ccf_all_orders,
+                            _kp_range,
+                            phase,
+                            _v_ccf,
+                            v_rest,
+                            with_signal,
+                            _pix_lr_b7,
+                            sysrem_it_opt,
                             _ccf_iterations,
                             in_trail_pix=cfg.cross_correlation.in_trail_left_right,
-                            auto_lims=True, input_stats=None,
+                            auto_lims=True,
+                            input_stats=None,
                             verbose=True,
-                            show_plot=False, save_plot=True,
+                            show_plot=False,
+                            save_plot=True,
                             CCF_Noise=False,
                         )
                     )
-                    _mini_b7["CCF_SNR"]    = False
-                    _mini_b7["Welch_ttest"] = True
+                    use_snr_statistic    = False
+                    use_welch_statistic = True
                     (_, _, _, _,
                      stats_sig, _, _,
                      stats_planet_pos_sig, stats_planet_area_sig,
                      _, _, _, _,
                      _, _, shuffled_nights_sig, v_rest_sigma) = (
                         statistical_study(
-                            _mini_b7, _ccf_v_step,
-                            _ccf_all_orders, _kp_range,
-                            phase, _v_ccf, v_rest, with_signal,
-                            _pix_lr_b7, sysrem_it_opt,
+                            replace(
+                                night_study,
+                                cross_correlation=replace(
+                                    cfg.cross_correlation,
+                                    ccf_snr=use_snr_statistic,
+                                    welch_ttest=use_welch_statistic,
+                                ),
+                            ),
+                            _ccf_v_step,
+                            _ccf_all_orders,
+                            _kp_range,
+                            phase,
+                            _v_ccf,
+                            v_rest,
+                            with_signal,
+                            _pix_lr_b7,
+                            sysrem_it_opt,
                             _ccf_iterations,
                             in_trail_pix=cfg.cross_correlation.in_trail_left_right,
-                            auto_lims=True, input_stats=None,
+                            auto_lims=True,
+                            input_stats=None,
                             verbose=True,
-                            show_plot=False, save_plot=True,
+                            show_plot=False,
+                            save_plot=True,
                             CCF_Noise=False,
                         )
                     )
@@ -4400,10 +4600,10 @@ class ExoploreSimulator:
 
             # -------------------------------------------------------
             # Note on skipped optional analyses:
-            # * Study_velocity_ranges  (inp_dat["Study_velocity_ranges"])
+            # * Velocity-range study
             #   → requires iterating ccf_v_step grid. skipped pending
             #     dedicated analysis module
-            # * Noise_statistical_study (inp_dat["Noise_statistical_study"])
+            # * Noise-only study
             #   → requires gauss_noise per order which is not yet stored
             #     in per_order_results. skipped pending Block 5 update
             # -------------------------------------------------------
@@ -4632,21 +4832,17 @@ class ExoploreSimulator:
         # The enable flag gates expensive sampling. setup labels above it are
         # also constructed when sampling is disabled.
         if cfg.retrieval.enabled:
+            if _dn:
+                raise ValueError(
+                    "Atmospheric retrieval requires a common observing sequence. "
+                    "Set observation.different_nights=false."
+                )
             import copy as _copy_b9
             import json as _json_b9
-            # Augment _mini_b7 with all keys needed by call_pRT,
-            # spec_to_mat_fraction, and preparing_pipeline inside the loglike.
-            # The monolithic inp_dat is split here into mini-dicts by
-            # purpose.  Merging _mini_prt and _mini_limbs here gives the
-            # retrieval loglike the full parameter set without key errors.
-            _mini_b7.update(_mini_prt)
-            _mini_b7.update(_mini_limbs)
-            _mini_b7.update({
-                "Scale_inj":           cfg.pipeline.inject_scale_factor,
-                "Inject_Scale_Factor": cfg.pipeline.inject_scale_factor,
-                "Noise_statistical_study": False,
-            })
-            # Set species_ret for the abundance array constructed by each
+            # Set the signal amplitude used inside each retrieval likelihood.
+            # Trial spectra use rt_inputs for the system quantities and
+            # cfg.atmosphere for the atmospheric regions and chemistry.
+            # Select species in the same order as the abundances constructed by each
             # likelihood. The species list and abundance array must align.
             _ret_dim_b9 = cfg.retrieval.dimensionality
             if _ret_dim_b9 in ("1D", "1D_Gibson22"):
@@ -4656,22 +4852,22 @@ class ExoploreSimulator:
                 # the likelihood). The default line species is H2O.
                 if (cfg.retrieval.atmosphere is not None
                         and cfg.retrieval.atmosphere.species):
-                    _mini_b7["species_ret"] = [
+                    retrieval_species = [
                         "H2", "He", cfg.retrieval.atmosphere.species[-1]]
                 else:
-                    _mini_b7["species_ret"] = ["H2", "He", "H2O"]
+                    retrieval_species = ["H2", "He", "H2O"]
             elif _ret_dim_b9 in ("1D_alpha", "1D_alpha_Gibson22"):
                 # Amplitude scaling: nominal model uses the config's species
                 # opacity (the same line list as the CCF template).
-                _mini_b7["species_ret"] = [
+                retrieval_species = [
                     "H2", "He", cfg.atmosphere.ccf_template.species[-1]]
             elif _ret_dim_b9 == "1D_CtoO_met":
-                _mini_b7["species_ret"] = ["H2", "He"]
+                retrieval_species = ["H2", "He"]
             elif _ret_dim_b9 in ("1D_extended", "1D_extended_fast"):
-                _mini_b7["species_ret"] = [
+                retrieval_species = [
                     "H2", "He", "H2O", "CH4", "NH3", "CO", "CO2", "HCN"]
             elif _ret_dim_b9 == "2D":
-                _mini_b7["species_ret"] = ["H2", "He", "H2O"]
+                retrieval_species = ["H2", "He", "H2O"]
 
             try:
                 import pymultinest as _pymn
@@ -4690,7 +4886,7 @@ class ExoploreSimulator:
             except ImportError:
                 _Radtrans = None
 
-            _mini_b7["prepare_template"] = True
+            prepare_retrieval_template = True
 
             # ------------------------------------------------------------------
             # 9a, Build retrieval matrices from per_order_results (in-memory)
@@ -4707,7 +4903,7 @@ class ExoploreSimulator:
             # from ALL retrieval structures before anything else in Block 9 runs.
             # The loglike uses hh as a SHARED index across:
             #   atmosphere_ret_list[hh]
-            #   inp_dat["order_selection"][hh]
+            #   retrieval_orders[hh]
             #   mask_aux[night_index, hh, :]
             #   model_mat[hh]
             # All of these must be in sync.  The only safe place to achieve
@@ -4720,95 +4916,53 @@ class ExoploreSimulator:
                     if h not in _fully_masked_h_set
                 ]
                 _n_orders_b9 = len(_good_h_b9)
-                _mini_b7["order_selection"] = order_selection[
+                retrieval_orders = order_selection[
                     np.asarray(_good_h_b9, dtype=int)]
             else:
                 _good_h_b9 = list(range(_n_orders_b9))
 
-            # Keep _mini_b7["n_orders"] in sync with any dropped orders
-            _mini_b7["n_orders"] = _n_orders_b9
+            # Retrieval arrays and opacity objects use the retained order count.
+            analysis_order_count = _n_orders_b9
 
-            if not _dn:
-                _n_sp_b9 = n_spectra
-                # mat_res / propag / std_noise already have a night axis
-                # from Block 5 allocation shape (_nn, n_spectra, n_pixels),
-                # so stacking gives (n_orders, _nn, n_spectra, n_pixels). ✓
-                # mat_star comes from get_stellar_matrix → (n_spectra, n_pixels),
-                # so we must insert the night axis after stacking.
-                mat_res_b9    = np.stack(
-                    [per_order_results[h]["mat_res"]      for h in _good_h_b9])
-                propag_b9     = np.stack(
-                    [per_order_results[h]["propag_noise"] for h in _good_h_b9])
-                std_noise_b9  = np.stack(
-                    [per_order_results[h]["std_noise"]    for h in _good_h_b9])
-                _ms_stack = np.stack(
-                    [per_order_results[h]["mat_star"]     for h in _good_h_b9])
-                if _ms_stack.ndim == 3:
-                    # (n_orders, n_spectra, n_pixels) → add night dim
-                    mat_star_b9 = _ms_stack[:, np.newaxis, :, :]
-                else:
-                    mat_star_b9 = _ms_stack
-                _mrp_b9 = getattr(cfg.retrieval, "model_reprocessing", "bare")
-                if _mrp_b9 != "bare" and _mini_b7["Retrieval_choice"] == 6:
-                    raise NotImplementedError(
-                        f"retrieval.model_reprocessing='{_mrp_b9}' is not "
-                        "implemented for time-resolved retrievals "
-                        "(retrieval_choice=6).")
-                _U_b9 = None
-                if (cfg.pipeline.name in ["ASL19", "Gibson22"]
-                        or _mrp_b9 == "projector"):
-                    if per_order_results[0].get("U_sysrem") is not None:
-                        _U_b9 = np.stack(
-                            [per_order_results[h]["U_sysrem"]
-                             for h in _good_h_b9])
-                # Empirical removed-structure matrices for the "embedded"
-                # model-reprocessing mode.
-                _cor_b9 = None
-                if (_mrp_b9 == "embedded"
-                        and per_order_results[0].get("cor") is not None):
-                    _cor_b9 = np.stack(
-                        [per_order_results[h]["cor"] for h in _good_h_b9])
+            _n_sp_b9 = n_spectra
+            # mat_res / propag / std_noise already have a night axis
+            # from Block 5 allocation shape (_nn, n_spectra, n_pixels),
+            # so stacking gives (n_orders, _nn, n_spectra, n_pixels). ✓
+            # mat_star comes from get_stellar_matrix → (n_spectra, n_pixels),
+            # so we must insert the night axis after stacking.
+            mat_res_b9    = np.stack(
+                [per_order_results[h]["mat_res"]      for h in _good_h_b9])
+            propag_b9     = np.stack(
+                [per_order_results[h]["propag_noise"] for h in _good_h_b9])
+            std_noise_b9  = np.stack(
+                [per_order_results[h]["std_noise"]    for h in _good_h_b9])
+            _ms_stack = np.stack(
+                [per_order_results[h]["mat_star"]     for h in _good_h_b9])
+            if _ms_stack.ndim == 3:
+                # (n_orders, n_spectra, n_pixels) → add night dim
+                mat_star_b9 = _ms_stack[:, np.newaxis, :, :]
             else:
-                _max_sp_b9 = int(np.max(_n_spectra_store_b5))
-                mat_res_b9   = np.full(
-                    (_n_orders_b9, _n_nights_b9, _max_sp_b9, _n_px_b9), np.nan)
-                propag_b9    = np.full_like(mat_res_b9, np.nan)
-                std_noise_b9 = np.full_like(mat_res_b9, np.nan)
-                mat_star_b9  = np.full_like(mat_res_b9, np.nan)
-                for _hb9_idx, _hb9 in enumerate(_good_h_b9):
-                    _mr_h = per_order_results[_hb9]["mat_res"]
-                    _pn_h = per_order_results[_hb9]["propag_noise"]
-                    _sn_h = per_order_results[_hb9]["std_noise"]
-                    _ms_h = per_order_results[_hb9]["mat_star"]
-                    mat_res_b9[_hb9_idx,   :, :_mr_h.shape[1], :] = _mr_h
-                    propag_b9[_hb9_idx,    :, :_pn_h.shape[1], :] = _pn_h
-                    std_noise_b9[_hb9_idx, :, :_sn_h.shape[1], :] = _sn_h
-                    mat_star_b9[_hb9_idx,  :, :_ms_h.shape[1], :] = _ms_h
-                _mrp_b9 = getattr(cfg.retrieval, "model_reprocessing", "bare")
-                _cor_b9 = None
-                if _mrp_b9 != "bare":
-                    raise NotImplementedError(
-                        f"retrieval.model_reprocessing='{_mrp_b9}' is only "
-                        "implemented for single-night retrievals "
-                        "(different_nights=false).")
-                _U_b9 = None
-                if cfg.pipeline.name in ["ASL19", "Gibson22"]:
-                    if "U_sysrem" in per_order_results[0]:
-                        _U_b9 = np.full(
-                            (_n_orders_b9, _n_nights_b9, _max_sp_b9,
-                             _si), np.nan)
-                        for _hb9_idx, _hb9 in enumerate(_good_h_b9):
-                            _u_h = per_order_results[_hb9]["U_sysrem"]
-                            _U_b9[_hb9_idx, :, :_u_h.shape[1], :] = _u_h
-                # NaN-fill trailing spectra per night
-                for _nn9 in range(_n_nights_b9):
-                    _nsp9 = int(_n_spectra_store_b5[_nn9])
-                    mat_res_b9[:,   _nn9, _nsp9:, :] = np.nan
-                    propag_b9[:,    _nn9, _nsp9:, :] = np.nan
-                    std_noise_b9[:, _nn9, _nsp9:, :] = np.nan
-                    mat_star_b9[:,  _nn9, _nsp9:, :] = np.nan
-                    if _U_b9 is not None:
-                        _U_b9[:, _nn9, _nsp9:, :] = np.nan
+                mat_star_b9 = _ms_stack
+            _mrp_b9 = getattr(cfg.retrieval, "model_reprocessing", "bare")
+            if _mrp_b9 != "bare" and cfg.retrieval.retrieval_choice == 6:
+                raise NotImplementedError(
+                    f"retrieval.model_reprocessing='{_mrp_b9}' is not "
+                    "implemented for time-resolved retrievals "
+                    "(retrieval_choice=6).")
+            _U_b9 = None
+            if (cfg.pipeline.name in ["ASL19", "Gibson22"]
+                    or _mrp_b9 == "projector"):
+                if per_order_results[0].get("U_sysrem") is not None:
+                    _U_b9 = np.stack(
+                        [per_order_results[h]["U_sysrem"]
+                         for h in _good_h_b9])
+            # Empirical removed-structure matrices for the "embedded"
+            # model-reprocessing mode.
+            _cor_b9 = None
+            if (_mrp_b9 == "embedded"
+                    and per_order_results[0].get("cor") is not None):
+                _cor_b9 = np.stack(
+                    [per_order_results[h]["cor"] for h in _good_h_b9])
 
             # ------------------------------------------------------------------
             # 9b, base directory
@@ -4816,7 +4970,7 @@ class ExoploreSimulator:
             # Block 8 saved masks and matrices directly into _base_dir_b8.
             # Block 9 must load from the same directory.
             _base_dir_b9 = _base_dir_b8
-            _sfx9 = _mini_b7["Simulation_name"]
+            _sfx9 = plot_name
 
             # ------------------------------------------------------------------
             # 9c, Night selection (lines 5757-5828)
@@ -4824,7 +4978,7 @@ class ExoploreSimulator:
             _night_min_b9 = int(_night_min)
             _night_max_b9 = int(_night_max)
 
-            if _mini_b7["Retrieval_choice"] == 1:
+            if cfg.retrieval.retrieval_choice == 1:
                 print("Performing retrieval on the first night")
                 _mr_n1 = mat_res_b9[:, 0, :, :].reshape(
                     1, *mat_res_b9[:, 0, :, :].shape)
@@ -4838,7 +4992,7 @@ class ExoploreSimulator:
                     1, *std_noise_b9[:, 0, :, :].shape)
                 _std_noise_ret = np.transpose(_sn_n1, (1, 0, 2, 3))
                 retrieved_nights = 1
-            elif _mini_b7["Retrieval_choice"] == 2:
+            elif cfg.retrieval.retrieval_choice == 2:
                 print("Performing retrieval on night_max, night_min, and night_avg")
                 _mean_night_b9 = int(np.argwhere(
                     stats[:, 0] == find_nearest(
@@ -4849,7 +5003,7 @@ class ExoploreSimulator:
                 _mat_star_ret  = mat_star_b9[:, _sel9, :, :]
                 _std_noise_ret = std_noise_b9[:,_sel9, :, :]
                 retrieved_nights = 3
-            elif _mini_b7["Retrieval_choice"] == 3:
+            elif cfg.retrieval.retrieval_choice == 3:
                 print("Performing retrieval on night_max and night_min")
                 _sel9 = [_night_max_b9, _night_min_b9]
                 _mat_res_ret   = mat_res_b9[:,  _sel9, :, :]
@@ -4857,8 +5011,8 @@ class ExoploreSimulator:
                 _mat_star_ret  = mat_star_b9[:, _sel9, :, :]
                 _std_noise_ret = std_noise_b9[:,_sel9, :, :]
                 retrieved_nights = 2
-            elif _mini_b7["Retrieval_choice"] in [4, 5, 6]:
-                if _mini_b7["Retrieval_choice"] == 4:
+            elif cfg.retrieval.retrieval_choice in [4, 5, 6]:
+                if cfg.retrieval.retrieval_choice == 4:
                     print("Combining all retrievals")
                 _mat_res_ret   = np.copy(mat_res_b9)
                 _propag_ret    = np.copy(propag_b9)
@@ -4869,16 +5023,8 @@ class ExoploreSimulator:
             # ------------------------------------------------------------------
             # 9d, Wave and mask loading (lines 5838-5858)
             # ------------------------------------------------------------------
-            if _mini_b7["Different_nights"]:
-                wave_ret = [
-                    wave_star[
-                        _mini_b7["order_selection_diffnights"][_b9], :
-                    ].reshape(_n_px_b9 * len(_mini_b7["order_selection_diffnights"][_b9]))
-                    for _b9 in range(_n_nights_b9)
-                ]
-            else:
-                wave_ret = wave_star[_mini_b7["order_selection"], :].reshape(
-                    _n_px_b9 * len(_mini_b7["order_selection"]))
+            wave_ret = wave_star[retrieval_orders, :].reshape(
+                _n_px_b9 * len(retrieval_orders))
 
             # Load masks from files saved in Block 8
             mask_ret_aux = np.load(
@@ -4897,8 +5043,8 @@ class ExoploreSimulator:
             # ------------------------------------------------------------------
             # 9d.5, Filter mask arrays for fully-masked orders
             # mat_res_b9 / propag_b9 / std_noise_b9 / mat_star_b9 were already
-            # built from _good_h_b9 only in 9a.  _mini_b7["order_selection"] was
-            # updated there too, so wave_ret (built in 9d) is already correct.
+            # built from the retained orders in 9a. retrieval_orders uses the
+            # same selection, so wave_ret (built in 9d) follows those orders.
             # The only thing left is to filter the on-disk mask arrays, which
             # are shaped (n_nights, n_orders_ORIGINAL, n_pixels) and therefore
             # still carry the bad-order columns.
@@ -4919,128 +5065,72 @@ class ExoploreSimulator:
             # 9e, Reshape matrices (lines 5863-5969)
             # ------------------------------------------------------------------
             _n_ord_sel_b9 = _n_orders_b9  # updated above if orders were dropped
-            if not _mini_b7["Different_nights"]:
-                mask_ret = mask_ret_aux.reshape(
+            mask_ret = mask_ret_aux.reshape(
+                _n_nights_b9, _n_px_b9 * _n_ord_sel_b9)
+            useful_spectral_points_ret = useful_spectral_points_aux.reshape(
+                _n_nights_b9, _n_px_b9 * _n_ord_sel_b9)
+            mask_snr_ret = mask_snr_ret_aux.reshape(
+                _n_nights_b9, _n_px_b9 * _n_ord_sel_b9)
+            useful_spectral_points_snr_ret = \
+                useful_spectral_points_snr_aux.reshape(
                     _n_nights_b9, _n_px_b9 * _n_ord_sel_b9)
-                useful_spectral_points_ret = useful_spectral_points_aux.reshape(
+            mask_inter_ret = mask_inter_ret_aux.reshape(
+                _n_nights_b9, _n_px_b9 * _n_ord_sel_b9)
+            useful_spectral_points_inter_ret = \
+                useful_spectral_points_inter_aux.reshape(
                     _n_nights_b9, _n_px_b9 * _n_ord_sel_b9)
-                mask_snr_ret = mask_snr_ret_aux.reshape(
-                    _n_nights_b9, _n_px_b9 * _n_ord_sel_b9)
-                useful_spectral_points_snr_ret = \
-                    useful_spectral_points_snr_aux.reshape(
-                        _n_nights_b9, _n_px_b9 * _n_ord_sel_b9)
-                mask_inter_ret = mask_inter_ret_aux.reshape(
-                    _n_nights_b9, _n_px_b9 * _n_ord_sel_b9)
-                useful_spectral_points_inter_ret = \
-                    useful_spectral_points_inter_aux.reshape(
-                        _n_nights_b9, _n_px_b9 * _n_ord_sel_b9)
 
-                # (n_nights, retrieved_nights, n_spectra, n_orders*n_pixels)
-                _mat_res_ret  = np.transpose(_mat_res_ret,  (1, 2, 0, 3))
-                _mat_res_ret  = _mat_res_ret.reshape(
-                    _mat_res_ret.shape[0],  _mat_res_ret.shape[1],
-                    _mat_res_ret.shape[2] * _mat_res_ret.shape[3])
-                _propag_ret   = np.transpose(_propag_ret,   (1, 2, 0, 3))
-                _propag_ret   = _propag_ret.reshape(
-                    _propag_ret.shape[0],   _propag_ret.shape[1],
-                    _propag_ret.shape[2] *  _propag_ret.shape[3])
-                _mat_star_ret = np.transpose(_mat_star_ret, (1, 2, 0, 3))
-                _mat_star_ret = _mat_star_ret.reshape(
-                    _mat_star_ret.shape[0], _mat_star_ret.shape[1],
-                    _mat_star_ret.shape[2] * _mat_star_ret.shape[3])
-                _std_noise_ret = np.transpose(_std_noise_ret, (1, 2, 0, 3))
-                _std_noise_ret = _std_noise_ret.reshape(
-                    _std_noise_ret.shape[0], _std_noise_ret.shape[1],
-                    _std_noise_ret.shape[2] * _std_noise_ret.shape[3])
-            else:
-                mask_ret                       = []
-                useful_spectral_points_ret     = []
-                mask_snr_ret                   = []
-                useful_spectral_points_snr_ret = []
-                mask_inter_ret                 = []
-                useful_spectral_points_inter_ret = []
-
-                _mat_res_ret_aux   = np.copy(_mat_res_ret)
-                _propag_ret_aux    = np.copy(_propag_ret)
-                _mat_star_ret_aux  = np.copy(_mat_star_ret)
-                _std_noise_ret_aux = np.copy(_std_noise_ret)
-                del _mat_res_ret, _propag_ret, _mat_star_ret, _std_noise_ret
-
-                _mat_res_ret   = []
-                _propag_ret    = []
-                _std_noise_ret = []
-                _mat_star_ret  = []
-
-                if _mini_b7["Retrieval_choice"] == 1:
-                    raise ValueError(
-                        "Retrieval_choice==1 with Different_nights: "
-                        "dimension mismatch.")
-
-                for _b9 in range(_n_nights_b9):
-                    _sel_b9  = _mini_b7["order_selection_diffnights"][_b9]
-                    _idx_b9  = [
-                        np.where(_mini_b7["order_selection"] == v)[0][0]
-                        for v in _sel_b9
-                    ]
-                    mask_ret.append(
-                        mask_ret_aux[_b9, _idx_b9].ravel())
-                    useful_spectral_points_ret.append(
-                        useful_spectral_points_aux[_b9, _idx_b9].ravel())
-                    mask_snr_ret.append(
-                        mask_snr_ret_aux[_b9, _idx_b9].ravel())
-                    useful_spectral_points_snr_ret.append(
-                        useful_spectral_points_snr_aux[_b9, _idx_b9].ravel())
-                    mask_inter_ret.append(
-                        mask_inter_ret_aux[_b9, _idx_b9].ravel())
-                    useful_spectral_points_inter_ret.append(
-                        useful_spectral_points_inter_aux[_b9, _idx_b9].ravel())
-                    _blk = _mat_res_ret_aux[_idx_b9, _b9].transpose(1, 0, 2)
-                    _mat_res_ret.append(_blk.reshape(_blk.shape[0], -1))
-                    _blk = _propag_ret_aux[_idx_b9, _b9].transpose(1, 0, 2)
-                    _propag_ret.append(_blk.reshape(_blk.shape[0], -1))
-                    _blk = _std_noise_ret_aux[_idx_b9, _b9].transpose(1, 0, 2)
-                    _std_noise_ret.append(_blk.reshape(_blk.shape[0], -1))
-                    _blk = _mat_star_ret_aux[_idx_b9, _b9].transpose(1, 0, 2)
-                    _mat_star_ret.append(_blk.reshape(_blk.shape[0], -1))
+            # (n_nights, retrieved_nights, n_spectra, n_orders*n_pixels)
+            _mat_res_ret  = np.transpose(_mat_res_ret,  (1, 2, 0, 3))
+            _mat_res_ret  = _mat_res_ret.reshape(
+                _mat_res_ret.shape[0],  _mat_res_ret.shape[1],
+                _mat_res_ret.shape[2] * _mat_res_ret.shape[3])
+            _propag_ret   = np.transpose(_propag_ret,   (1, 2, 0, 3))
+            _propag_ret   = _propag_ret.reshape(
+                _propag_ret.shape[0],   _propag_ret.shape[1],
+                _propag_ret.shape[2] *  _propag_ret.shape[3])
+            _mat_star_ret = np.transpose(_mat_star_ret, (1, 2, 0, 3))
+            _mat_star_ret = _mat_star_ret.reshape(
+                _mat_star_ret.shape[0], _mat_star_ret.shape[1],
+                _mat_star_ret.shape[2] * _mat_star_ret.shape[3])
+            _std_noise_ret = np.transpose(_std_noise_ret, (1, 2, 0, 3))
+            _std_noise_ret = _std_noise_ret.reshape(
+                _std_noise_ret.shape[0], _std_noise_ret.shape[1],
+                _std_noise_ret.shape[2] * _std_noise_ret.shape[3])
 
             # ------------------------------------------------------------------
             # 9f, Different_nights deep copies (lines 6008-6021)
             # ------------------------------------------------------------------
-            if _mini_b7["Different_nights"]:
-                T_0 = np.asarray(T_0)
-                _syn_jd_store_b9 = np.full(
-                    (_n_nights_b9, int(max(_n_spectra_store_b5))), np.nan)
-                for _n_idx9, _n_aux9 in enumerate(n_spectra):
-                    _syn_jd_store_b9[_n_idx9, :_n_aux9] = \
-                        np.asarray(syn_jd[_n_idx9])
-                    _syn_jd_store_b9[_n_idx9, _n_aux9:] = np.nan
-                _std_noise_ret_store = _copy_b9.deepcopy(_std_noise_ret)
-                _mat_res_ret_store   = _copy_b9.deepcopy(_mat_res_ret)
-                _propag_ret_store    = _copy_b9.deepcopy(_propag_ret)
-                _mat_star_ret_store  = _copy_b9.deepcopy(_mat_star_ret)
-                _T_0_store_b9        = np.copy(T_0)
-                del _mat_res_ret, _propag_ret, _mat_star_ret, \
-                    _mat_res_ret_aux, _propag_ret_aux
+
+            retrieval_preparation = PreparationInputs(
+                pipeline=cfg.pipeline,
+                tellurics=cfg.tellurics,
+                use_real_data=cfg.observation.use_real_data,
+                sysrem_iterations=_si,
+            )
 
             # ------------------------------------------------------------------
             # 9g, SYSREM filtering projector (lines 6024-6035)
             # ------------------------------------------------------------------
             P = None
-            if ((_mini_b7["preparing_pipeline"] in ["ASL19", "Gibson22"]
-                 or _mini_b7.get("model_reprocessing", "bare") == "projector")
+            if ((cfg.pipeline.name in ["ASL19", "Gibson22"]
+                 or (getattr(cfg.retrieval, 'model_reprocessing', 'bare')) == "projector")
                     and _U_b9 is not None):
-                if not _mini_b7["Different_nights"]:
-                    P = SYSREM_filtering_projector(
-                        _mini_b7, n_spectra, propag_b9, _U_b9)
-                else:
-                    P = SYSREM_filtering_projector(
-                        _mini_b7, _n_spectra_store_b5, propag_b9, _U_b9)
-            if (_mini_b7.get("model_reprocessing", "bare") == "projector"
+                P = SYSREM_filtering_projector(
+                    n_spectra,
+                    propag_b9,
+                    _U_b9,
+                    different_nights=_dn,
+                    n_orders=n_orders,
+                    n_nights=_nn,
+                    sysrem_iterations=_si,
+                )
+            if ((getattr(cfg.retrieval, 'model_reprocessing', 'bare')) == "projector"
                     and P is None):
                 raise RuntimeError(
                     "model_reprocessing='projector' requires the detrending "
                     "temporal modes (U), which this run did not produce.")
-            if (_mini_b7.get("model_reprocessing", "bare") == "embedded"
+            if ((getattr(cfg.retrieval, 'model_reprocessing', 'bare')) == "embedded"
                     and _cor_b9 is None):
                 raise RuntimeError(
                     "model_reprocessing='embedded' requires the removed-"
@@ -5050,13 +5140,13 @@ class ExoploreSimulator:
             # ------------------------------------------------------------------
             # 9h, Sampler definitions (lines 6052-6087)
             # ------------------------------------------------------------------
-            if _mini_b7["Sampler_choice"] == "Nested_sampling":
+            if sampling_method == "Nested_sampling":
                 def prior(cube, ndim, nparams):
                     # Use user-supplied prior_bounds from config if available,
                     # falling back to the hardcoded defaults otherwise.
-                    _cfg_bounds = _mini_b7.get("PRIOR_BOUNDS", {})
-                    _bds = (_cfg_bounds.get(_mini_b7["Ret_dim"])
-                            or _PRIOR_BOUNDS_B9[_mini_b7["Ret_dim"]])
+                    _cfg_bounds = (cfg.retrieval.prior_bounds)
+                    _bds = (_cfg_bounds.get(cfg.retrieval.dimensionality)
+                            or _PRIOR_BOUNDS_B9[cfg.retrieval.dimensionality])
                     for _i9, (_lo9, _hi9) in enumerate(_bds):
                         cube[_i9] = _lo9 + (_hi9 - _lo9) * cube[_i9]
                     return cube
@@ -5083,10 +5173,10 @@ class ExoploreSimulator:
             # ------------------------------------------------------------------
             # 9i, 1D retrieval branch (lines 6091-8453)
             # ------------------------------------------------------------------
-            if _mini_b7["Ret_dim"] in [
+            if cfg.retrieval.dimensionality in [
                 "1D", "1D_CtoO_met", "1D_Gibson22", "1D_alpha", "1D_alpha_Gibson22"
             ]:
-                _mini_b7["Limb_asymmetries"] = False
+                retrieval_limb_asymmetries = False
 
                 # ==============================================================
                 # Single-night loglike  (Retrieval_choice != 4)
@@ -5100,19 +5190,19 @@ class ExoploreSimulator:
                     _atm_list         = _ctx["atmosphere_ret_list"]
 
                     # ---- param extraction ----
-                    if _mini_b7["Ret_dim"] == "1D":
+                    if cfg.retrieval.dimensionality == "1D":
                         log10_X1 = cube[0]; K_p = cube[1]
                         T_equ = cube[2]; v_wind = cube[3]
-                    elif _mini_b7["Ret_dim"] == "1D_CtoO_met":
+                    elif cfg.retrieval.dimensionality == "1D_CtoO_met":
                         c_to_o = cube[0]; met = cube[1]
-                    elif _mini_b7["Ret_dim"] == "1D_Gibson22":
+                    elif cfg.retrieval.dimensionality == "1D_Gibson22":
                         log10_X1 = cube[0]; K_p = cube[1]
                         T_equ = cube[2]; v_wind = cube[3]; beta = cube[4]
-                    elif _mini_b7["Ret_dim"] == "1D_alpha":
+                    elif cfg.retrieval.dimensionality == "1D_alpha":
                         # Amplitude scaling: free K_p, V_rest, α on a fixed
                         # nominal model (no pRT / abundance / T sampled).
                         K_p = cube[0]; v_wind = cube[1]; alpha = cube[2]
-                    elif _mini_b7["Ret_dim"] == "1D_alpha_Gibson22":
+                    elif cfg.retrieval.dimensionality == "1D_alpha_Gibson22":
                         # Same fixed-model α detection + Gibson22 β noise-rescaling.
                         K_p = cube[0]; v_wind = cube[1]
                         alpha = cube[2]; beta = cube[3]
@@ -5120,325 +5210,204 @@ class ExoploreSimulator:
                     log_likelihood = 0.
 
                     # ---- abundances ----
-                    if _mini_b7["Ret_dim"] in ["1D", "1D_Gibson22"]:
+                    if cfg.retrieval.dimensionality in ["1D", "1D_Gibson22"]:
                         abundances = np.asarray(
-                            [_mini_b7["vmr"][0], _mini_b7["vmr"][1], 10.**log10_X1])
+                            [pm.vmr[0], pm.vmr[1], 10.**log10_X1])
                     else:
                         abundances = np.asarray(
-                            [_mini_b7["vmr"][0], _mini_b7["vmr"][1]])
+                            [pm.vmr[0], pm.vmr[1]])
 
                     # ---- model matrix ----
-                    if not _mini_b7["Different_nights"]:
-                        _n_sp_ll  = n_spectra
-                        _ph_ll    = phase
-                        _berv_ll  = berv
-                        _with_ll  = with_signal
-                        _wout_ll  = without_signal
-                        _frac_ll  = fraction
-                        _sjd_ll   = syn_jd
-                        _T0_ll    = T_0
-                        model_mat = np.zeros(
-                            (_n_ord_sel_b9, _n_sp_ll, n_pixels))
-                        model_mat_prepared = np.zeros_like(model_mat)
+                    _n_sp_ll  = n_spectra
+                    _ph_ll    = phase
+                    _berv_ll  = berv
+                    _with_ll  = with_signal
+                    _wout_ll  = without_signal
+                    _frac_ll  = fraction
+                    _sjd_ll   = syn_jd
+                    _T0_ll    = T_0
+                    model_mat = np.zeros(
+                        (_n_ord_sel_b9, _n_sp_ll, n_pixels))
+                    model_mat_prepared = np.zeros_like(model_mat)
 
-                        _emulator_ll = _ctx.get("prt_emulator")
-                        for hh in range(_n_orders_b9):
-                            atm_r = _atm_list[hh]
-                            if _mini_b7["Ret_dim"] in ("1D_alpha", "1D_alpha_Gibson22"):
-                                # FIXED nominal model (computed once, pre-sampler).
-                                # α scales its depth via Scale_inj below. No pRT.
-                                wave_pRT_r = _ctx["nominal_wave"][hh]
-                                syn_spec_r = _ctx["nominal_spec"][hh]
-                            elif _emulator_ll is not None:
-                                wave_pRT_r, syn_spec_r = _emulator_ll.predict(
-                                    T_eq=T_equ,
-                                    log10_x_h2o=log10_X1,
-                                )
-                            elif _mini_b7["Ret_dim"] != "1D_CtoO_met":
-                                wave_pRT_r, syn_spec_r, *_ = call_pRT(
-                                    _mini_b7, p_ret, atm_r,
-                                    _mini_b7["species_ret"],
-                                    abundances, _mini_b7["MMW_ret"],
-                                    _mini_b7["p0_ret"],
-                                    _mini_b7["isothermal_ret"], T_equ,
-                                    _mini_b7["two_point_T_ret"],
-                                    _mini_b7["p_points_ret"],
-                                    _mini_b7["t_points_ret"],
-                                    _mini_b7["Kappa_IR_ret"],
-                                    _mini_b7["Gamma_ret"], T_equ,
-                                    None, None, use_easyCHEM=False,
-                                )
-                            else:  # 1D_CtoO_met
-                                wave_pRT_r, syn_spec_r, *_ = call_pRT(
-                                    _mini_b7, p_ret, atm_r,
-                                    _mini_b7["species_ret"],
-                                    abundances, _mini_b7["MMW_ret"],
-                                    _mini_b7["p0_ret"],
-                                    _mini_b7["isothermal_ret"],
-                                    _mini_b7["T_equ"],
-                                    _mini_b7["two_point_T_ret"],
-                                    _mini_b7["p_points_ret"],
-                                    _mini_b7["t_points_ret"],
-                                    _mini_b7["Kappa_IR_ret"],
-                                    _mini_b7["Gamma_ret"], _mini_b7["T_equ"],
-                                    metallicity=met, C_to_O=c_to_o,
-                                    use_easyCHEM=True, P_cloud=None,
-                                    easychem_CtoO_ret=True,
-                                )
-
-                            # v_planet
-                            if _mini_b7["Ret_dim"] != "1D_CtoO_met":
-                                if not _mini_b7["significant_eccentricity"]:
-                                    v_planet_r = get_V(
-                                        K_p, _ph_ll, _berv_ll,
-                                        _mini_b7["V_sys"], v_wind)
-                                else:
-                                    v_planet_r = get_V_eccentric(
-                                        K_p, _ph_ll,
-                                        _mini_b7["eccentricity"],
-                                        _mini_b7["arg_periastron_w"],
-                                        _berv_ll, _mini_b7["V_sys"], v_wind)
-                            elif _mini_b7["Ret_dim"] == "1D_CtoO_met":
-                                if not _mini_b7["significant_eccentricity"]:
-                                    v_planet_r = get_V(
-                                        _mini_b7["K_p"], _ph_ll, _berv_ll,
-                                        _mini_b7["V_sys"], 0.)
-                                else:
-                                    v_planet_r = get_V_eccentric(
-                                        _mini_b7["K_p"], _ph_ll,
-                                        _mini_b7["eccentricity"],
-                                        _mini_b7["arg_periastron_w"],
-                                        _berv_ll, _mini_b7["V_sys"], 0.)
-                            else:
-                                if not _mini_b7["significant_eccentricity"]:
-                                    v_planet_r = get_V(
-                                        _mini_b7["K_p"], _ph_ll, _berv_ll,
-                                        _mini_b7["V_sys"], _mini_b7["V_wind"])
-                                else:
-                                    v_planet_r = get_V_eccentric(
-                                        _mini_b7["K_p"], _ph_ll,
-                                        _mini_b7["eccentricity"],
-                                        _mini_b7["arg_periastron_w"],
-                                        _berv_ll, _mini_b7["V_sys"],
-                                        _mini_b7["V_wind"])
-
-                            # 1D_alpha[_Gibson22]: α scales the model depth via
-                            # Scale_inj. All other modes keep the config value.
-                            _smf_inp = (dict(_mini_b7, Scale_inj=alpha)
-                                        if _mini_b7["Ret_dim"] in
-                                           ("1D_alpha", "1D_alpha_Gibson22")
-                                        else _mini_b7)
-                            model_mat[hh], _ = spec_to_mat_fraction(
-                                _smf_inp, _sjd_ll, _T0_ll, v_planet_r,
-                                wave_star[_mini_b7["order_selection"][hh], :],
-                                wave_pRT_r, syn_spec_r,
-                                _mat_star_ret[_night_index][:, :n_pixels],
-                                _with_ll, _wout_ll, _frac_ll,
-                                include_star=False,
+                    _emulator_ll = _ctx.get("prt_emulator")
+                    for hh in range(_n_orders_b9):
+                        atm_r = _atm_list[hh]
+                        if cfg.retrieval.dimensionality in ("1D_alpha", "1D_alpha_Gibson22"):
+                            # FIXED nominal model (computed once, pre-sampler).
+                            # α scales its depth via Scale_inj below. No pRT.
+                            wave_pRT_r = _ctx["nominal_wave"][hh]
+                            syn_spec_r = _ctx["nominal_spec"][hh]
+                        elif _emulator_ll is not None:
+                            wave_pRT_r, syn_spec_r = _emulator_ll.predict(
+                                T_eq=T_equ,
+                                log10_x_h2o=log10_X1,
+                            )
+                        elif cfg.retrieval.dimensionality != "1D_CtoO_met":
+                            wave_pRT_r, syn_spec_r, *_ = call_pRT(
+                                rt_inputs, p_ret, atm_r,
+                                retrieval_species,
+                                abundances, retrieval_atmosphere_config.mean_molecular_weight,
+                                retrieval_atmosphere_config.reference_pressure_bar,
+                                retrieval_atmosphere_config.isothermal, T_equ,
+                                retrieval_atmosphere_config.two_point,
+                                retrieval_atmosphere_config.two_point_pressures_bar,
+                                retrieval_atmosphere_config.two_point_temperatures_K,
+                                retrieval_atmosphere_config.kappa_ir,
+                                retrieval_atmosphere_config.gamma_guillot, T_equ,
+                                None, None, use_easyCHEM=False,
+                            )
+                        else:  # 1D_CtoO_met
+                            wave_pRT_r, syn_spec_r, *_ = call_pRT(
+                                rt_inputs, p_ret, atm_r,
+                                retrieval_species,
+                                abundances, retrieval_atmosphere_config.mean_molecular_weight,
+                                retrieval_atmosphere_config.reference_pressure_bar,
+                                retrieval_atmosphere_config.isothermal,
+                                pm.equilibrium_temperature_K,
+                                retrieval_atmosphere_config.two_point,
+                                retrieval_atmosphere_config.two_point_pressures_bar,
+                                retrieval_atmosphere_config.two_point_temperatures_K,
+                                retrieval_atmosphere_config.kappa_ir,
+                                retrieval_atmosphere_config.gamma_guillot, pm.equilibrium_temperature_K,
+                                metallicity=met, C_to_O=c_to_o,
+                                use_easyCHEM=True, P_cloud=None,
+                                easychem_CtoO_ret=True,
                             )
 
-                            if _mini_b7["prepare_template"]:
-                                if not _mini_b7["SYSREM_robust_halt"]:
-                                    _sysrem_pass = None
-                                _mrp_ll = _mini_b7.get(
-                                    "model_reprocessing", "bare")
-                                if (_mini_b7["preparing_pipeline"] == "Gibson22"
-                                        or _mrp_ll == "projector"):
-                                    # Linear filter: project the data-derived
-                                    # temporal modes out of the model only.
-                                    # the template carries no background
-                                    # structure.
-                                    _usp_i9 = np.where(
-                                        useful_spectral_points_inter_aux[
-                                            _night_index, hh, :])[0]
-                                    model_mat_prepared[hh] = \
-                                        filter_model_singleorder(
-                                            P[hh, _night_index, :, :],
-                                            model_mat[hh], _usp_i9,
-                                        )
-                                    if (_mrp_ll == "projector"
-                                            and _mini_b7["preparing_pipeline"]
-                                                != "Gibson22"):
-                                        # Subtraction-convention pipelines
-                                        # compare zero-centred residuals to
-                                        # the template, so filter the model
-                                        # DEVIATION: by linearity,
-                                        # filt(m-1) = filt(m) - filt(1).
-                                        # Without this, the filtered constant
-                                        # level survives as a spurious
-                                        # time-structured baseline.
-                                        model_mat_prepared[hh] -= \
-                                            filter_model_singleorder(
-                                                P[hh, _night_index, :, :],
-                                                np.ones_like(model_mat[hh]),
-                                                _usp_i9,
-                                            )
-                                else:
-                                    # "bare": re-run the preparing pipeline on
-                                    # the model matrix alone.  "embedded":
-                                    # multiply the model into the structure the
-                                    # detrending removed from the data (the
-                                    # empirical telluric/stellar template) and
-                                    # re-run the pipeline on the combination.
-                                    _mm_in = (
-                                        _cor_b9[hh, :_n_sp_ll, :]
-                                        * model_mat[hh]
-                                        if _mrp_ll == "embedded"
-                                        else model_mat[hh])
-                                    model_mat_prepared[hh] = \
-                                        preparing_pipeline(
-                                            _mini_b7, _mm_in,
-                                            _std_noise_ret[_night_index,
-                                                           :_n_sp_ll,
-                                                           hh*_n_px_b9:(hh+1)*_n_px_b9],
-                                            wave_star[
-                                                _mini_b7["order_selection"][hh],
-                                                :],
-                                            np.where(
-                                                useful_spectral_points_snr_aux[
-                                                    _night_index, hh, :])[0],
-                                            np.where(
-                                                mask_snr_ret_aux[
-                                                    _night_index, hh, :])[0],
-                                            _frac_ll, _ph_ll, _wout_ll,
-                                            _sysrem_pass, None,
-                                            tell_mask_threshold_Blain24=0.8,
-                                            max_fit_BL19=False,
-                                            sysrem_division=False,
-                                            masks=False,
-                                            correct_uncertainties=False,
-                                            retrieval=True,
-                                            mask_inter_retrieval=np.where(
-                                                mask_inter_ret_aux[
-                                                    _night_index, hh, :])[0],
-                                            useful_spectral_points_inter_retrieval=np.where(
-                                                useful_spectral_points_inter_aux[
-                                                    _night_index, hh, :])[0],
-                                        )
-                            else:
-                                model_mat_prepared[hh] = np.copy(model_mat[hh])
-
-                    else:
-                        # Different_nights branch
-                        _n_sp_ll  = n_spectra
-                        _ph_ll    = phase
-                        _berv_ll  = berv
-                        _with_ll  = with_signal
-                        _wout_ll  = without_signal
-                        _frac_ll  = fraction
-                        _sjd_ll   = syn_jd
-                        _T0_ll    = T_0
-                        _indices_ll = [
-                            np.where(
-                                _mini_b7["order_selection"] == v)[0][0]
-                            for v in _mini_b7[
-                                "order_selection_diffnights"][_night_index]
-                        ]
-                        model_mat = np.zeros(
-                            (len(_indices_ll), _n_sp_ll, n_pixels))
-                        model_mat_prepared = np.zeros_like(model_mat)
-
-                        for _idx_ll, hh in enumerate(_indices_ll):
-                            atm_r = _atm_list[hh]
-                            if _mini_b7["Ret_dim"] != "1D_CtoO_met":
-                                wave_pRT_r, syn_spec_r, *_ = call_pRT(
-                                    _mini_b7, p_ret, atm_r,
-                                    _mini_b7["species_ret"],
-                                    abundances, _mini_b7["MMW_ret"],
-                                    _mini_b7["p0_ret"],
-                                    _mini_b7["isothermal_ret"], T_equ,
-                                    _mini_b7["two_point_T_ret"],
-                                    _mini_b7["p_points_ret"],
-                                    _mini_b7["t_points_ret"],
-                                    _mini_b7["Kappa_IR_ret"],
-                                    _mini_b7["Gamma_ret"], T_equ,
-                                    None, None, use_easyCHEM=False,
-                                )
-                            else:
-                                wave_pRT_r, syn_spec_r, *_ = call_pRT(
-                                    _mini_b7, p_ret, atm_r,
-                                    _mini_b7["species_ret"],
-                                    abundances, _mini_b7["MMW_ret"],
-                                    _mini_b7["p0_ret"],
-                                    _mini_b7["isothermal_ret"],
-                                    _mini_b7["T_equ"],
-                                    _mini_b7["two_point_T_ret"],
-                                    _mini_b7["p_points_ret"],
-                                    _mini_b7["t_points_ret"],
-                                    _mini_b7["Kappa_IR_ret"],
-                                    _mini_b7["Gamma_ret"], _mini_b7["T_equ"],
-                                    metallicity=met, C_to_O=c_to_o,
-                                    use_easyCHEM=True, P_cloud=None,
-                                    easychem_CtoO_ret=True,
-                                )
-
-                            if _mini_b7["Ret_dim"] != "1D_CtoO_met":
+                        # v_planet
+                        if cfg.retrieval.dimensionality != "1D_CtoO_met":
+                            if not cfg.observation.significant_eccentricity:
                                 v_planet_r = get_V(
                                     K_p, _ph_ll, _berv_ll,
-                                    _mini_b7["V_sys"], v_wind)
+                                    planet.systemic_velocity_kms, v_wind)
                             else:
+                                v_planet_r = get_V_eccentric(
+                                    K_p, _ph_ll,
+                                    planet.eccentricity,
+                                    planet.argument_of_periastron_deg,
+                                    _berv_ll, planet.systemic_velocity_kms, v_wind)
+                        elif cfg.retrieval.dimensionality == "1D_CtoO_met":
+                            if not cfg.observation.significant_eccentricity:
                                 v_planet_r = get_V(
-                                    _mini_b7["K_p"], _ph_ll, _berv_ll,
-                                    _mini_b7["V_sys"], _mini_b7["V_wind"])
+                                    planet.kp_kms, _ph_ll, _berv_ll,
+                                    planet.systemic_velocity_kms, 0.)
+                            else:
+                                v_planet_r = get_V_eccentric(
+                                    planet.kp_kms, _ph_ll,
+                                    planet.eccentricity,
+                                    planet.argument_of_periastron_deg,
+                                    _berv_ll, planet.systemic_velocity_kms, 0.)
+                        else:
+                            if not cfg.observation.significant_eccentricity:
+                                v_planet_r = get_V(
+                                    planet.kp_kms, _ph_ll, _berv_ll,
+                                    planet.systemic_velocity_kms, pm.wind_velocity_kms)
+                            else:
+                                v_planet_r = get_V_eccentric(
+                                    planet.kp_kms, _ph_ll,
+                                    planet.eccentricity,
+                                    planet.argument_of_periastron_deg,
+                                    _berv_ll, planet.systemic_velocity_kms,
+                                    pm.wind_velocity_kms)
 
-                            model_mat[_idx_ll], _ = \
-                                spec_to_mat_fraction(
-                                    _mini_b7, _sjd_ll, _T0_ll, v_planet_r,
-                                    wave_star[
-                                        _mini_b7["order_selection"][hh], :],
-                                    wave_pRT_r, syn_spec_r,
-                                    np.ones((_n_sp_ll, n_pixels)),
-                                    _with_ll, _wout_ll, _frac_ll,
-                                    include_star=False,
-                                )
-                            if _mini_b7["prepare_template"]:
-                                if not _mini_b7["SYSREM_robust_halt"]:
-                                    _sysrem_pass = None
-                                if _mini_b7["preparing_pipeline"] != "Gibson22":
-                                    model_mat_prepared[_idx_ll] = \
-                                        preparing_pipeline(
-                                            _mini_b7,
-                                            model_mat[_idx_ll],
-                                            _std_noise_ret[_night_index][
-                                                :_n_sp_ll,
-                                                hh*_n_px_b9:(hh+1)*_n_px_b9],
-                                            wave_star[
-                                                _mini_b7["order_selection"][hh],
-                                                :],
-                                            np.where(
-                                                useful_spectral_points_snr_aux[
-                                                    _night_index, hh, :])[0],
-                                            np.where(
-                                                mask_snr_ret_aux[
-                                                    _night_index, hh, :])[0],
-                                            _frac_ll, _ph_ll, _wout_ll,
-                                            _sysrem_pass, None,
-                                            tell_mask_threshold_Blain24=0.8,
-                                            max_fit_BL19=False,
-                                            sysrem_division=False,
-                                            masks=False,
-                                            correct_uncertainties=False,
-                                            retrieval=True,
-                                            mask_inter_retrieval=np.where(
-                                                mask_inter_ret_aux[
-                                                    _night_index, hh, :])[0],
-                                            useful_spectral_points_inter_retrieval=np.where(
-                                                useful_spectral_points_inter_aux[
-                                                    _night_index, hh, :])[0],
-                                        )
-                                else:
-                                    model_mat_prepared[_idx_ll] = \
+                        # 1D_alpha[_Gibson22]: α scales the model depth via
+                        # Scale_inj. All other modes keep the config value.
+                        _model_signal_scale = (
+                            alpha if cfg.retrieval.dimensionality in
+                            ("1D_alpha", "1D_alpha_Gibson22")
+                            else cfg.pipeline.inject_scale_factor
+                        )
+                        model_mat[hh], _ = spec_to_mat_fraction(
+                            v_planet_r,
+                            wave_star[retrieval_orders[hh], :],
+                            wave_pRT_r,
+                            syn_spec_r,
+                            _mat_star_ret[_night_index][:, :n_pixels],
+                            _with_ll,
+                            _wout_ll,
+                            _frac_ll,
+                            event_type=cfg.observation.event_type,
+                            signal_scale=_model_signal_scale,
+                            limb_asymmetries=retrieval_limb_asymmetries,
+                            limb_divisions=cfg.atmosphere.limb_divisions,
+                            resolving_power=inst.res,
+                            include_star=False,
+                        )
+
+                        if prepare_retrieval_template:
+                            if not cfg.pipeline.sysrem_robust_halt:
+                                _sysrem_pass = None
+                            _mrp_ll = (getattr(cfg.retrieval, 'model_reprocessing', 'bare'))
+                            if (cfg.pipeline.name == "Gibson22"
+                                    or _mrp_ll == "projector"):
+                                # Linear filter: project the data-derived
+                                # temporal modes out of the model only.
+                                # the template carries no background
+                                # structure.
+                                _usp_i9 = np.where(
+                                    useful_spectral_points_inter_aux[
+                                        _night_index, hh, :])[0]
+                                model_mat_prepared[hh] = \
+                                    filter_model_singleorder(
+                                        P[hh, _night_index, :, :],
+                                        model_mat[hh], _usp_i9,
+                                    )
+                                if (_mrp_ll == "projector"
+                                        and cfg.pipeline.name
+                                            != "Gibson22"):
+                                    # Subtraction-convention pipelines
+                                    # compare zero-centred residuals to
+                                    # the template, so filter the model
+                                    # DEVIATION: by linearity,
+                                    # filt(m-1) = filt(m) - filt(1).
+                                    # Without this, the filtered constant
+                                    # level survives as a spurious
+                                    # time-structured baseline.
+                                    model_mat_prepared[hh] -= \
                                         filter_model_singleorder(
-                                            P[hh, _night_index,
-                                              :_n_sp_ll, :_n_sp_ll],
-                                            model_mat[_idx_ll],
-                                            np.where(
-                                                useful_spectral_points_inter_aux[
-                                                    _night_index, hh, :])[0],
+                                            P[hh, _night_index, :, :],
+                                            np.ones_like(model_mat[hh]),
+                                            _usp_i9,
                                         )
                             else:
-                                model_mat_prepared[_idx_ll] = np.copy(
-                                    model_mat[_idx_ll])
+                                # "bare": re-run the preparing pipeline on
+                                # the model matrix alone.  "embedded":
+                                # multiply the model into the structure the
+                                # detrending removed from the data (the
+                                # empirical telluric/stellar template) and
+                                # re-run the pipeline on the combination.
+                                _mm_in = (
+                                    _cor_b9[hh, :_n_sp_ll, :]
+                                    * model_mat[hh]
+                                    if _mrp_ll == "embedded"
+                                    else model_mat[hh])
+                                model_mat_prepared[hh] = \
+                                    preparing_pipeline(
+                                        retrieval_preparation,
+                                        _mm_in,
+                                        _std_noise_ret[_night_index, :_n_sp_ll, hh * _n_px_b9 : (hh + 1) * _n_px_b9],
+                                        wave_star[retrieval_orders[hh], :],
+                                        np.where(useful_spectral_points_snr_aux[_night_index, hh, :])[0],
+                                        np.where(mask_snr_ret_aux[_night_index, hh, :])[0],
+                                        _frac_ll,
+                                        _ph_ll,
+                                        _wout_ll,
+                                        _sysrem_pass,
+                                        None,
+                                        tell_mask_threshold_Blain24=0.8,
+                                        max_fit_BL19=False,
+                                        sysrem_division=False,
+                                        masks=False,
+                                        correct_uncertainties=False,
+                                        retrieval=True,
+                                        mask_inter_retrieval=np.where(mask_inter_ret_aux[_night_index, hh, :])[0],
+                                        useful_spectral_points_inter_retrieval=np.where(
+                                            useful_spectral_points_inter_aux[_night_index, hh, :]
+                                        )[0],
+                                    )
+                        else:
+                            model_mat_prepared[hh] = np.copy(model_mat[hh])
 
                     # transpose+reshape to (n_spectra, n_orders*n_pixels)
                     model_mat = np.transpose(model_mat, (1, 0, 2))
@@ -5464,160 +5433,116 @@ class ExoploreSimulator:
                             with_signal_ret = egress_idx
 
                     # ---- log-likelihood ----
-                    if _mini_b7["logL_choice"] == "BL19":
+                    if cfg.retrieval.log_likelihood == "BL19":
                         # The model must carry the same preparation as the data
                         # (as the CCF and the Blain24/Gibson22 loglikes do), so
                         # compare the prepared data with model_mat_prepared.
-                        if _mini_b7["Different_nights"]:
-                            for n in with_signal_ret:
-                                _d = _mat_res_ret[n,
-                                    useful_spectral_points_ret[_night_index]]
-                                _d  = _d - np.mean(_d)
-                                _tpl = model_mat_prepared[n,
-                                    useful_spectral_points_ret[_night_index]]
-                                _tpl = _tpl - np.mean(_tpl)
-                                sf2 = np.mean(_d**2)
-                                sg2 = np.mean(_tpl**2)
-                                R   = np.mean(_d * _tpl)
-                                log_likelihood += (
-                                    -(len(_d) / 2.)
-                                    * np.log(sf2 - 2.*R + sg2))
-                        else:
-                            for n in with_signal_ret:
-                                _d = (_mat_res_ret[_night_index, n,
-                                        useful_spectral_points_ret[
-                                            _night_index, :]]
-                                      - np.mean(_mat_res_ret[_night_index, n,
-                                        useful_spectral_points_ret[
-                                            _night_index, :]]))
-                                _tpl = (model_mat_prepared[n,
-                                        useful_spectral_points_ret[
-                                            _night_index, :]]
-                                        - np.mean(model_mat_prepared[n,
-                                        useful_spectral_points_ret[
-                                            _night_index, :]]))
-                                sf2 = np.mean(_d**2)
-                                sg2 = np.mean(_tpl**2)
-                                R   = np.mean(_d * _tpl)
-                                log_likelihood += (
-                                    -(len(_d) / 2.)
-                                    * np.log(sf2 - 2.*R + sg2))
+                        for n in with_signal_ret:
+                            _d = (_mat_res_ret[_night_index, n,
+                                    useful_spectral_points_ret[
+                                        _night_index, :]]
+                                  - np.mean(_mat_res_ret[_night_index, n,
+                                    useful_spectral_points_ret[
+                                        _night_index, :]]))
+                            _tpl = (model_mat_prepared[n,
+                                    useful_spectral_points_ret[
+                                        _night_index, :]]
+                                    - np.mean(model_mat_prepared[n,
+                                    useful_spectral_points_ret[
+                                        _night_index, :]]))
+                            sf2 = np.mean(_d**2)
+                            sg2 = np.mean(_tpl**2)
+                            R   = np.mean(_d * _tpl)
+                            log_likelihood += (
+                                -(len(_d) / 2.)
+                                * np.log(sf2 - 2.*R + sg2))
 
-                    elif _mini_b7["logL_choice"] == "Blain24":
-                        if _mini_b7["Different_nights"]:
-                            for n in with_signal_ret:
-                                log_likelihood += -0.5 * np.sum(
-                                    ((_mat_res_ret[n,
-                                       useful_spectral_points_ret[_night_index]]
-                                      - model_mat_prepared[n,
-                                       useful_spectral_points_ret[_night_index]])
-                                     / _propag_ret[n,
-                                       useful_spectral_points_ret[_night_index]]
-                                     )**2)
-                        else:
-                            _up9 = useful_spectral_points_ret[_night_index, :]
-                            # σ error model (Cheverall26 pipeline): MAD-of-residuals
-                            # (paper-faithful: σ_j = 1.4826·MAD over in-transit
-                            # exposures per channel, time-independent) vs the
-                            # default pipeline-propagated σ.  Cached per night.
-                            _em9 = _mini_b7.get("ret_error_model")
-                            _chev9 = (_mini_b7["preparing_pipeline"] == "Cheverall26")
-                            if _em9 in ("mad_residual", "cov_acf", "cov_lsf") and _chev9:
-                                # per-channel MAD sigma (shared cache)
-                                _sk9 = f"_sigma_mad_{_night_index}"
-                                if _sk9 not in _ctx:
-                                    _rr9 = _mat_res_ret[_night_index][
-                                        np.asarray(with_signal_ret), :]
-                                    _md9 = np.median(_rr9, axis=0)
-                                    _sg9 = 1.4826 * np.median(
-                                        np.abs(_rr9 - _md9), axis=0)
-                                    _sg9[~np.isfinite(_sg9) | (_sg9 <= 0)] = np.inf
-                                    _ctx[_sk9] = _sg9
-                                if _em9 == "mad_residual":
-                                    _sig9 = _ctx[_sk9][_up9]
-                                    for n in with_signal_ret:
-                                        log_likelihood += -0.5 * np.sum(
-                                            ((_mat_res_ret[_night_index, n, _up9]
-                                              - model_mat_prepared[n, _up9])
-                                             / _sig9)**2)
-                                else:
-                                    # banded block-diagonal noise covariance
-                                    # C = D R D (D=diag(sigma_MAD), R=short-range
-                                    # per-order correlation).  The determinant
-                                    # cancels in the model-vs-null Bayes factor,
-                                    # so only (r-m)^T C^-1 (r-m) is evaluated.
-                                    from exoplore.analysis import covnoise as _covn
-                                    _ckey = f"_covfac_{_night_index}_{_em9}"
-                                    if _ckey not in _ctx:
-                                        _resin = _mat_res_ret[_night_index][
-                                            np.asarray(with_signal_ret), :]
-                                        _ctx[_ckey] = _covn.build_factors(
-                                            _resin, _ctx[_sk9],
-                                            useful_spectral_points_ret[
-                                                _night_index, :],
-                                            _n_px_b9, _n_orders_b9,
-                                            kernel=("acf" if _em9 == "cov_acf"
-                                                    else "lsf"),
-                                            kmax=8, fwhm=3.3)
-                                    _fac9 = _ctx[_ckey]
-                                    for n in with_signal_ret:
-                                        _diff9 = (_mat_res_ret[_night_index, n, :]
-                                                  - model_mat_prepared[n, :])
-                                        log_likelihood += -0.5 * _covn.quad_form(
-                                            _fac9, _diff9)
-                            else:
+                    elif cfg.retrieval.log_likelihood == "Blain24":
+                        _up9 = useful_spectral_points_ret[_night_index, :]
+                        # σ error model (Cheverall26 pipeline): MAD-of-residuals
+                        # (paper-faithful: σ_j = 1.4826·MAD over in-transit
+                        # exposures per channel, time-independent) vs the
+                        # default pipeline-propagated σ.  Cached per night.
+                        _em9 = (getattr(cfg.retrieval, 'error_model', 'propagated'))
+                        _chev9 = (cfg.pipeline.name == "Cheverall26")
+                        if _em9 in ("mad_residual", "cov_acf", "cov_lsf") and _chev9:
+                            # per-channel MAD sigma (shared cache)
+                            _sk9 = f"_sigma_mad_{_night_index}"
+                            if _sk9 not in _ctx:
+                                _rr9 = _mat_res_ret[_night_index][
+                                    np.asarray(with_signal_ret), :]
+                                _md9 = np.median(_rr9, axis=0)
+                                _sg9 = 1.4826 * np.median(
+                                    np.abs(_rr9 - _md9), axis=0)
+                                _sg9[~np.isfinite(_sg9) | (_sg9 <= 0)] = np.inf
+                                _ctx[_sk9] = _sg9
+                            if _em9 == "mad_residual":
+                                _sig9 = _ctx[_sk9][_up9]
                                 for n in with_signal_ret:
                                     log_likelihood += -0.5 * np.sum(
                                         ((_mat_res_ret[_night_index, n, _up9]
                                           - model_mat_prepared[n, _up9])
-                                         / _propag_ret[_night_index, n, _up9])**2)
+                                         / _sig9)**2)
+                            else:
+                                # banded block-diagonal noise covariance
+                                # C = D R D (D=diag(sigma_MAD), R=short-range
+                                # per-order correlation).  The determinant
+                                # cancels in the model-vs-null Bayes factor,
+                                # so only (r-m)^T C^-1 (r-m) is evaluated.
+                                from exoplore.analysis import covnoise as _covn
+                                _ckey = f"_covfac_{_night_index}_{_em9}"
+                                if _ckey not in _ctx:
+                                    _resin = _mat_res_ret[_night_index][
+                                        np.asarray(with_signal_ret), :]
+                                    _ctx[_ckey] = _covn.build_factors(
+                                        _resin, _ctx[_sk9],
+                                        useful_spectral_points_ret[
+                                            _night_index, :],
+                                        _n_px_b9, _n_orders_b9,
+                                        kernel=("acf" if _em9 == "cov_acf"
+                                                else "lsf"),
+                                        kmax=8, fwhm=3.3)
+                                _fac9 = _ctx[_ckey]
+                                for n in with_signal_ret:
+                                    _diff9 = (_mat_res_ret[_night_index, n, :]
+                                              - model_mat_prepared[n, :])
+                                    log_likelihood += -0.5 * _covn.quad_form(
+                                        _fac9, _diff9)
+                        else:
+                            for n in with_signal_ret:
+                                log_likelihood += -0.5 * np.sum(
+                                    ((_mat_res_ret[_night_index, n, _up9]
+                                      - model_mat_prepared[n, _up9])
+                                     / _propag_ret[_night_index, n, _up9])**2)
 
-                    elif _mini_b7["logL_choice"] == "Gibson22":
+                    elif cfg.retrieval.log_likelihood == "Gibson22":
                         # Enforce beta prior (reads from prior_bounds config).
                         # beta is the last sampled parameter: index 4 for 1D_Gibson22,
                         # index 3 for 1D_alpha_Gibson22.
                         _beta_lo, _beta_hi = _PRIOR_BOUNDS_B9[
-                            _mini_b7["Ret_dim"]][-1]
+                            cfg.retrieval.dimensionality][-1]
                         if not (_beta_lo <= beta <= _beta_hi):
                             return -np.inf
-                        if _mini_b7["Different_nights"]:
-                            _Npix_g22  = np.count_nonzero(
-                                useful_spectral_points_ret[_night_index])
-                            _Nfr_g22   = len(with_signal_ret)
-                            _chi2_g22  = 0.
-                            for n in with_signal_ret:
-                                _res_g = (_mat_res_ret[n,
-                                    useful_spectral_points_ret[_night_index]]
-                                    - model_mat_prepared[n,
-                                    useful_spectral_points_ret[_night_index]])
-                                _sig_g = _propag_ret[n,
-                                    useful_spectral_points_ret[_night_index]]
-                                _chi2_g22 += np.sum(
-                                    (_res_g / (beta * _sig_g))**2)
-                            log_likelihood += -0.5 * _chi2_g22
-                            log_likelihood += (
-                                -_Nfr_g22 * _Npix_g22 * np.log(beta))
-                        else:
-                            _Npix_g22 = np.count_nonzero(
-                                useful_spectral_points_ret[_night_index, :])
-                            _Nfr_g22  = len(with_signal_ret)
-                            _chi2_g22 = 0.
-                            for n in with_signal_ret:
-                                _res_g = (
-                                    _mat_res_ret[_night_index, n,
-                                        useful_spectral_points_ret[
-                                            _night_index, :]]
-                                    - model_mat_prepared[n,
-                                        useful_spectral_points_ret[
-                                            _night_index, :]])
-                                _sig_g = _propag_ret[_night_index, n,
+                        _Npix_g22 = np.count_nonzero(
+                            useful_spectral_points_ret[_night_index, :])
+                        _Nfr_g22  = len(with_signal_ret)
+                        _chi2_g22 = 0.
+                        for n in with_signal_ret:
+                            _res_g = (
+                                _mat_res_ret[_night_index, n,
                                     useful_spectral_points_ret[
                                         _night_index, :]]
-                                _chi2_g22 += np.sum(
-                                    (_res_g / (beta * _sig_g))**2)
-                            log_likelihood += -0.5 * _chi2_g22
-                            log_likelihood += (
-                                -_Nfr_g22 * _Npix_g22 * np.log(beta))
+                                - model_mat_prepared[n,
+                                    useful_spectral_points_ret[
+                                        _night_index, :]])
+                            _sig_g = _propag_ret[_night_index, n,
+                                useful_spectral_points_ret[
+                                    _night_index, :]]
+                            _chi2_g22 += np.sum(
+                                (_res_g / (beta * _sig_g))**2)
+                        log_likelihood += -0.5 * _chi2_g22
+                        log_likelihood += (
+                            -_Nfr_g22 * _Npix_g22 * np.log(beta))
 
                     return log_likelihood
 
@@ -5633,253 +5558,144 @@ class ExoploreSimulator:
                     _atm_list         = _ctx["atmosphere_ret_list"]
 
                     # param extraction, same as single-night
-                    if _mini_b7["Ret_dim"] == "1D":
+                    if cfg.retrieval.dimensionality == "1D":
                         log10_X1 = cube[0]; K_p = cube[1]
                         T_equ = cube[2]; v_wind = cube[3]
-                    elif _mini_b7["Ret_dim"] == "1D_CtoO_met":
+                    elif cfg.retrieval.dimensionality == "1D_CtoO_met":
                         c_to_o = cube[0]; met = cube[1]
-                    elif _mini_b7["Ret_dim"] == "1D_Gibson22":
+                    elif cfg.retrieval.dimensionality == "1D_Gibson22":
                         log10_X1 = cube[0]; K_p = cube[1]
                         T_equ = cube[2]; v_wind = cube[3]; beta = cube[4]
-                    elif _mini_b7["Ret_dim"] == "1D_alpha":
+                    elif cfg.retrieval.dimensionality == "1D_alpha":
                         K_p = cube[0]; v_wind = cube[1]; alpha = cube[2]
-                    elif _mini_b7["Ret_dim"] == "1D_alpha_Gibson22":
+                    elif cfg.retrieval.dimensionality == "1D_alpha_Gibson22":
                         K_p = cube[0]; v_wind = cube[1]
                         alpha = cube[2]; beta = cube[3]
 
                     log_likelihood = 0.
 
-                    if _mini_b7["Ret_dim"] in ["1D", "1D_Gibson22"]:
+                    if cfg.retrieval.dimensionality in ["1D", "1D_Gibson22"]:
                         abundances = np.asarray(
-                            [_mini_b7["vmr"][0], _mini_b7["vmr"][1], 10.**log10_X1])
+                            [pm.vmr[0], pm.vmr[1], 10.**log10_X1])
                     else:
                         abundances = np.asarray(
-                            [_mini_b7["vmr"][0], _mini_b7["vmr"][1]])
+                            [pm.vmr[0], pm.vmr[1]])
 
                     for jj in range(retrieved_nights):
-                        if not _mini_b7["Different_nights"]:
-                            _n_sp_c   = n_spectra
-                            _ph_c     = phase
-                            _berv_c   = berv
-                            _with_c   = with_signal
-                            _wout_c   = without_signal
-                            _frac_c   = fraction
-                            _sjd_c    = syn_jd
-                            _T0_c     = T_0
-                            model_mat = np.zeros(
-                                (_n_ord_sel_b9, _n_sp_c, n_pixels))
-                            model_mat_prepared = np.zeros_like(model_mat)
+                        _n_sp_c   = n_spectra
+                        _ph_c     = phase
+                        _berv_c   = berv
+                        _with_c   = with_signal
+                        _wout_c   = without_signal
+                        _frac_c   = fraction
+                        _sjd_c    = syn_jd
+                        _T0_c     = T_0
+                        model_mat = np.zeros(
+                            (_n_ord_sel_b9, _n_sp_c, n_pixels))
+                        model_mat_prepared = np.zeros_like(model_mat)
 
-                            for hh in range(_n_orders_b9):
-                                atm_r = _atm_list[hh]
-                                if _mini_b7["Ret_dim"] != "1D_CtoO_met":
-                                    wave_pRT_r, syn_spec_r, *_ = \
-                                        call_pRT(
-                                            _mini_b7, p_ret, atm_r,
-                                            _mini_b7["species_ret"],
-                                            abundances, _mini_b7["MMW_ret"],
-                                            _mini_b7["p0_ret"],
-                                            _mini_b7["isothermal_ret"], T_equ,
-                                            _mini_b7["two_point_T_ret"],
-                                            _mini_b7["p_points_ret"],
-                                            _mini_b7["t_points_ret"],
-                                            _mini_b7["Kappa_IR_ret"],
-                                            _mini_b7["Gamma_ret"], T_equ,
-                                            None, None, use_easyCHEM=False,
+                        for hh in range(_n_orders_b9):
+                            atm_r = _atm_list[hh]
+                            if cfg.retrieval.dimensionality != "1D_CtoO_met":
+                                wave_pRT_r, syn_spec_r, *_ = \
+                                    call_pRT(
+                                        rt_inputs, p_ret, atm_r,
+                                        retrieval_species,
+                                        abundances, retrieval_atmosphere_config.mean_molecular_weight,
+                                        retrieval_atmosphere_config.reference_pressure_bar,
+                                        retrieval_atmosphere_config.isothermal, T_equ,
+                                        retrieval_atmosphere_config.two_point,
+                                        retrieval_atmosphere_config.two_point_pressures_bar,
+                                        retrieval_atmosphere_config.two_point_temperatures_K,
+                                        retrieval_atmosphere_config.kappa_ir,
+                                        retrieval_atmosphere_config.gamma_guillot, T_equ,
+                                        None, None, use_easyCHEM=False,
+                                    )
+                            else:
+                                wave_pRT_r, syn_spec_r, *_ = \
+                                    call_pRT(
+                                        rt_inputs, p_ret, atm_r,
+                                        retrieval_species,
+                                        abundances, retrieval_atmosphere_config.mean_molecular_weight,
+                                        retrieval_atmosphere_config.reference_pressure_bar,
+                                        retrieval_atmosphere_config.isothermal,
+                                        pm.equilibrium_temperature_K,
+                                        retrieval_atmosphere_config.two_point,
+                                        retrieval_atmosphere_config.two_point_pressures_bar,
+                                        retrieval_atmosphere_config.two_point_temperatures_K,
+                                        retrieval_atmosphere_config.kappa_ir,
+                                        retrieval_atmosphere_config.gamma_guillot,
+                                        pm.equilibrium_temperature_K,
+                                        metallicity=log10_Z, C_to_O=0.55,
+                                        use_easyCHEM=True,
+                                        P_cloud=10.**log10_P,
+                                    )
+
+                            if cfg.retrieval.dimensionality != "1D_CtoO_met":
+                                v_planet_r = get_V(
+                                    K_p, _ph_c, _berv_c,
+                                    planet.systemic_velocity_kms, v_wind)
+                            else:
+                                v_planet_r = get_V(
+                                    planet.kp_kms, _ph_c, _berv_c,
+                                    planet.systemic_velocity_kms, pm.wind_velocity_kms)
+
+                            model_mat[hh], _ = spec_to_mat_fraction(
+                                v_planet_r,
+                                wave_star[retrieval_orders[hh], :],
+                                wave_pRT_r,
+                                syn_spec_r,
+                                _mat_star_ret[jj][:, :n_pixels],
+                                _with_c,
+                                _wout_c,
+                                _frac_c,
+                                event_type=cfg.observation.event_type,
+                                signal_scale=cfg.pipeline.inject_scale_factor,
+                                limb_asymmetries=retrieval_limb_asymmetries,
+                                limb_divisions=cfg.atmosphere.limb_divisions,
+                                resolving_power=inst.res,
+                                include_star=False,
+                            )
+                            if prepare_retrieval_template:
+                                if not cfg.pipeline.sysrem_robust_halt:
+                                    _sysrem_pass = None
+                                if cfg.pipeline.name != "Gibson22":
+                                    model_mat_prepared[hh] = \
+                                        preparing_pipeline(
+                                            retrieval_preparation,
+                                            model_mat[hh],
+                                            _std_noise_ret[jj, :_n_sp_c, :],
+                                            wave_star[retrieval_orders[hh], :],
+                                            np.where(useful_spectral_points_snr_aux[jj, hh, :])[0],
+                                            np.where(mask_snr_ret_aux[jj, hh, :])[0],
+                                            _frac_c,
+                                            _ph_c,
+                                            _wout_c,
+                                            _sysrem_pass,
+                                            None,
+                                            tell_mask_threshold_Blain24=0.8,
+                                            max_fit_BL19=False,
+                                            sysrem_division=False,
+                                            masks=False,
+                                            correct_uncertainties=False,
+                                            retrieval=True,
+                                            mask_inter_retrieval=np.where(mask_inter_ret_aux[jj, hh, :])[0],
+                                            useful_spectral_points_inter_retrieval=np.where(
+                                                useful_spectral_points_inter_aux[jj, hh, :]
+                                            )[0],
                                         )
                                 else:
-                                    wave_pRT_r, syn_spec_r, *_ = \
-                                        call_pRT(
-                                            _mini_b7, p_ret, atm_r,
-                                            _mini_b7["species_ret"],
-                                            abundances, _mini_b7["MMW_ret"],
-                                            _mini_b7["p0_ret"],
-                                            _mini_b7["isothermal_ret"],
-                                            _mini_b7["T_equ"],
-                                            _mini_b7["two_point_T_ret"],
-                                            _mini_b7["p_points_ret"],
-                                            _mini_b7["t_points_ret"],
-                                            _mini_b7["Kappa_IR_ret"],
-                                            _mini_b7["Gamma_ret"],
-                                            _mini_b7["T_equ"],
-                                            metallicity=log10_Z, C_to_O=0.55,
-                                            use_easyCHEM=True,
-                                            P_cloud=10.**log10_P,
+                                    model_mat_prepared[hh] = \
+                                        filter_model_singleorder(
+                                            P[hh, jj, :, :],
+                                            model_mat[hh],
+                                            np.where(
+                                                useful_spectral_points_inter_aux[
+                                                    jj, hh, :])[0],
                                         )
-
-                                if _mini_b7["Ret_dim"] != "1D_CtoO_met":
-                                    v_planet_r = get_V(
-                                        K_p, _ph_c, _berv_c,
-                                        _mini_b7["V_sys"], v_wind)
-                                else:
-                                    v_planet_r = get_V(
-                                        _mini_b7["K_p"], _ph_c, _berv_c,
-                                        _mini_b7["V_sys"], _mini_b7["V_wind"])
-
-                                model_mat[hh], _ = spec_to_mat_fraction(
-                                    _mini_b7, _sjd_c, _T0_c, v_planet_r,
-                                    wave_star[
-                                        _mini_b7["order_selection"][hh], :],
-                                    wave_pRT_r, syn_spec_r,
-                                    _mat_star_ret[jj][:, :n_pixels],
-                                    _with_c, _wout_c, _frac_c,
-                                    include_star=False,
-                                )
-                                if _mini_b7["prepare_template"]:
-                                    if not _mini_b7["SYSREM_robust_halt"]:
-                                        _sysrem_pass = None
-                                    if _mini_b7["preparing_pipeline"] != "Gibson22":
-                                        model_mat_prepared[hh] = \
-                                            preparing_pipeline(
-                                                _mini_b7, model_mat[hh],
-                                                _std_noise_ret[jj,
-                                                               :_n_sp_c, :],
-                                                wave_star[_mini_b7[
-                                                    "order_selection"][hh], :],
-                                                np.where(
-                                                    useful_spectral_points_snr_aux[
-                                                        jj, hh, :])[0],
-                                                np.where(
-                                                    mask_snr_ret_aux[
-                                                        jj, hh, :])[0],
-                                                _frac_c, _ph_c, _wout_c,
-                                                _sysrem_pass, None,
-                                                tell_mask_threshold_Blain24=0.8,
-                                                max_fit_BL19=False,
-                                                sysrem_division=False,
-                                                masks=False,
-                                                correct_uncertainties=False,
-                                                retrieval=True,
-                                                mask_inter_retrieval=np.where(
-                                                    mask_inter_ret_aux[
-                                                        jj, hh, :])[0],
-                                                useful_spectral_points_inter_retrieval=np.where(
-                                                    useful_spectral_points_inter_aux[
-                                                        jj, hh, :])[0],
-                                            )
-                                    else:
-                                        model_mat_prepared[hh] = \
-                                            filter_model_singleorder(
-                                                P[hh, jj, :, :],
-                                                model_mat[hh],
-                                                np.where(
-                                                    useful_spectral_points_inter_aux[
-                                                        jj, hh, :])[0],
-                                            )
-                                else:
-                                    model_mat_prepared[hh] = np.copy(
-                                        model_mat[hh])
-
-                        else:
-                            # Different_nights inside combined loglike
-                            _indices_c = [
-                                np.where(
-                                    _mini_b7["order_selection"] == v)[0][0]
-                                for v in _mini_b7[
-                                    "order_selection_diffnights"][_night_index]
-                            ]
-                            model_mat = np.zeros(
-                                (len(_indices_c), n_spectra, n_pixels))
-                            model_mat_prepared = np.zeros_like(model_mat)
-
-                            for _ic, hh in enumerate(_indices_c):
-                                atm_r = _atm_list[hh]
-                                if _mini_b7["Ret_dim"] != "1D_CtoO_met":
-                                    wave_pRT_r, syn_spec_r, *_ = \
-                                        call_pRT(
-                                            _mini_b7, p_ret, atm_r,
-                                            _mini_b7["species_ret"],
-                                            abundances, _mini_b7["MMW_ret"],
-                                            _mini_b7["p0_ret"],
-                                            _mini_b7["isothermal_ret"], T_equ,
-                                            _mini_b7["two_point_T_ret"],
-                                            _mini_b7["p_points_ret"],
-                                            _mini_b7["t_points_ret"],
-                                            _mini_b7["Kappa_IR_ret"],
-                                            _mini_b7["Gamma_ret"], T_equ,
-                                            None, None, use_easyCHEM=False,
-                                        )
-                                else:
-                                    wave_pRT_r, syn_spec_r, *_ = \
-                                        call_pRT(
-                                            _mini_b7, p_ret, atm_r,
-                                            _mini_b7["species_ret"],
-                                            abundances, _mini_b7["MMW_ret"],
-                                            _mini_b7["p0_ret"],
-                                            _mini_b7["isothermal_ret"],
-                                            _mini_b7["T_equ"],
-                                            _mini_b7["two_point_T_ret"],
-                                            _mini_b7["p_points_ret"],
-                                            _mini_b7["t_points_ret"],
-                                            _mini_b7["Kappa_IR_ret"],
-                                            _mini_b7["Gamma_ret"],
-                                            _mini_b7["T_equ"],
-                                            metallicity=log10_Z, C_to_O=0.55,
-                                            use_easyCHEM=True,
-                                            P_cloud=10.**log10_P,
-                                        )
-                                if _mini_b7["Ret_dim"] != "1D_CtoO_met":
-                                    v_planet_r = get_V(
-                                        K_p, phase, berv,
-                                        _mini_b7["V_sys"], v_wind)
-                                else:
-                                    v_planet_r = get_V(
-                                        _mini_b7["K_p"], phase, berv,
-                                        _mini_b7["V_sys"], _mini_b7["V_wind"])
-                                model_mat[_ic], _ = spec_to_mat_fraction(
-                                    _mini_b7, syn_jd, T_0, v_planet_r,
-                                    wave_star[
-                                        _mini_b7["order_selection"][hh], :],
-                                    wave_pRT_r, syn_spec_r,
-                                    np.ones((n_spectra, n_pixels)),
-                                    with_signal, without_signal, fraction,
-                                    include_star=False,
-                                )
-                                if _mini_b7["prepare_template"]:
-                                    if not _mini_b7["SYSREM_robust_halt"]:
-                                        _sysrem_pass = None
-                                    if _mini_b7["preparing_pipeline"] != "Gibson22":
-                                        model_mat_prepared[_ic] = \
-                                            preparing_pipeline(
-                                                _mini_b7, model_mat[_ic],
-                                                _std_noise_ret[jj][
-                                                    :n_spectra, :],
-                                                wave_star[_mini_b7[
-                                                    "order_selection"][hh], :],
-                                                np.where(
-                                                    useful_spectral_points_snr_aux[
-                                                        jj, hh, :])[0],
-                                                np.where(
-                                                    mask_snr_ret_aux[
-                                                        jj, hh, :])[0],
-                                                fraction, phase, without_signal,
-                                                _sysrem_pass, None,
-                                                tell_mask_threshold_Blain24=0.8,
-                                                max_fit_BL19=False,
-                                                sysrem_division=False,
-                                                masks=False,
-                                                correct_uncertainties=False,
-                                                retrieval=True,
-                                                mask_inter_retrieval=np.where(
-                                                    mask_inter_ret_aux[
-                                                        jj, hh, :])[0],
-                                                useful_spectral_points_inter_retrieval=np.where(
-                                                    useful_spectral_points_inter_aux[
-                                                        jj, hh, :])[0],
-                                            )
-                                    else:
-                                        model_mat_prepared[_ic] = \
-                                            filter_model_singleorder(
-                                                P[hh, jj,
-                                                  :n_spectra, :n_spectra],
-                                                model_mat[_ic],
-                                                np.where(
-                                                    useful_spectral_points_inter_aux[
-                                                        jj, hh, :])[0],
-                                            )
-                                else:
-                                    model_mat_prepared[_ic] = np.copy(
-                                        model_mat[_ic])
+                            else:
+                                model_mat_prepared[hh] = np.copy(
+                                    model_mat[hh])
 
                         # transpose + reshape
                         model_mat = np.transpose(model_mat, (1, 0, 2))
@@ -5904,112 +5720,68 @@ class ExoploreSimulator:
                                 with_signal_ret = egress_idx
 
                         # log-likelihood accumulation
-                        if _mini_b7["logL_choice"] == "BL19":
-                            if _mini_b7["Different_nights"]:
-                                for n in with_signal_ret:
-                                    _d = (_mat_res_ret[n,
-                                          useful_spectral_points_ret[_night_index]]
-                                          - np.mean(_mat_res_ret[n,
-                                          useful_spectral_points_ret[_night_index]]))
-                                    _tpl = (model_mat[n,
-                                            useful_spectral_points_ret[_night_index]]
-                                            - np.mean(model_mat[n,
-                                            useful_spectral_points_ret[_night_index]]))
-                                    sf2 = np.mean(_d**2)
-                                    sg2 = np.mean(_tpl**2)
-                                    R   = np.mean(_d * _tpl)
-                                    log_likelihood += (
-                                        -(len(_d)/2.) * np.log(sf2-2.*R+sg2))
-                            else:
-                                for n in with_signal_ret:
-                                    _d = (_mat_res_ret[_night_index, n,
-                                          useful_spectral_points_ret[_night_index,:]]
-                                          - np.mean(_mat_res_ret[_night_index, n,
-                                          useful_spectral_points_ret[_night_index,:]]))
-                                    _tpl = (model_mat[n,
-                                            useful_spectral_points_ret[_night_index,:]]
-                                            - np.mean(model_mat[n,
-                                            useful_spectral_points_ret[_night_index,:]]))
-                                    sf2 = np.mean(_d**2)
-                                    sg2 = np.mean(_tpl**2)
-                                    R   = np.mean(_d * _tpl)
-                                    log_likelihood += (
-                                        -(len(_d)/2.) * np.log(sf2-2.*R+sg2))
+                        if cfg.retrieval.log_likelihood == "BL19":
+                            for n in with_signal_ret:
+                                _d = (_mat_res_ret[_night_index, n,
+                                      useful_spectral_points_ret[_night_index,:]]
+                                      - np.mean(_mat_res_ret[_night_index, n,
+                                      useful_spectral_points_ret[_night_index,:]]))
+                                _tpl = (model_mat[n,
+                                        useful_spectral_points_ret[_night_index,:]]
+                                        - np.mean(model_mat[n,
+                                        useful_spectral_points_ret[_night_index,:]]))
+                                sf2 = np.mean(_d**2)
+                                sg2 = np.mean(_tpl**2)
+                                R   = np.mean(_d * _tpl)
+                                log_likelihood += (
+                                    -(len(_d)/2.) * np.log(sf2-2.*R+sg2))
 
-                        elif _mini_b7["logL_choice"] == "Blain24":
-                            if _mini_b7["Different_nights"]:
-                                for n in with_signal_ret:
-                                    log_likelihood += -0.5 * np.sum(
-                                        ((_mat_res_ret[n,
-                                           useful_spectral_points_ret[_night_index]]
-                                          - model_mat_prepared[n,
-                                           useful_spectral_points_ret[_night_index]])
-                                         / _propag_ret[n,
-                                           useful_spectral_points_ret[_night_index]]
-                                         )**2)
-                            else:
-                                for n in with_signal_ret:
-                                    log_likelihood += -0.5 * np.sum(
-                                        ((_mat_res_ret[_night_index, n,
-                                           useful_spectral_points_ret[_night_index,:]]
-                                          - model_mat_prepared[n,
-                                           useful_spectral_points_ret[_night_index,:]])
-                                         / _propag_ret[_night_index, n,
-                                           useful_spectral_points_ret[_night_index,:]]
-                                         )**2)
+                        elif cfg.retrieval.log_likelihood == "Blain24":
+                            for n in with_signal_ret:
+                                log_likelihood += -0.5 * np.sum(
+                                    ((_mat_res_ret[_night_index, n,
+                                       useful_spectral_points_ret[_night_index,:]]
+                                      - model_mat_prepared[n,
+                                       useful_spectral_points_ret[_night_index,:]])
+                                     / _propag_ret[_night_index, n,
+                                       useful_spectral_points_ret[_night_index,:]]
+                                     )**2)
 
-                        elif _mini_b7["logL_choice"] == "Gibson22":
+                        elif cfg.retrieval.log_likelihood == "Gibson22":
                             _beta_lo2, _beta_hi2 = _PRIOR_BOUNDS_B9[
-                                _mini_b7["Ret_dim"]][-1]
+                                cfg.retrieval.dimensionality][-1]
                             if not (_beta_lo2 <= beta <= _beta_hi2):
                                 return -np.inf
-                            if _mini_b7["Different_nights"]:
-                                _Npix_g = np.count_nonzero(
-                                    useful_spectral_points_ret[_night_index])
-                                _Nfr_g  = len(with_signal_ret)
-                                _chi2_g = 0.
-                                for n in with_signal_ret:
-                                    _r = (_mat_res_ret[n,
-                                          useful_spectral_points_ret[_night_index]]
-                                          - model_mat_prepared[n,
-                                          useful_spectral_points_ret[_night_index]])
-                                    _s = _propag_ret[n,
-                                         useful_spectral_points_ret[_night_index]]
-                                    _chi2_g += np.sum((_r/(beta*_s))**2)
-                                log_likelihood += (-0.5 * _chi2_g
-                                                   - _Nfr_g * _Npix_g
-                                                   * np.log(beta))
-                            else:
-                                _Npix_g = np.count_nonzero(
-                                    useful_spectral_points_ret[_night_index,:])
-                                _Nfr_g  = len(with_signal_ret)
-                                _chi2_g = 0.
-                                for n in with_signal_ret:
-                                    _r = (_mat_res_ret[_night_index, n,
-                                          useful_spectral_points_ret[_night_index,:]]
-                                          - model_mat_prepared[n,
-                                          useful_spectral_points_ret[_night_index,:]])
-                                    _s = _propag_ret[_night_index, n,
-                                         useful_spectral_points_ret[_night_index,:]]
-                                    _chi2_g += np.sum((_r/(beta*_s))**2)
-                                log_likelihood += (-0.5 * _chi2_g
-                                                   - _Nfr_g * _Npix_g
-                                                   * np.log(beta))
+                            _Npix_g = np.count_nonzero(
+                                useful_spectral_points_ret[_night_index,:])
+                            _Nfr_g  = len(with_signal_ret)
+                            _chi2_g = 0.
+                            for n in with_signal_ret:
+                                _r = (_mat_res_ret[_night_index, n,
+                                      useful_spectral_points_ret[_night_index,:]]
+                                      - model_mat_prepared[n,
+                                      useful_spectral_points_ret[_night_index,:]])
+                                _s = _propag_ret[_night_index, n,
+                                     useful_spectral_points_ret[_night_index,:]]
+                                _chi2_g += np.sum((_r/(beta*_s))**2)
+                            log_likelihood += (-0.5 * _chi2_g
+                                               - _Nfr_g * _Npix_g
+                                               * np.log(beta))
 
                     _ctx["sysrem_pass"] = _sysrem_pass
                     return log_likelihood
 
                 # choose which loglike to pass to the sampler
-                if _mini_b7["Retrieval_choice"] != 4:
+                if cfg.retrieval.retrieval_choice != 4:
                     loglike = _loglike_1d_single
                 else:
                     loglike = _loglike_1d_combined
 
                 # MCMC log_prior / log_prob (need loglike defined first)
-                if _mini_b7["Sampler_choice"] == "MCMC":
-                    _cfg_bounds_mc = _mini_b7.get("PRIOR_BOUNDS", {})
-                    _bds_mc = (_cfg_bounds_mc.get(_mini_b7["Ret_dim"])
-                               or _PRIOR_BOUNDS_B9[_mini_b7["Ret_dim"]])
+                if sampling_method == "MCMC":
+                    _cfg_bounds_mc = (cfg.retrieval.prior_bounds)
+                    _bds_mc = (_cfg_bounds_mc.get(cfg.retrieval.dimensionality)
+                               or _PRIOR_BOUNDS_B9[cfg.retrieval.dimensionality])
                     def log_prior_b9(theta):
                         for val, (_lo9, _hi9) in zip(theta, _bds_mc):
                             if not (_lo9 <= val <= _hi9):
@@ -6021,7 +5793,7 @@ class ExoploreSimulator:
                             return -np.inf
                         return lp + loglike(theta, len(theta), len(theta))
                     ndim_b9     = len(_bds_mc)
-                    nwalkers_b9 = _mini_b7["n_walkers"]
+                    nwalkers_b9 = cfg.retrieval.n_walkers
                     p0_b9       = np.array([
                         [np.random.uniform(_lo9, _hi9)
                          for (_lo9, _hi9) in _bds_mc]
@@ -6048,13 +5820,13 @@ class ExoploreSimulator:
                         import os as _os9
                         from exoplore.retrieval.likelihood_emulator import (
                             LoglikeEmulator as _LLE)
-                        _ll_bounds = _mini_b7.get("PRIOR_BOUNDS", {})
-                        _ll_bds    = (_ll_bounds.get(_mini_b7["Ret_dim"])
-                                      or _PRIOR_BOUNDS_B9[_mini_b7["Ret_dim"]])
+                        _ll_bounds = (cfg.retrieval.prior_bounds)
+                        _ll_bds    = (_ll_bounds.get(cfg.retrieval.dimensionality)
+                                      or _PRIOR_BOUNDS_B9[cfg.retrieval.dimensionality])
                         _ll_n      = len(_ll_bds)
                         _ll_prior  = np.array(_ll_bds, dtype=np.float32).T
                         _ll_save   = _os9.path.join(
-                            _mini_b7["plots_dir"], "likelihood_emulator")
+                            (str(dirs['plots']) + '/'), "likelihood_emulator")
 
                         def _ll_wrap(_theta):
                             _c = np.array(_theta, dtype=float)
@@ -6083,7 +5855,7 @@ class ExoploreSimulator:
                             return _em.predict(
                                 np.array(_cube[:_n], dtype=np.float32))
 
-                    if _mini_b7["Sampler_choice"] == "Nested_sampling":
+                    if sampling_method == "Nested_sampling":
                         _pymn.run(
                             _ll_active, prior,
                             n_dims=n_params,
@@ -6092,9 +5864,8 @@ class ExoploreSimulator:
                             evidence_tolerance=0.5,
                             sampling_efficiency=0.8,
                             n_iter_before_update=100,
-                            const_efficiency_mode=_mini_b7[
-                                "Multinest_Constant_Eff_Mode"],
-                            n_live_points=_mini_b7["Multinest_live_points"],
+                            const_efficiency_mode=cfg.retrieval.constant_efficiency_mode,
+                            n_live_points=cfg.retrieval.live_points,
                             max_iter=0,
                         )
                         # ── Analyzer: try the pymultinest Analyzer first.
@@ -6161,18 +5932,18 @@ class ExoploreSimulator:
                             _plt9.close()
                             _tick9 = {"labelsize": 12}
                             _no_truths9 = (
-                                _mini_b7.get("use_real_data", False)
+                                (False)
                                 or (cfg.atmosphere.limb_asymmetries
-                                    and _mini_b7["Ret_dim"] not in ("2D",))
+                                    and cfg.retrieval.dimensionality not in ("2D",))
                             )
                             _truths_1d9  = (None if _no_truths9 else
-                                            [np.log10(_mini_b7["vmr"][2]),
-                                             _mini_b7["K_p"], _mini_b7["T_equ"],
-                                             _mini_b7["V_wind"]])
+                                            [np.log10(pm.vmr[2]),
+                                             planet.kp_kms, pm.equilibrium_temperature_K,
+                                             pm.wind_velocity_kms])
                             _truths_g229 = (None if _no_truths9 else
-                                            [np.log10(_mini_b7["vmr"][2]),
-                                             _mini_b7["K_p"], _mini_b7["T_equ"],
-                                             _mini_b7["V_wind"], 1.0])
+                                            [np.log10(pm.vmr[2]),
+                                             planet.kp_kms, pm.equilibrium_temperature_K,
+                                             pm.wind_velocity_kms, 1.0])
 
                             # Zoom each axis to the posterior bulk (weighted
                             # 0.3 to 99.7 percentile with padding), so the
@@ -6181,7 +5952,7 @@ class ExoploreSimulator:
                             _w9m = _wts9[_mask9]
                             _truth_for_range = (
                                 _truths_g229
-                                if _mini_b7["Ret_dim"] in (
+                                if cfg.retrieval.dimensionality in (
                                     "1D_Gibson22", "Blain24_beta")
                                 else _truths_1d9)
 
@@ -6218,7 +5989,7 @@ class ExoploreSimulator:
                                 contour_kwargs={"linewidths": 1.5},
                                 hist_kwargs={"linewidth": 2})
 
-                            if _mini_b7["Ret_dim"] == "1D":
+                            if cfg.retrieval.dimensionality == "1D":
                                 _fig9 = _corner.corner(
                                     _dat9[_mask9, :],
                                     weights=_wts9[_mask9],
@@ -6231,7 +6002,7 @@ class ExoploreSimulator:
                                     label_kwargs={"fontsize": 18},
                                     title_kwargs={"fontsize": 18},
                                     **_cstyle9)
-                            elif _mini_b7["Ret_dim"] in ["1D_Gibson22", "Blain24_beta"]:
+                            elif cfg.retrieval.dimensionality in ["1D_Gibson22", "Blain24_beta"]:
                                 _fig9 = _corner.corner(
                                     _dat9[_mask9, :],
                                     weights=_wts9[_mask9],
@@ -6275,7 +6046,7 @@ class ExoploreSimulator:
                             f"{label_suffix}_maskpoints_{_sfx9}", a=_mask9)
                         return _sa, _sa_pts
 
-                    elif _mini_b7["Sampler_choice"] == "MCMC":
+                    elif sampling_method == "MCMC":
                         if _emcee is None:
                             return None, None
                         # Serial evaluation (pool=None).
@@ -6290,9 +6061,9 @@ class ExoploreSimulator:
                             nwalkers_b9, ndim_b9, log_prob_b9,
                             pool=None)
                         _samp9.run_mcmc(
-                            p0_b9, _mini_b7["n_steps_MCMC"], progress=True)
+                            p0_b9, cfg.retrieval.n_steps, progress=True)
                         _samples9 = _samp9.get_chain(
-                            discard=_mini_b7["MCMC_burnin"], thin=10, flat=True)
+                            discard=cfg.retrieval.burnin, thin=10, flat=True)
                         if _corner is not None:
                             import matplotlib.pyplot as _plt9
                             _PNAMES9 = {
@@ -6302,22 +6073,22 @@ class ExoploreSimulator:
                                            r"$T_{\rm eq}$", r"$v_{\rm wind}$",
                                            r"$\beta$"],
                             }
-                            _lbls9 = _PNAMES9.get(_mini_b7["Ret_dim"],
+                            _lbls9 = _PNAMES9.get(cfg.retrieval.dimensionality,
                                                    parameters)
                             _no_truths9 = (
-                                _mini_b7.get("use_real_data", False)
+                                (False)
                                 or (cfg.atmosphere.limb_asymmetries
-                                    and _mini_b7["Ret_dim"]
+                                    and cfg.retrieval.dimensionality
                                     not in ("2D",))
                             )
                             _truths9 = None if _no_truths9 else {
-                                "1D": [np.log10(_mini_b7["vmr"][2]),
-                                       _mini_b7["K_p"], _mini_b7["T_equ"],
-                                       _mini_b7["V_wind"]],
-                                "1D_Gibson22": [np.log10(_mini_b7["vmr"][2]),
-                                           _mini_b7["K_p"], _mini_b7["T_equ"],
-                                           _mini_b7["V_wind"], 1.0],
-                            }.get(_mini_b7["Ret_dim"])
+                                "1D": [np.log10(pm.vmr[2]),
+                                       planet.kp_kms, pm.equilibrium_temperature_K,
+                                       pm.wind_velocity_kms],
+                                "1D_Gibson22": [np.log10(pm.vmr[2]),
+                                           planet.kp_kms, pm.equilibrium_temperature_K,
+                                           pm.wind_velocity_kms, 1.0],
+                            }.get(cfg.retrieval.dimensionality)
                             _fig9 = _corner.corner(
                                 _samples9, labels=_lbls9,
                                 show_titles=True, title_fmt=".2f",
@@ -6329,7 +6100,7 @@ class ExoploreSimulator:
                                 title_kwargs={"fontsize": 18})
                             _plt9.tight_layout()
                             _corner_path9 = os.path.join(
-                                _mini_b7["plots_dir"],
+                                (str(dirs['plots']) + '/'),
                                 "retrieval_night_0_corner.pdf")
                             _fig9.savefig(_corner_path9,
                                           bbox_inches="tight")
@@ -6341,52 +6112,19 @@ class ExoploreSimulator:
                 # (Master lines 6671-7139 / 7988-8125)
                 # ==============================================================
                 _base_dir_plot_b9 = (
-                    _mini_b7["home_dir"].rstrip("/") + "/plots_SNR"
-                    if _mini_b7["All_significance_metrics"]
-                    else _mini_b7["plots_dir"].rstrip("/")
+                    (str(dirs['root']) + '/').rstrip("/") + "/plots_SNR"
+                    if cfg.cross_correlation.all_significance_metrics
+                    else (str(dirs['plots']) + '/').rstrip("/")
                 )
                 os.makedirs(_base_dir_plot_b9, exist_ok=True)
 
-                if _mini_b7["Retrieval_choice"] != 6:
-                    if not _mini_b7["Different_nights"]:
-                        _ctx["idx_interval"] = np.arange(n_spectra)
+                if cfg.retrieval.retrieval_choice != 6:
+                    _ctx["idx_interval"] = np.arange(n_spectra)
                     _ctx["interval_tracker"] = None
 
                     for night_index in range(retrieved_nights):
                         _ctx["night_index"] = night_index
 
-                        if _mini_b7["Different_nights"]:
-                            n_spectra   = int(_n_spectra_store_b5[night_index])
-                            phase       = np.asarray(
-                                phase_store[night_index], dtype=float)
-                            v_planet    = np.asarray(
-                                v_planet_store[night_index], dtype=float)
-                            with_signal = np.asarray(
-                                with_signal_store[night_index], dtype=int)
-                            without_signal = np.asarray(
-                                without_signal_store[night_index], dtype=int)
-                            fraction    = np.asarray(
-                                fraction_store[night_index], dtype=float)
-                            airmass     = np.asarray(
-                                airmass_store[night_index], dtype=float)
-                            berv        = np.asarray(
-                                berv_store[night_index], dtype=float)
-                            syn_jd      = np.asarray(
-                                _syn_jd_store_b9[night_index, :n_spectra],
-                                dtype=float)
-                            T_0         = float(_T_0_store_b9[night_index])
-                            _mat_res_ret   = np.asarray(
-                                _mat_res_ret_store[night_index][:n_spectra,:],
-                                dtype=float)
-                            _propag_ret    = np.asarray(
-                                _propag_ret_store[night_index][:n_spectra,:],
-                                dtype=float)
-                            _std_noise_ret = np.asarray(
-                                _std_noise_ret_store[night_index][:n_spectra,:],
-                                dtype=float)
-                            _mat_star_ret  = np.asarray(
-                                _mat_star_ret_store[night_index][:n_spectra,:],
-                                dtype=float)
 
                         if night_index == 0:
                             if cfg.retrieval.use_emulator:
@@ -6402,16 +6140,16 @@ class ExoploreSimulator:
                                     if _Radtrans is not None:
                                         _atm9 = _Radtrans(
                                             pressures=p_ret,
-                                            line_species=_mini_b7["species_ret"][2:],
+                                            line_species=retrieval_species[2:],
                                             rayleigh_species=["H2", "He"],
                                             gas_continuum_contributors=[
                                                 "H2--H2", "H2--He"],
                                             wavelength_boundaries=[
                                                 wave_star[
-                                                    _mini_b7["order_selection"][hh],
+                                                    retrieval_orders[hh],
                                                     :].min() - 0.01,
                                                 wave_star[
-                                                    _mini_b7["order_selection"][hh],
+                                                    retrieval_orders[hh],
                                                     :].max() + 0.01,
                                             ],
                                             line_opacity_mode="lbl",
@@ -6427,7 +6165,7 @@ class ExoploreSimulator:
                         # diagnostic: a model-vs-null Bayes factor >> 1 for a
                         # non-planetary template means the detection machinery
                         # responds to residual telluric structure.
-                        if (_mini_b7["Ret_dim"] in ("1D_alpha", "1D_alpha_Gibson22")
+                        if (cfg.retrieval.dimensionality in ("1D_alpha", "1D_alpha_Gibson22")
                                 and _ctx.get("nominal_spec") is None
                                 and cfg.cross_correlation.ccf_template_source
                                     == "telluric"):
@@ -6448,7 +6186,7 @@ class ExoploreSimulator:
                             _ctx["nominal_spec"] = []
                             for hh in range(_n_orders_b9):
                                 _wo9 = wave_star[
-                                    _mini_b7["order_selection"][hh], :]
+                                    retrieval_orders[hh], :]
                                 _sel9 = ((_lam9 >= _wo9.min() - 0.01)
                                          & (_lam9 <= _wo9.max() + 0.01))
                                 _wn9 = np.ascontiguousarray(
@@ -6470,7 +6208,7 @@ class ExoploreSimulator:
                         # exactly like a planetary model by the sampler.  A
                         # contamination diagnostic for structure at the stellar
                         # velocity (which coincides with the planet cell).
-                        if (_mini_b7["Ret_dim"] in ("1D_alpha", "1D_alpha_Gibson22")
+                        if (cfg.retrieval.dimensionality in ("1D_alpha", "1D_alpha_Gibson22")
                                 and _ctx.get("nominal_spec") is None
                                 and cfg.cross_correlation.ccf_template_source
                                     == "stellar"):
@@ -6482,7 +6220,7 @@ class ExoploreSimulator:
                             _ctx["nominal_spec"] = []
                             for hh in range(_n_orders_b9):
                                 _wo9 = wave_star[
-                                    _mini_b7["order_selection"][hh], :]
+                                    retrieval_orders[hh], :]
                                 _sel9 = ((_wv_s9 >= _wo9.min() - 0.01)
                                          & (_wv_s9 <= _wo9.max() + 0.01))
                                 _wn9 = np.ascontiguousarray(
@@ -6502,11 +6240,11 @@ class ExoploreSimulator:
                         # 1D_alpha: precompute the fixed nominal model ONCE per
                         # order (no pRT inside the sampler, α just scales its
                         # depth).  Nominal abundance/T = the CCF template.
-                        if (_mini_b7["Ret_dim"] in ("1D_alpha", "1D_alpha_Gibson22")
+                        if (cfg.retrieval.dimensionality in ("1D_alpha", "1D_alpha_Gibson22")
                                 and _ctx.get("nominal_spec") is None
                                 and _Radtrans is not None):
                             _nom_ab = np.asarray([
-                                _mini_b7["vmr"][0], _mini_b7["vmr"][1],
+                                pm.vmr[0], pm.vmr[1],
                                 float(cfg.atmosphere.ccf_template.mass_fractions[-1])])
                             _nom_T = float(
                                 cfg.atmosphere.ccf_template.isothermal_temperature_K)
@@ -6514,16 +6252,16 @@ class ExoploreSimulator:
                             _ctx["nominal_spec"] = []
                             for hh in range(_n_orders_b9):
                                 _wn, _sn, *_ = call_pRT(
-                                    _mini_b7, p_ret,
+                                    rt_inputs, p_ret,
                                     _ctx["atmosphere_ret_list"][hh],
-                                    _mini_b7["species_ret"], _nom_ab,
-                                    _mini_b7["MMW_ret"], _mini_b7["p0_ret"],
-                                    _mini_b7["isothermal_ret"], _nom_T,
-                                    _mini_b7["two_point_T_ret"],
-                                    _mini_b7["p_points_ret"],
-                                    _mini_b7["t_points_ret"],
-                                    _mini_b7["Kappa_IR_ret"],
-                                    _mini_b7["Gamma_ret"], _nom_T,
+                                    retrieval_species, _nom_ab,
+                                    retrieval_atmosphere_config.mean_molecular_weight, retrieval_atmosphere_config.reference_pressure_bar,
+                                    retrieval_atmosphere_config.isothermal, _nom_T,
+                                    retrieval_atmosphere_config.two_point,
+                                    retrieval_atmosphere_config.two_point_pressures_bar,
+                                    retrieval_atmosphere_config.two_point_temperatures_K,
+                                    retrieval_atmosphere_config.kappa_ir,
+                                    retrieval_atmosphere_config.gamma_guillot, _nom_T,
                                     None, None, use_easyCHEM=False)
                                 _ctx["nominal_wave"].append(_wn)
                                 _ctx["nominal_spec"].append(_sn)
@@ -6540,42 +6278,11 @@ class ExoploreSimulator:
                 # (Master lines 7141-7435)
                 # ==============================================================
                 else:
-                    if not _mini_b7["Different_nights"]:
-                        _ctx["idx_interval"] = np.arange(n_spectra)
+                    _ctx["idx_interval"] = np.arange(n_spectra)
 
                     for night_index in range(retrieved_nights):
                         _ctx["night_index"] = night_index
 
-                        if _mini_b7["Different_nights"]:
-                            n_spectra   = int(_n_spectra_store_b5[night_index])
-                            phase       = np.asarray(
-                                phase_store[night_index], dtype=float)
-                            with_signal = np.asarray(
-                                with_signal_store[night_index], dtype=int)
-                            without_signal = np.asarray(
-                                without_signal_store[night_index], dtype=int)
-                            fraction    = np.asarray(
-                                fraction_store[night_index], dtype=float)
-                            airmass     = np.asarray(
-                                airmass_store[night_index], dtype=float)
-                            berv        = np.asarray(
-                                berv_store[night_index], dtype=float)
-                            syn_jd      = np.asarray(
-                                _syn_jd_store_b9[night_index, :n_spectra],
-                                dtype=float)
-                            T_0         = float(_T_0_store_b9[night_index])
-                            _mat_res_ret   = np.asarray(
-                                _mat_res_ret_store[night_index][:n_spectra,:],
-                                dtype=float)
-                            _propag_ret    = np.asarray(
-                                _propag_ret_store[night_index][:n_spectra,:],
-                                dtype=float)
-                            _std_noise_ret = np.asarray(
-                                _std_noise_ret_store[night_index][:n_spectra,:],
-                                dtype=float)
-                            _mat_star_ret  = np.asarray(
-                                _mat_star_ret_store[night_index][:n_spectra,:],
-                                dtype=float)
 
                         if night_index == 0:
                             if cfg.retrieval.use_emulator:
@@ -6591,16 +6298,16 @@ class ExoploreSimulator:
                                     if _Radtrans is not None:
                                         _atm9 = _Radtrans(
                                             pressures=p_ret,
-                                            line_species=_mini_b7["species_ret"][2:],
+                                            line_species=retrieval_species[2:],
                                             rayleigh_species=["H2", "He"],
                                             gas_continuum_contributors=[
                                                 "H2--H2", "H2--He"],
                                             wavelength_boundaries=[
                                                 wave_star[
-                                                    _mini_b7["order_selection"][hh],
+                                                    retrieval_orders[hh],
                                                     :].min() - 0.01,
                                                 wave_star[
-                                                    _mini_b7["order_selection"][hh],
+                                                    retrieval_orders[hh],
                                                     :].max() + 0.01,
                                             ],
                                             line_opacity_mode="lbl",
@@ -6608,12 +6315,7 @@ class ExoploreSimulator:
                                         _ctx["atmosphere_ret_list"].append(_atm9)
 
                         # n_intervals
-                        if _mini_b7.get("Retrieval_time_resolution_step"):
-                            _n_int9 = int(len(with_signal)
-                                          / _mini_b7[
-                                              "Retrieval_time_resolution_step"])
-                        else:
-                            _n_int9 = 4  # default: ingress/first/second/egress
+                        _n_int9 = 4  # default: ingress/first/second/egress
 
                         _tmg_means = {
                             k: np.full(_n_int9, np.nan) for k in parameters}
@@ -6632,15 +6334,6 @@ class ExoploreSimulator:
 
                         for interval_tracker in range(_n_int9):
                             _ctx["interval_tracker"] = interval_tracker
-                            if _mini_b7.get(
-                                    "Retrieval_time_resolution_step"):
-                                _step9 = _mini_b7[
-                                    "Retrieval_time_resolution_step"]
-                                _start9 = interval_tracker * _step9
-                                _end9   = min(_start9 + _step9,
-                                              len(with_signal))
-                                _ctx["idx_interval"] = with_signal[
-                                    _start9:_end9]
                             # else use default 4-interval split in loglike
 
                             _lbl_sfx2 = (f"_night_{night_index}"
@@ -6693,8 +6386,8 @@ class ExoploreSimulator:
             # ------------------------------------------------------------------
             # 9j, 2D retrieval branch (lines 8454-8760)
             # ------------------------------------------------------------------
-            elif _mini_b7["Ret_dim"] == "2D":
-                if _mini_b7["Retrieval_choice"] != 4:
+            elif cfg.retrieval.dimensionality == "2D":
+                if cfg.retrieval.retrieval_choice != 4:
                     print("Retrieving one by one.")
 
                     def _loglike_2d(cube, ndim, nparams):
@@ -6711,25 +6404,24 @@ class ExoploreSimulator:
 
                         log_likelihood = 0.
 
-                        inp_dat_ret = _mini_b7
                         abundances_morning = np.asarray(
-                            [_mini_b7["vmr_morning_day"][0],
-                             _mini_b7["vmr_morning_day"][1],
+                            [limb_retrieval.morning_abundances[0],
+                             limb_retrieval.morning_abundances[1],
                              10.**log10_X_LL])
-                        inp_dat_ret["vmr_morning_day"] = abundances_morning
+                        limb_retrieval.morning_abundances = abundances_morning
                         abundances_evening = np.asarray(
-                            [_mini_b7["vmr_evening_day"][0],
-                             _mini_b7["vmr_evening_day"][1],
+                            [limb_retrieval.evening_abundances[0],
+                             limb_retrieval.evening_abundances[1],
                              10.**log10_X_TL])
-                        inp_dat_ret["vmr_evening_day"] = abundances_evening
+                        limb_retrieval.evening_abundances = abundances_evening
 
                         model_mat = np.zeros(
                             (_n_ord_sel_b9, n_spectra, n_pixels))
                         model_mat_prepared = np.zeros_like(model_mat)
 
                         _same_sp = (
-                            _mini_b7["species_ret_morning"][2:]
-                            == _mini_b7["species_ret_evening"][2:])
+                            _md.species[2:]
+                            == _ed.species[2:])
                         if _same_sp:
                             _m_list = _atm_list
                             _e_list = _atm_list
@@ -6737,9 +6429,22 @@ class ExoploreSimulator:
                             _m_list = _atm_list_m
                             _e_list = _atm_list_e
 
-                        inp_dat_ret["T_eq_morning_day"] = T_equ_LL
-                        inp_dat_ret["T_eq_evening_day"] = T_equ_TL
 
+                        # Trial abundances use the configured regional temperature
+                        # profiles and chemistry choices for this likelihood.
+                        retrieval_atmosphere = replace(
+                            cfg.atmosphere,
+                            morning_day=replace(
+                                cfg.atmosphere.morning_day,
+                                species=_md.species,
+                                mass_fractions=abundances_morning,
+                            ),
+                            evening_day=replace(
+                                cfg.atmosphere.evening_day,
+                                species=_ed.species,
+                                mass_fractions=abundances_evening,
+                            ),
+                        )
                         for hh in range(_n_orders_b9):
                             atm_m = _m_list[hh]
                             atm_e = _e_list[hh]
@@ -6748,10 +6453,10 @@ class ExoploreSimulator:
 
                             (wave_pRT_r, syn_spec_LL, _, syn_spec_TL,
                              *_) = call_pRT_limbs(
-                                _mini_b7, p_ret, None, p_ret, None,
+                                rt_inputs, cfg.atmosphere, p_ret, None, p_ret, None,
                                 atm_m, None, atm_e, None,
-                                mode="full", retrieval=True,
-                                inp_dat_ret=inp_dat_ret)
+                                mode="full",
+                                retrieval_atmosphere=retrieval_atmosphere)
 
                             syn_LL_w = convolve_spectrum_with_kernel(
                                 wave_pRT_r, syn_spec_LL,
@@ -6771,53 +6476,54 @@ class ExoploreSimulator:
                                 _delta_v_rotkernel[hh])
 
                             v_planet_r = get_V(
-                                K_p, phase, berv, _mini_b7["V_sys"], v_wind)
+                                K_p, phase, berv, planet.systemic_velocity_kms, v_wind)
 
                             model_mat[hh], _ = spec_to_mat_fraction(
-                                _mini_b7, syn_jd, T_0, v_planet_r,
-                                wave_star[_mini_b7["order_selection"][hh], :],
+                                v_planet_r,
+                                wave_star[retrieval_orders[hh], :],
                                 wave_pRT_r,
                                 per_order_results[hh]["syn_spec"],
                                 np.ones((n_spectra, n_pixels)),
-                                with_signal, without_signal, fraction,
+                                with_signal,
+                                without_signal,
+                                fraction,
+                                event_type=cfg.observation.event_type,
+                                signal_scale=cfg.pipeline.inject_scale_factor,
+                                limb_asymmetries=retrieval_limb_asymmetries,
+                                limb_divisions=cfg.atmosphere.limb_divisions,
+                                resolving_power=inst.res,
                                 spec_morning_day=syn_LL_r,
                                 spec_evening_day=syn_TL_r,
-                                sf_morning_day=per_order_results[hh].get(
-                                    "sf_morning_day"),
-                                sf_evening_day=per_order_results[hh].get(
-                                    "sf_evening_day"),
+                                sf_morning_day=per_order_results[hh].get("sf_morning_day"),
+                                sf_evening_day=per_order_results[hh].get("sf_evening_day"),
                                 include_star=False,
                             )
-                            if _mini_b7["prepare_template"]:
-                                if not _mini_b7["SYSREM_robust_halt"]:
+                            if prepare_retrieval_template:
+                                if not cfg.pipeline.sysrem_robust_halt:
                                     _sysrem_pass = None
                                 model_mat_prepared[hh] = \
                                     preparing_pipeline(
-                                        _mini_b7, model_mat[hh],
-                                        _std_noise_ret[_night_index,
-                                                       :n_spectra,
-                                                       hh*_n_px_b9:(hh+1)*_n_px_b9],
-                                        wave_star[
-                                            _mini_b7["order_selection"][hh], :],
-                                        np.where(
-                                            useful_spectral_points_snr_aux[
-                                                _night_index, hh, :])[0],
-                                        np.where(
-                                            mask_snr_ret_aux[
-                                                _night_index, hh, :])[0],
-                                        airmass, phase, without_signal,
-                                        _sysrem_pass, None,
+                                        retrieval_preparation,
+                                        model_mat[hh],
+                                        _std_noise_ret[_night_index, :n_spectra, hh * _n_px_b9 : (hh + 1) * _n_px_b9],
+                                        wave_star[retrieval_orders[hh], :],
+                                        np.where(useful_spectral_points_snr_aux[_night_index, hh, :])[0],
+                                        np.where(mask_snr_ret_aux[_night_index, hh, :])[0],
+                                        airmass,
+                                        phase,
+                                        without_signal,
+                                        _sysrem_pass,
+                                        None,
                                         tell_mask_threshold_Blain24=0.8,
                                         max_fit_BL19=False,
-                                        sysrem_division=False, masks=False,
+                                        sysrem_division=False,
+                                        masks=False,
                                         correct_uncertainties=False,
                                         retrieval=True,
-                                        mask_inter_retrieval=np.where(
-                                            mask_inter_ret_aux[
-                                                _night_index, hh, :])[0],
+                                        mask_inter_retrieval=np.where(mask_inter_ret_aux[_night_index, hh, :])[0],
                                         useful_spectral_points_inter_retrieval=np.where(
-                                            useful_spectral_points_inter_aux[
-                                                _night_index, hh, :])[0],
+                                            useful_spectral_points_inter_aux[_night_index, hh, :]
+                                        )[0],
                                     )
                             else:
                                 model_mat_prepared[hh] = np.copy(model_mat[hh])
@@ -6844,46 +6550,18 @@ class ExoploreSimulator:
                     loglike = _loglike_2d
 
                     _base_dir_plot_b9 = (
-                        _mini_b7["home_dir"].rstrip("/") + "/plots_SNR"
-                        if _mini_b7["All_significance_metrics"]
-                        else _mini_b7["plots_dir"].rstrip("/")
+                        (str(dirs['root']) + '/').rstrip("/") + "/plots_SNR"
+                        if cfg.cross_correlation.all_significance_metrics
+                        else (str(dirs['plots']) + '/').rstrip("/")
                     )
                     os.makedirs(_base_dir_plot_b9, exist_ok=True)
 
-                    if not _mini_b7["Different_nights"]:
-                        _ctx["idx_interval"] = np.arange(n_spectra)
+                    _ctx["idx_interval"] = np.arange(n_spectra)
                     _ctx["interval_tracker"] = None
 
                     for night_index in range(retrieved_nights):
                         _ctx["night_index"] = night_index
 
-                        if _mini_b7["Different_nights"]:
-                            n_spectra   = int(_n_spectra_store_b5[night_index])
-                            phase       = np.asarray(
-                                phase_store[night_index], dtype=float)
-                            with_signal = np.asarray(
-                                with_signal_store[night_index], dtype=int)
-                            without_signal = np.asarray(
-                                without_signal_store[night_index], dtype=int)
-                            fraction    = np.asarray(
-                                fraction_store[night_index], dtype=float)
-                            airmass     = np.asarray(
-                                airmass_store[night_index], dtype=float)
-                            berv        = np.asarray(
-                                berv_store[night_index], dtype=float)
-                            syn_jd      = np.asarray(
-                                _syn_jd_store_b9[night_index, :n_spectra],
-                                dtype=float)
-                            T_0         = float(_T_0_store_b9[night_index])
-                            _mat_res_ret   = np.asarray(
-                                _mat_res_ret_store[night_index][:n_spectra,:],
-                                dtype=float)
-                            _propag_ret    = np.asarray(
-                                _propag_ret_store[night_index][:n_spectra,:],
-                                dtype=float)
-                            _mat_star_ret  = np.asarray(
-                                _mat_star_ret_store[night_index][:n_spectra,:],
-                                dtype=float)
 
                         if night_index == 0:
                             _ctx["atmosphere_ret_list"]        = []
@@ -6892,24 +6570,21 @@ class ExoploreSimulator:
                             for hh in range(_n_orders_b9):
                                 if _Radtrans is not None:
                                     _same_sp_b9 = (
-                                        _mini_b7["species_ret_morning"][2:]
-                                        != _mini_b7["species_ret_evening"][2:])
+                                        _md.species[2:]
+                                        != _ed.species[2:])
                                     if _same_sp_b9:
                                         if hh == 0:
                                             _ctx["atmosphere_ret_list"] = []
                                         _atm9m = _Radtrans(
                                             pressures=p_ret,
-                                            line_species=_mini_b7[
-                                                "species_ret_morning"][2:],
+                                            line_species=_md.species[2:],
                                             rayleigh_species=["H2", "He"],
                                             gas_continuum_contributors=[
                                                 "H2--H2", "H2--He"],
                                             wavelength_boundaries=[
-                                                wave_star[_mini_b7[
-                                                    "order_selection"][hh],
+                                                wave_star[retrieval_orders[hh],
                                                     :].min() - 0.01,
-                                                wave_star[_mini_b7[
-                                                    "order_selection"][hh],
+                                                wave_star[retrieval_orders[hh],
                                                     :].max() + 0.01,
                                             ],
                                             line_opacity_mode="lbl",
@@ -6919,17 +6594,14 @@ class ExoploreSimulator:
                                         ].append(_atm9m)
                                         _atm9e = _Radtrans(
                                             pressures=p_ret,
-                                            line_species=_mini_b7[
-                                                "species_ret_evening"][2:],
+                                            line_species=_ed.species[2:],
                                             rayleigh_species=["H2", "He"],
                                             gas_continuum_contributors=[
                                                 "H2--H2", "H2--He"],
                                             wavelength_boundaries=[
-                                                wave_star[_mini_b7[
-                                                    "order_selection"][hh],
+                                                wave_star[retrieval_orders[hh],
                                                     :].min() - 0.01,
-                                                wave_star[_mini_b7[
-                                                    "order_selection"][hh],
+                                                wave_star[retrieval_orders[hh],
                                                     :].max() + 0.01,
                                             ],
                                             line_opacity_mode="lbl",
@@ -6947,17 +6619,14 @@ class ExoploreSimulator:
                                             ] = []
                                         _atm9 = _Radtrans(
                                             pressures=p_ret,
-                                            line_species=_mini_b7[
-                                                "species_ret_evening"][2:],
+                                            line_species=_ed.species[2:],
                                             rayleigh_species=["H2", "He"],
                                             gas_continuum_contributors=[
                                                 "H2--H2", "H2--He"],
                                             wavelength_boundaries=[
-                                                wave_star[_mini_b7[
-                                                    "order_selection"][hh],
+                                                wave_star[retrieval_orders[hh],
                                                     :].min() - 0.01,
-                                                wave_star[_mini_b7[
-                                                    "order_selection"][hh],
+                                                wave_star[retrieval_orders[hh],
                                                     :].max() + 0.01,
                                             ],
                                             line_opacity_mode="lbl",
@@ -6976,9 +6645,8 @@ class ExoploreSimulator:
                                 evidence_tolerance=0.5,
                                 sampling_efficiency=0.8,
                                 n_iter_before_update=100,
-                                const_efficiency_mode=_mini_b7[
-                                    "Multinest_Constant_Eff_Mode"],
-                                n_live_points=_mini_b7["Multinest_live_points"],
+                                const_efficiency_mode=cfg.retrieval.constant_efficiency_mode,
+                                n_live_points=cfg.retrieval.live_points,
                                 max_iter=0,
                             )
                             _sa2d = _pymn.Analyzer(
@@ -7000,15 +6668,13 @@ class ExoploreSimulator:
                                 _wts2d  = _sa2d.get_data()[:, 0]
                                 _msk2d  = _wts2d > 1e-4
                                 _truths2d9 = (None
-                                    if _mini_b7.get("use_real_data", False)
+                                    if (False)
                                     else [
-                                        np.log10(_mini_b7[
-                                            "vmr_morning_day"][2]),
-                                        np.log10(_mini_b7[
-                                            "vmr_evening_day"][2]),
-                                        _mini_b7["K_p"],
-                                        _mini_b7["T_equ_morning_day"],
-                                        _mini_b7["T_equ_evening_day"],
+                                        np.log10(limb_retrieval.morning_abundances[2]),
+                                        np.log10(limb_retrieval.evening_abundances[2]),
+                                        planet.kp_kms,
+                                        _md.equilibrium_temperature_K,
+                                        _ed.equilibrium_temperature_K,
                                     ])
                                 _fig2d  = _corner.corner(
                                     _dat2d[_msk2d, :],

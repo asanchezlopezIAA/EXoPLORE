@@ -7,18 +7,16 @@ JSON file on disk.
 
 Two JSON formats are supported transparently:
 
-**New format** (recommended)
+**Named-unit format** (recommended)
     Uses the same field names as :class:`PlanetParameters`, i.e. with
     explicit units in the key names (``orbital_period_days``,
     ``planet_radius_rjup``, etc.).  This is what the bundled
     ``planet_params/`` files use.  Auto-detected when the key
     ``"orbital_period_days"`` is present.
 
-**SI-unit (inp_dat) format**
-    Uses the short key names from the original ``inp_dat`` dict
-    (``Period``, ``R_pl`` in metres, ``incl`` in radians, etc.).
+**SI-unit format**
+    Uses short keys (``Period``, ``R_pl`` in metres, ``incl`` in radians).
     Auto-detected when the key ``"Period"`` is present.
-    Existing planet JSON files continue to work with no changes.
 
 Example
 -------
@@ -80,7 +78,7 @@ def load_planet(path: str | Path) -> PlanetParameters:
     """Load planet parameters from a JSON file.
 
     Supports both the new clean format (field names with units) and the
-    SI-unit format (short keys from ``inp_dat``).
+    SI-unit format with short keys.
 
     Parameters
     ----------
@@ -193,7 +191,7 @@ def _load_new_format(raw: dict, stem: str) -> PlanetParameters:
 # --- SI-unit format loader ---
 
 def _load_si_unit_format(raw: dict, stem: str) -> PlanetParameters:
-    """Load from the inp_dat SI-unit JSON format."""
+    """Load the SI-unit planet JSON format."""
 
     name = raw.get("Exoplanet_name", stem)
 

@@ -14,18 +14,34 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib import cm
+from scipy import stats as sc
 import os
 from typing import Optional, List, Tuple, Set
 
-def plot_absolute_differences(inp_dat, matrix, name, stat,
-                              night_ref=0, night_max = 0, night_min=0,
-                              per_order=False, save_plot=False):
+def plot_absolute_differences(
+    matrix,
+    name,
+    stat,
+    night_ref=0,
+    night_max=0,
+    night_min=0,
+    per_order=False,
+    save_plot=False,
+    *,
+    n_nights,
+    n_orders,
+    plots_dir,
+    order_indices
+):
     """
     Plot the absolute differences between noise matrices for 
     multiple nights and orders.
 
     Parameters:
-        inp_dat (dict): Input data.
+        n_nights, n_orders: Counts of nights and selected orders.
+        order_indices: Physical instrument order IDs.
+        plots_dir: Output directory.
         matrix (ndarray): 4D array of matrices 
         for nights and orders.
         name (str): Name for the plot.
@@ -39,12 +55,12 @@ def plot_absolute_differences(inp_dat, matrix, name, stat,
         None
     """
     if save_plot:
-        os.makedirs(f"{inp_dat['plots_dir']}statistical/gauss_noise_minmax", exist_ok=True)
+        os.makedirs(f"{plots_dir}statistical/gauss_noise_minmax", exist_ok=True)
     # Calculate the absolute differences between noise matrices
-    abs_diff = np.zeros((inp_dat['n_nights'], inp_dat['n_orders']))
-    amp = np.zeros((inp_dat['n_nights'], inp_dat['n_orders']))
-    for n in range(inp_dat['n_nights']):
-        for h in range(inp_dat['n_orders']):
+    abs_diff = np.zeros((n_nights, n_orders))
+    amp = np.zeros((n_nights, n_orders))
+    for n in range(n_nights):
+        for h in range(n_orders):
             abs_diff[n, h] = np.sum(
                 np.abs(
                     matrix[night_ref, h, :, :] - matrix[n, h, :, :]
@@ -55,11 +71,11 @@ def plot_absolute_differences(inp_dat, matrix, name, stat,
                     ) 
 
     # Create a mask to exclude the reference night from the plots
-    mask = np.ones(inp_dat['n_nights'], dtype=bool)
+    mask = np.ones(n_nights, dtype=bool)
     mask[night_ref] = False
 
     if not per_order:
-        nights_x = np.arange(0, inp_dat['n_nights'], 1)[mask]
+        nights_x = np.arange(0, n_nights, 1)[mask]
         for data_y, ylabel, fname_prefix in [
             (np.sum(abs_diff, axis=1)[mask], 'Absolute difference', ''),
             (np.sum(amp, axis=1)[mask],      'Amplitude',           'amp_'),
@@ -68,13 +84,13 @@ def plot_absolute_differences(inp_dat, matrix, name, stat,
             plt.plot(nights_x, data_y, 'ko')
             plt.xlabel('Night', fontsize=17)
             plt.ylabel(ylabel, fontsize=17)
-            plt.xticks(np.arange(0, inp_dat['n_nights'] + 1, 50))
+            plt.xticks(np.arange(0, n_nights + 1, 50))
             plt.tick_params(axis='both', width=1.5, direction='in', labelsize=17)
             plt.grid(True, color='gray', linestyle='--', linewidth=0.5)
             plt.gca().set_axisbelow(True)
             if save_plot:
                 plt.savefig(
-                    f"{inp_dat['plots_dir']}statistical/"
+                    f"{plots_dir}statistical/"
                     f"gauss_noise_minmax/{fname_prefix}{name}.png",
                     bbox_inches='tight')
             plt.close()
@@ -95,7 +111,7 @@ def plot_absolute_differences(inp_dat, matrix, name, stat,
 
         if save_plot:
             plt.savefig(
-                f"{inp_dat['plots_dir']}statistical/"
+                f"{plots_dir}statistical/"
                 f"gauss_noise_minmax/{name}_SNR.png",
                 bbox_inches='tight')
 
@@ -118,23 +134,23 @@ def plot_absolute_differences(inp_dat, matrix, name, stat,
 
         if save_plot:
             plt.savefig(
-                f"{inp_dat['plots_dir']}statistical/"
+                f"{plots_dir}statistical/"
                 f"gauss_noise_minmax/amp_{name}_SNR.png",
                 bbox_inches='tight')
 
         plt.show()
         plt.close()
     else:
-        for h in range(inp_dat['n_orders']):
+        for h in range(n_orders):
             plt.close()
             # Plot absolute differences vs. night (excluding reference night)
-            plt.plot(np.arange(0, inp_dat['n_nights'], 1)[mask], 
+            plt.plot(np.arange(0, n_nights, 1)[mask],
                      abs_diff[:, h][mask], 'ko')
-            plt.title(f"Order {inp_dat['order_selection'][h]}", 
+            plt.title(f"Order {order_indices[h]}",
                       fontsize=17)
             plt.xlabel('Night', fontsize=17)
             plt.ylabel('Absolute difference', fontsize=17)
-            plt.xticks(np.arange(0, inp_dat['n_nights'] + 1, 50))
+            plt.xticks(np.arange(0, n_nights + 1, 50))
             plt.axvline(x=night_min, color='r', linestyle='--', 
                         linewidth=0.5, label = 'Night_min')
             plt.axvline(x=night_max, color='b', linestyle='--', 
@@ -146,8 +162,8 @@ def plot_absolute_differences(inp_dat, matrix, name, stat,
             plt.legend()
             if save_plot:
                 plt.savefig(
-                    f"{inp_dat['plots_dir']}statistical/"
-                    f"gauss_noise_minmax/{name}_{inp_dat['order_selection'][h]}.png",
+                    f"{plots_dir}statistical/"
+                    f"gauss_noise_minmax/{name}_{order_indices[h]}.png",
                     bbox_inches='tight')
 
             plt.show()
@@ -155,13 +171,13 @@ def plot_absolute_differences(inp_dat, matrix, name, stat,
             
             plt.close()
             # Plot absolute differences vs. night (excluding reference night)
-            plt.plot(np.arange(0, inp_dat['n_nights'], 1)[mask], 
+            plt.plot(np.arange(0, n_nights, 1)[mask],
                      amp[:, h][mask], 'ko')
-            plt.title(f"Order {inp_dat['order_selection'][h]}", 
+            plt.title(f"Order {order_indices[h]}",
                       fontsize=17)
             plt.xlabel('Night', fontsize=17)
             plt.ylabel('Amplitude', fontsize=17)
-            plt.xticks(np.arange(0, inp_dat['n_nights'] + 1, 50))
+            plt.xticks(np.arange(0, n_nights + 1, 50))
             plt.axvline(x=night_min, color='r', linestyle='--', 
                         linewidth=0.5, label = 'Night_min')
             plt.axvline(x=night_max, color='b', linestyle='--', 
@@ -173,8 +189,8 @@ def plot_absolute_differences(inp_dat, matrix, name, stat,
             plt.legend()
             if save_plot:
                 plt.savefig(
-                    f"{inp_dat['plots_dir']}statistical/"
-                    f"gauss_noise_minmax/amp_{name}_{inp_dat['order_selection'][h]}.png",
+                    f"{plots_dir}statistical/"
+                    f"gauss_noise_minmax/amp_{name}_{order_indices[h]}.png",
                     bbox_inches='tight')
 
             plt.show()
@@ -196,8 +212,8 @@ def plot_absolute_differences(inp_dat, matrix, name, stat,
     
             if save_plot:
                 plt.savefig(
-                    f"{inp_dat['plots_dir']}statistical/"
-                    f"gauss_noise_minmax/{name}_SNR_{inp_dat['order_selection'][h]}.png",
+                    f"{plots_dir}statistical/"
+                    f"gauss_noise_minmax/{name}_SNR_{order_indices[h]}.png",
                     bbox_inches='tight')
 
         plt.show()
@@ -218,8 +234,8 @@ def plot_absolute_differences(inp_dat, matrix, name, stat,
 
         if save_plot:
             plt.savefig(
-                f"{inp_dat['plots_dir']}statistical/"
-                f"gauss_noise_minmax/amp_{name}_SNR_{inp_dat['order_selection'][h]}.png",
+                f"{plots_dir}statistical/"
+                f"gauss_noise_minmax/amp_{name}_SNR_{order_indices[h]}.png",
                 bbox_inches='tight')
 
     plt.show()
@@ -228,8 +244,18 @@ def plot_absolute_differences(inp_dat, matrix, name, stat,
     return
 
 
-def diff_res_model(inp_dat, matrix_res, model, stats,
-                   save_plot=False, per_order=True):
+def diff_res_model(
+    matrix_res,
+    model,
+    stats,
+    save_plot=False,
+    per_order=True,
+    *,
+    n_nights,
+    n_orders,
+    order_indices,
+    plots_dir
+):
     """Plot the absolute difference between the residual matrix and a forward model.
 
     Compares the SysRem-processed spectral residual matrix for each night
@@ -244,10 +270,14 @@ def diff_res_model(inp_dat, matrix_res, model, stats,
 
     Parameters
     ----------
-    inp_dat : dict
-        Parameter dictionary containing ``'n_nights'``, ``'n_orders'``,
-        ``'instrument'``, ``'Exoplanet_name'``, ``'event'``, and
-        ``'Simulation_name'``.
+    n_nights
+        Number of observing nights.
+    n_orders
+        Number of selected spectral orders.
+    order_indices
+        Physical spectral-order indices.
+    plots_dir
+        Output directory including its trailing path separator.
     matrix_res : np.ndarray, shape (n_nights, n_orders, n_spectra, n_pixels)
         4D residual matrix from the pipeline.  Night index 0 is excluded.
         The remaining nights are compared to the model.
@@ -266,7 +296,7 @@ def diff_res_model(inp_dat, matrix_res, model, stats,
 
     # Calculate the absolute differences
     diff_resmmodel = np.zeros_like(matrix_res)
-    for n in range(inp_dat['n_nights']-1):
+    for n in range(n_nights-1):
         diff_resmmodel[n, :, :, :] = np.abs(
             matrix_res[n, :,:,:] - model[:, :, :]
             )
@@ -278,14 +308,14 @@ def diff_res_model(inp_dat, matrix_res, model, stats,
 
     # Create a figure and axis
     if save_plot:
-        os.makedirs(f"{inp_dat['plots_dir']}statistical/gauss_noise_minmax", exist_ok=True)
+        os.makedirs(f"{plots_dir}statistical/gauss_noise_minmax", exist_ok=True)
     plt.figure(figsize=(8, 6))
 
     if per_order:
-        abs_diff = np.zeros((inp_dat['n_nights']-1, inp_dat['n_orders']))
-        amp = np.zeros((inp_dat['n_nights']-1, inp_dat['n_orders']))
-        for n in range(inp_dat['n_nights']-1):
-            for h in range(inp_dat['n_orders']):
+        abs_diff = np.zeros((n_nights-1, n_orders))
+        amp = np.zeros((n_nights-1, n_orders))
+        for n in range(n_nights-1):
+            for h in range(n_orders):
                 abs_diff[n, h] = np.sum(
                     np.abs(diff_resmmodel[n, h, :, :])
                     )
@@ -294,7 +324,7 @@ def diff_res_model(inp_dat, matrix_res, model, stats,
                     )
             
             plt.scatter(
-                inp_dat['order_selection'], abs_diff[n, :], c = cmap(norm(stats[n, 0])),
+                order_indices, abs_diff[n, :], c = cmap(norm(stats[n, 0])),
                 norm = norm, cmap = cmap, marker = 'o', linewidth = 1, 
                 #label = f'TC - model\n{np.round(np.sum(abs_diff[n, :]),2)}'
                 )
@@ -316,16 +346,16 @@ def diff_res_model(inp_dat, matrix_res, model, stats,
         
         if save_plot:
             plt.savefig(
-                f"{inp_dat['plots_dir']}statistical/"
+                f"{plots_dir}statistical/"
                 f"ABS_Diff_TCdata_model_perorder.png",
                 bbox_inches='tight')
             
         plt.show()
         plt.close()
           
-        for n in range(inp_dat['n_nights']-1):
+        for n in range(n_nights-1):
             plt.scatter(
-                inp_dat['order_selection'], amp[n, :], c = cmap(norm(stats[n, 0])),
+                order_indices, amp[n, :], c = cmap(norm(stats[n, 0])),
                 norm = norm, cmap = cmap, marker = 'o', linewidth = 1, 
                 #label = f'TC - model\n{np.round(np.sum(abs_diff[n, :]),2)}'
                 )
@@ -346,7 +376,7 @@ def diff_res_model(inp_dat, matrix_res, model, stats,
         
         if save_plot:
             plt.savefig(
-                f"{inp_dat['plots_dir']}statistical/"
+                f"{plots_dir}statistical/"
                 f"Amplitude_TCdata_model_perorder.png",
                 bbox_inches='tight')
         
@@ -354,9 +384,9 @@ def diff_res_model(inp_dat, matrix_res, model, stats,
         plt.close()
             
     else:
-        abs_diff = np.zeros((inp_dat['n_nights']-1))
-        amp = np.zeros((inp_dat['n_nights']-1))
-        for n in range(inp_dat['n_nights']-1):
+        abs_diff = np.zeros((n_nights-1))
+        amp = np.zeros((n_nights-1))
+        for n in range(n_nights-1):
             abs_diff[n] = np.sum(np.abs(
                 diff_resmmodel[n, :, :, :]
                 ))
@@ -382,7 +412,7 @@ def diff_res_model(inp_dat, matrix_res, model, stats,
         
         if save_plot:
             plt.savefig(
-                f"{inp_dat['plots_dir']}statistical/"
+                f"{plots_dir}statistical/"
                 f"ABS_Diff_TCdata_model.png",
                 bbox_inches='tight')
         
@@ -406,7 +436,7 @@ def diff_res_model(inp_dat, matrix_res, model, stats,
         
         if save_plot:
             plt.savefig(
-                f"{inp_dat['plots_dir']}statistical/"
+                f"{plots_dir}statistical/"
                 f"ABS_Diff_TCdata_model.png",
                 bbox_inches='tight')
         

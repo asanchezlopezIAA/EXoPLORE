@@ -469,6 +469,14 @@ SYSREM removes dominant telluric and stellar structure and also changes the unde
 
 ## 10. `retrieval`
 
+Molecular retrievals require `observation.different_nights: false`. Multiple
+nights can share that observing sequence. The current retrieval route has no
+per-night order-selection input for different observing sequences.
+
+The C/O–metallicity tutorial uses `retrieval_choice: 1`. The combined-night
+C/O–metallicity route (`retrieval_choice: 4`) is currently incomplete.
+
+
 ```json
 "retrieval": {
   "enabled": false,
@@ -498,10 +506,10 @@ SYSREM removes dominant telluric and stellar structure and also changes the unde
 | `enabled` | `true`, `false` | Master switch. Set to `false` to skip retrieval entirely (default for exploration runs). When `true`, the retrieval runs at the **end of the same simulation** using the spectral matrices held in memory. Repeating this retrieval starts with a new simulation run. |
 | `sampler` | `"nested_sampling"`, `"mcmc"` | Bayesian sampler. `"nested_sampling"`: [MultiNest](https://github.com/JohannesBuchner/PyMultiNest) via [PyMultiNest](https://github.com/JohannesBuchner/PyMultiNest) (faster, better for multimodal posteriors). `"mcmc"`: [emcee](https://emcee.readthedocs.io) ensemble sampler. |
 | `log_likelihood` | `"Blain24"`, `"BL19"`, `"Gibson22"` | Log-likelihood function. **Coupled to `dimensionality`, see below.** `"Blain24"`: Blain, Sánchez-López & Mollière (2024, AJ, 167, 179), per-order noise scaling. Use with `"1D"`, `"1D_CtoO_met"`, or `"2D"`. `"BL19"`: Brogi & Line (2019), analytic marginalisation over signal scaling. Use with `"1D"`, `"1D_CtoO_met"`, or `"2D"`. `"Gibson22"`: Gibson et al. (2022), chi-squared with free β noise-scaling. **must be used exclusively with `"1D_Gibson22"`**. Any invalid combination raises a `ValueError` at runtime. |
-| `dimensionality` | `"1D"`, `"1D_Gibson22"`, `"1D_CtoO_met"`, `"1D_extended"`, `"1D_extended_fast"`, `"2D"` | Retrieval parameter space. **Coupled to `log_likelihood`, see above.** `"1D"`: single VMR (H₂O), Kp, T_eq, wind velocity (4 params), use with BL19 or Blain24. `"1D_Gibson22"`: same plus β noise-scaling parameter (5 params), **use only with Gibson22 likelihood**. `"1D_CtoO_met"`: C/O ratio and metallicity via EasyChem (2 params, Kp and V_wind fixed to planet values), use with BL19 or Blain24. `"1D_extended"`: log₁₀(VMR) for H₂O, CH₄, NH₃, CO, CO₂, HCN plus Kp, T_eq, and wind velocity (9 params), multi-species retrieval. Use with BL19 or Blain24. `"1D_extended_fast"`: same species plus T_eq only (Kp and wind velocity fixed, 7 params). `"2D"`: morning and evening limb VMR and T_eq independently (limb asymmetry retrieval), use with BL19 or Blain24. |
+| `dimensionality` | `"1D"`, `"1D_Gibson22"`, `"1D_CtoO_met"`, `"1D_extended"`, `"1D_extended_fast"`, `"2D"` | Retrieval parameter space. **Coupled to `log_likelihood`, see above.** `"1D"`: single VMR (H₂O), Kp, T_eq, wind velocity (4 params), use with BL19 or Blain24. `"1D_Gibson22"`: same plus β noise-scaling parameter (5 params), **use only with Gibson22 likelihood**. `"1D_CtoO_met"`: C/O ratio and metallicity via EasyChem (2 params, Kp and V_wind fixed to planet values), use with BL19 or Blain24. `"1D_extended"`: log₁₀(VMR) for H₂O, CH₄, NH₃, CO, CO₂, HCN plus Kp, T_eq, and wind velocity (9 params), multi-species retrieval. Use with BL19 or Blain24. `"1D_extended_fast"`: same species plus T_eq only (Kp and wind velocity fixed, 7 params). `"2D"`: separate morning and evening limb VMRs, use with BL19 or Blain24. The current likelihood retains the configured regional temperature profiles. Its sampled temperature coordinates are not propagated into those profiles. |
 | `retrieval_choice` | int | Selects the specific retrieval configuration within a dimensionality class. See the retrieval module documentation. |
-| `time_resolution` | `true`, `false` | If `true`, perform a time-resolved retrieval splitting the transit into time bins. |
-| `time_resolution_step` | int | Number of exposures per time bin for time-resolved retrieval. |
+| `time_resolution` | `true`, `false` | Reserved control for future time-bin selection. The current time-resolved route is selected with `retrieval_choice: 6`. |
+| `time_resolution_step` | int | Reserved control for future per-exposure binning. The current time-resolved route uses four transit intervals. |
 | `live_points` | int | Number of live points for nested sampling. Higher = more accurate posteriors but slower. Minimum useful: 100. Typical: 200 to 500. |
 | `constant_efficiency_mode` | `true`, `false` | MultiNest constant efficiency mode. Faster but less accurate. For exploration only. |
 | `n_walkers` | int | Number of walkers for MCMC (emcee). Must be ≥ 2 × number of free parameters. Default: 32. |

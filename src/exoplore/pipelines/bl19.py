@@ -12,8 +12,8 @@ two rounds of telluric correction via polynomial fitting to the median
 spectrum and to each pixel's time evolution.
 
 This module provides ``pipeline_BL19_norm`` and
-``pipeline_BL19_tellcorr`` functions that operate without the
-``inp_dat`` dependency.
+``pipeline_BL19_tellcorr`` functions. Their arguments supply spectra,
+uncertainties and the retained wavelength columns.
 
 References
 ----------

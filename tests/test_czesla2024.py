@@ -14,6 +14,8 @@ from exoplore.instruments.crires_czesla2024 import protected_windows
 from exoplore.pipelines.czesla2024 import exposure_indices,fit_helium_multiplet,prepare_transmission
 from exoplore.pipelines.helium_math import C_KMS,air_to_vacuum_nm,multiplet,resample,stellar_wavelength
 from exoplore.pipelines.prepare import preparing_pipeline
+from exoplore.pipelines.models import HeliumObservation,PreparationInputs
+from exoplore.config.models import PipelineConfig,TelluricConfig
 
 
 def example() -> SimulationConfig:
@@ -103,12 +105,41 @@ def test_runner_routes_only_explicit_czesla_choice():
 
 def test_dispatcher_exposes_recipe_without_mutating_input():
     config=small_config();native,flux,error,berv,rv=synthetic(config);before=flux.copy()
-    inp={'preparing_pipeline':'czesla2024','telluric_corrected':True,'czesla2024_config':asdict(config),'berv_kms':berv,'planet_rv_kms':rv}
-    result=preparing_pipeline(inp,flux,error,native,np.arange(flux.shape[1]),np.array([],int),np.ones(9),np.zeros(9),np.array([0,1,7,8]),None)
+    observation=HeliumObservation(berv, rv, telluric_corrected=True)
+    inp=PreparationInputs(
+        PipelineConfig(name="czesla2024", czesla2024=config),
+        TelluricConfig(),
+        True,
+        0,
+        helium_observation=observation,
+    )
+    result=preparing_pipeline(
+        inp,
+        flux,
+        error,
+        native,
+        np.arange(flux.shape[1]),
+        np.array([], int),
+        np.ones(9),
+        np.zeros(9),
+        np.array([0, 1, 7, 8]),
+        None,
+    )
     assert len(result)==9;assert result[4]==0;assert result[8] is None
     np.testing.assert_array_equal(flux,before)
-    inp['telluric_corrected']=False
-    with pytest.raises(ValueError):preparing_pipeline(inp,flux,error,native,np.arange(flux.shape[1]),np.array([],int),np.ones(9),np.zeros(9),np.array([0,1,7,8]),None)
+    inp=replace(inp,helium_observation=replace(observation,telluric_corrected=False))
+    with pytest.raises(ValueError):preparing_pipeline(
+        inp,
+        flux,
+        error,
+        native,
+        np.arange(flux.shape[1]),
+        np.array([], int),
+        np.ones(9),
+        np.zeros(9),
+        np.array([0, 1, 7, 8]),
+        None,
+    )
 
 
 def test_existing_outputs_refused_before_loading_spectra(tmp_path):

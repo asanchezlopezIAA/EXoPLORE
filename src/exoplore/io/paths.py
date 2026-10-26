@@ -144,10 +144,8 @@ def correlations_dir(cfg: SimulationConfig, simulation_name: str) -> Path:
 def inputs_dir(cfg: SimulationConfig, simulation_name: str) -> Path:
     """Return the path to the per-simulation metadata subdirectory.
 
-    The subdirectory is ``<simulation_output_dir>/inputs/``.  It stores
-    JSON or NPZ files that snapshot the exact ``inp_dat`` parameter
-    dictionary and instrument configuration used for a specific run,
-    enabling full reproducibility when re-analysing archived data.
+    The subdirectory is ``<simulation_output_dir>/inputs/``. It provides
+    a location for input metadata associated with an individual run.
 
     Return a Path object. build_output_tree(create=True) creates directories.
 

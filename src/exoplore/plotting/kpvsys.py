@@ -21,6 +21,8 @@ function's return behavior before trying to customize its result.
 
 from __future__ import annotations
 
+from exoplore.plotting.models import DetectionPlotSettings
+
 # Role in the calculation
 # Plot detection maps and velocity profiles using the map orientation and velocity
 # convention supplied to each function. Labels distinguish systemic velocity from the
@@ -176,10 +178,19 @@ def plot_1d_ccf(
 # ---------------------------------------------------------------------------
 
 def plot_1D_CCF(
-        inp_dat, v_rest, ccf_tot_sn, max_kp, max_sn, n_kp,
-        max_v_wind, xlims, show_plot=False, save_plot=True,
-        CCF_Noise=False, sysrem_opt=False
-        ):
+    settings: DetectionPlotSettings,
+    v_rest,
+    ccf_tot_sn,
+    max_kp,
+    max_sn,
+    n_kp,
+    max_v_wind,
+    xlims,
+    show_plot=False,
+    save_plot=True,
+    CCF_Noise=False,
+    sysrem_opt=False,
+):
     """
     Plots the 1D CCF obtained at the Kp of maximum significance of
     the grid (kp_range in the main code) explored.
@@ -189,7 +200,7 @@ def plot_1D_CCF(
         ccf_tot_sn: 2D array of CCF values (v_rest.shape, kp_range.shape).
         max_kp: Maximum Kp value.
         max_sn: Maximum S/N value.
-        inp_dat: Dictionary containing input parameters.
+        settings: Plot labels, output directory and velocity-axis settings.
         n_kp: Number of Kp values.
         max_v_wind: Maximum v_wind value.
 
@@ -198,31 +209,6 @@ def plot_1D_CCF(
 
     """
 
-    """
-    # Plot for proposals
-    import matplotlib.pyplot as plt
-
-    # Plot with enhancements
-    plt.figure(figsize=(10, 5))  # Adjust figure size
-    plt.plot(v_rest, ccf_tot_sn_stat[:,int(stats[37,1])+320,37], linewidth = 3, color='royalblue', label='CCF Signal')
-
-    # Add labels and title
-    plt.xlabel("Rest-frame Velocity (km/s)", fontsize=14)
-    plt.ylabel("Cross-Correlation Function (S/N)", fontsize=14)
-
-    # Add grid and legend
-    plt.grid(True, linestyle='--', alpha=0.6)
-    plt.legend(fontsize=12, loc='best')
-
-    # Improve tick styles
-    plt.xticks(fontsize=12)
-    plt.yticks(fontsize=12)
-
-    plt.savefig("/Users/alexsl/Documents/Simulador/IGRINS2/HD219134b/4transits_CCF_H2O.pdf")
-
-    # Show the plot
-    plt.show()
-    """
     import matplotlib.pyplot as plt
 
     plt.close('all')
@@ -236,14 +222,14 @@ def plot_1D_CCF(
 
         # Set the x-axis limits and ticks
         if xlims == None:
-            plt.xlim(-inp_dat['MAX_CCF_V_STD'] + 5, inp_dat['MAX_CCF_V_STD'] - 5)
-            labels = np.arange(-inp_dat['MAX_CCF_V_STD'] + 5,
-                               inp_dat['MAX_CCF_V_STD'] - 5 +
-                               inp_dat['PLOT_CCF_XSTEP'], inp_dat['PLOT_CCF_XSTEP'])
+            plt.xlim(-settings.velocity_half_range_kms + 5, settings.velocity_half_range_kms - 5)
+            labels = np.arange(-settings.velocity_half_range_kms + 5,
+                               settings.velocity_half_range_kms - 5 +
+                               settings.velocity_tick_step_kms, settings.velocity_tick_step_kms)
             plt.xticks(labels)
             # Add text to the plot
             plt.text(
-                -inp_dat['MAX_CCF_V_STD'] + 10, 3,
+                -settings.velocity_half_range_kms + 10, 3,
                 f"{round(max_sn, 2)}, {int(max_kp-n_kp/2)}, {np.round(max_v_wind, 2)}",
                 color='black', fontsize=10
                 )
@@ -260,7 +246,7 @@ def plot_1D_CCF(
     else:
 
         # Calculate number of rows (SYSREM its) and columns (subplots)
-        n_rows = inp_dat["sysrem_its"]
+        n_rows = settings.sysrem_iterations
 
         # Create a figure with a grid of subplots
         fig, axes = plt.subplots(n_rows, 1, figsize=(18, 5 * n_rows))
@@ -280,16 +266,16 @@ def plot_1D_CCF(
 
             # Set the x-axis limits and ticks
             if xlims == None:
-                ax.set_xlim(-inp_dat['MAX_CCF_V_STD'] + 5, inp_dat['MAX_CCF_V_STD'] - 5)
-                labels = np.arange(-inp_dat['MAX_CCF_V_STD'] + 5,
-                                   inp_dat['MAX_CCF_V_STD'] - 5 +
-                                   inp_dat['PLOT_CCF_XSTEP'], inp_dat['PLOT_CCF_XSTEP'])
+                ax.set_xlim(-settings.velocity_half_range_kms + 5, settings.velocity_half_range_kms - 5)
+                labels = np.arange(-settings.velocity_half_range_kms + 5,
+                                   settings.velocity_half_range_kms - 5 +
+                                   settings.velocity_tick_step_kms, settings.velocity_tick_step_kms)
                 ax.set_xticks(labels)
                 # Add text to the plot
                 for n in range(2):
                     color = 'k' if n == 0 else 'firebrick'
                     ax.text(
-                        -inp_dat['MAX_CCF_V_STD'] + 10, np.median( ccf_tot_sn[:, int(max_kp[0, l]), 0, l])+n*1.5,
+                        -settings.velocity_half_range_kms + 10, np.median( ccf_tot_sn[:, int(max_kp[0, l]), 0, l])+n*1.5,
                         f"{round(max_sn[n, l], 2)}, {int(max_kp[n, l]-n_kp/2)}, {np.round(max_v_wind[n, l], 2)}",
                         color=color, fontsize=17
                         )
@@ -319,10 +305,10 @@ def plot_1D_CCF(
 
 
     if save_plot and not CCF_Noise:
-        filename = f"{inp_dat['plots_dir']}1D_CCF_{inp_dat['Simulation_name']}.pdf"
+        filename = f"{settings.plots_dir}1D_CCF_{settings.simulation_name}.pdf"
         fig.savefig(filename)
     elif save_plot and CCF_Noise:
-        filename = f"{inp_dat['plots_dir']}1D_CCF_noise_{inp_dat['Simulation_name']}.pdf"
+        filename = f"{settings.plots_dir}1D_CCF_noise_{settings.simulation_name}.pdf"
         fig.savefig(filename)
     if show_plot: plt.show()
     plt.close()
@@ -330,20 +316,20 @@ def plot_1D_CCF(
 
 
 def plot_multi_night_1D_CCF(
-        inp_dat,
-        v_rest,
-        night_slices,
-        combined_slice,
-        xlims=None,
-        show_plot=False,
-        save_plot=True,
+    settings: DetectionPlotSettings,
+    v_rest,
+    night_slices,
+    combined_slice,
+    xlims=None,
+    show_plot=False,
+    save_plot=True,
 ):
     """Overlay 1D CCF slices for individual nights and the combined stack.
 
     Parameters
     ----------
-    inp_dat : dict
-        Simulation input dict (needs ``plots_dir``, ``Simulation_name``).
+    settings : DetectionPlotSettings
+        Plot labels, output directory and velocity-axis settings.
     v_rest : ndarray
         Velocity axis in km/s, shape (n_v,).
     night_slices : list of (ndarray, float)
@@ -381,8 +367,8 @@ def plot_multi_night_1D_CCF(
     plt.tight_layout()
 
     if save_plot:
-        filename = (f"{inp_dat['plots_dir']}"
-                    f"1D_CCF_{inp_dat['Simulation_name']}_nights_combined.pdf")
+        filename = (f"{settings.plots_dir}"
+                    f"1D_CCF_{settings.simulation_name}_nights_combined.pdf")
         fig.savefig(filename)
         fig.savefig(filename.replace('.pdf', '.png'), dpi=150)
     if show_plot:
@@ -391,27 +377,24 @@ def plot_multi_night_1D_CCF(
 
 
 def plot_combined_KpVrest_1DCCF(
-        inp_dat,
-        v_rest,
-        kp_range,
-        ccf_tot_sn,
-        max_kp_idx,
-        title="",
-        filename="",
-        panel_label=None,
-        show_plot=False,
-        save_plot=False,
-        ):
-
+    settings: DetectionPlotSettings,
+    v_rest,
+    kp_range,
+    ccf_tot_sn,
+    max_kp_idx,
+    title="",
+    filename="",
+    panel_label=None,
+    show_plot=False,
+    save_plot=False,
+):
     """
     Plot the 1D CCF at the Kp of maximum significance on top,
     and the 2D Kp-V_rest significance map below, with a shared
     x-axis and a dedicated colorbar column.
 
     Args:
-        inp_dat: dict of input parameters, must contain
-            'MAX_CCF_V_STD', 'kp_max', 'PLOT_CCF_XSTEP',
-            'K_p', 'plots_dir', 'Simulation_name'.
+        settings: DetectionPlotSettings with reference motion and axis ranges.
         v_rest: 1D array of rest-frame velocities.
         kp_range: 1D array of Kp values.
         ccf_tot_sn: 2D array of S/N values shaped (len(v_rest), len(kp_range)).
@@ -483,12 +466,12 @@ def plot_combined_KpVrest_1DCCF(
     for sign in (-1, 1):
         ax2.plot(
             sign * np.array([20, 500]),
-            [inp_dat["K_p"]] * 2,
+            [settings.reference_kp_kms] * 2,
             color=linecolor, ls="--", lw=4, alpha=0.7
         )
     # vertical dashed line at V_rest=0 with gap in the center
     y_min, y_max = ax2.get_ylim()
-    center = inp_dat["K_p"]
+    center = settings.reference_kp_kms
     gap = 40  # size of gap in km/s
     ax2.plot([0, 0], [y_min, center-gap], color=linecolor, lw=4, ls="--", alpha=0.7)
     ax2.plot([0, 0], [center+gap, y_max], color=linecolor, lw=4, ls="--", alpha=0.7)
@@ -496,10 +479,10 @@ def plot_combined_KpVrest_1DCCF(
     ax2.set_xlabel("V$_{rest}$ (km s$^{-1}$)", fontsize=22)
     ax2.set_ylabel("K$_{P}$ (km s$^{-1}$)", fontsize=22)
     ax2.set_xlim(
-        -inp_dat["MAX_CCF_V_STD"] + 5,
-         inp_dat["MAX_CCF_V_STD"] - 5
+        -settings.velocity_half_range_kms + 5,
+         settings.velocity_half_range_kms - 5
     )
-    ax2.set_ylim(-inp_dat["kp_max"], inp_dat["kp_max"])
+    ax2.set_ylim(-settings.kp_max_kms, settings.kp_max_kms)
     ax2.tick_params(labelsize=20)
 
     # Colorbar
@@ -521,18 +504,25 @@ def plot_combined_KpVrest_1DCCF(
 
 
 def plot_Kp_Vrest(
-        inp_dat, kp_range, ccf_tot_sn, v_rest, title="",
-        show_plot=False, save_plot=False, xrange=None, yrange=None,
-        CCF_Noise=False, sysrem_opt=False, cc_values=False
-        ):
+    settings: DetectionPlotSettings,
+    kp_range,
+    ccf_tot_sn,
+    v_rest,
+    title="",
+    show_plot=False,
+    save_plot=False,
+    xrange=None,
+    yrange=None,
+    CCF_Noise=False,
+    sysrem_opt=False,
+    cc_values=False,
+):
     """Plot the Kp-Vrest S/N detection map.
 
     Parameters
     ----------
-    inp_dat : dict
-        Simulation input dictionary.  Keys used: ``'MAX_CCF_V_STD'``,
-        ``'PLOT_CCF_XSTEP'``, ``'kp_max'``, ``'K_p'``,
-        ``'sysrem_its'``, ``'plots_dir'``, ``'Simulation_name'``.
+    settings : DetectionPlotSettings
+        Plot labels, output directory and velocity-axis settings.
     kp_range : ndarray
         Array of trial Kp values (km/s).
     ccf_tot_sn : ndarray
@@ -576,21 +566,21 @@ def plot_Kp_Vrest(
         # readable number of labels. Otherwise widen to the smallest "nice"
         # step giving <= ~12 ticks over the displayed velocity range, so a
         # small step over a wide v_rest range does not cram the axis.
-        _vspan = 2.0 * inp_dat['MAX_CCF_V_STD']
-        _xstep = inp_dat['PLOT_CCF_XSTEP']
+        _vspan = 2.0 * settings.velocity_half_range_kms
+        _xstep = settings.velocity_tick_step_kms
         if _vspan / max(_xstep, 1e-9) > 12:
             _xstep = next((s for s in (10, 20, 25, 50, 100, 200, 500)
                            if _vspan / s <= 12), 500)
         # x-axis (v_rest) ticks anchored on 0 (so 0 is always labelled even when
         # the step does not divide the velocity range evenly). ticks beyond the
         # range are clipped by the axis limits.
-        _vmax_tick = int(np.ceil(inp_dat['MAX_CCF_V_STD'] / _xstep) * _xstep)
+        _vmax_tick = int(np.ceil(settings.velocity_half_range_kms / _xstep) * _xstep)
         xlabels = np.arange(-_vmax_tick, _vmax_tick + _xstep, _xstep)
         # y-axis (Kp) ticks: a clean 50 km/s grid anchored on 0 (so 0 is always
         # labelled), spanning at least -200 to 200 km/s inclusive. ticks beyond
         # the Kp range are clipped by the axis limits.
         _kstep = 50
-        _kmax = max(200, int(np.ceil(inp_dat['kp_max'] / _kstep) * _kstep))
+        _kmax = max(200, int(np.ceil(settings.kp_max_kms / _kstep) * _kstep))
         ylabels = np.arange(-_kmax, _kmax + _kstep, _kstep)
 
         kp_plot = ax.contourf(v_rest, kp_range, plot_variable, levels,
@@ -619,27 +609,27 @@ def plot_Kp_Vrest(
         ax.set_xlabel(r"v$_{\mathrm{rest}}$ ($\mathrm{km}$ $\mathrm{s}^{-1}$)",
                       fontsize=17)
         ax.set_ylabel(r"K$_\mathrm{P}$ (km s$^{-1}$)", fontsize=17)
-        ax.plot([-500, -20], [inp_dat['K_p'], inp_dat['K_p']], color='r',
+        ax.plot([-500, -20], [settings.reference_kp_kms, settings.reference_kp_kms], color='r',
                 linestyle='--', linewidth=2., alpha=0.6)
-        ax.plot([20, 500], [inp_dat['K_p'], inp_dat['K_p']], color='r',
+        ax.plot([20, 500], [settings.reference_kp_kms, settings.reference_kp_kms], color='r',
                 linestyle='--', linewidth=2., alpha=0.6)
-        ax.plot([0., 0.], [-500, inp_dat['K_p'] - 20], linestyle='--',
+        ax.plot([0., 0.], [-500, settings.reference_kp_kms - 20], linestyle='--',
                 linewidth=2., color='r', alpha=0.6)
-        ax.plot([0., 0.], [inp_dat['K_p'] + 20, 500], linestyle='--',
+        ax.plot([0., 0.], [settings.reference_kp_kms + 20, 500], linestyle='--',
                 linewidth=2., color='r', alpha=0.6)
         if (xrange is None and yrange is not None) or (xrange is not None and yrange is None):
             raise ValueError(
                 "Please provide either both xrange and yrange or None of them"
                 )
         if xrange is None and yrange is None:
-            ax.set_xlim(-inp_dat['MAX_CCF_V_STD'] + 5, inp_dat['MAX_CCF_V_STD'] - 5)
-            ax.set_ylim(-inp_dat['kp_max'], inp_dat['kp_max'])
+            ax.set_xlim(-settings.velocity_half_range_kms + 5, settings.velocity_half_range_kms - 5)
+            ax.set_ylim(-settings.kp_max_kms, settings.kp_max_kms)
         else:
             ax.set_xlim(xrange[0], xrange[1])
             ax.set_ylim(yrange[0], yrange[1])
 
     else:
-        n_rows = inp_dat["sysrem_its"]
+        n_rows = settings.sysrem_iterations
         n_cols = 2
         fig, axes = plt.subplots(n_rows, n_cols, figsize=(18, 5 * n_rows))
 
@@ -651,15 +641,15 @@ def plot_Kp_Vrest(
                                    np.ceil(ccf_tot_sn.max()) - 0.7, 1)
                 # x-axis ticks anchored on 0 (see 2D path), so 0 is labelled
                 # even when the step does not divide the velocity range evenly.
-                _xstep_m = inp_dat['PLOT_CCF_XSTEP']
-                _vmax_tick = int(np.ceil(inp_dat['MAX_CCF_V_STD'] / _xstep_m)
+                _xstep_m = settings.velocity_tick_step_kms
+                _vmax_tick = int(np.ceil(settings.velocity_half_range_kms / _xstep_m)
                                  * _xstep_m)
                 xlabels = np.arange(-_vmax_tick, _vmax_tick + _xstep_m, _xstep_m)
                 # y-axis (Kp) ticks on a clean 50 km/s grid anchored on 0,
                 # spanning at least -200 to 200 km/s inclusive (see 2D path).
                 _kstep = 50
                 _kmax = max(200,
-                            int(np.ceil(inp_dat['kp_max'] / _kstep) * _kstep))
+                            int(np.ceil(settings.kp_max_kms / _kstep) * _kstep))
                 ylabels = np.arange(-_kmax, _kmax + _kstep, _kstep)
                 kp_plot = ax.contourf(v_rest, kp_range, plot_variable, levels,
                                       cmap=cm.viridis)
@@ -677,22 +667,22 @@ def plot_Kp_Vrest(
                         fontsize=17)
                 if j == n_cols - 1:
                     ax.set_ylabel(r"K$_\mathrm{P}$ (km s$^{-1}$)", fontsize=17)
-                ax.plot([-500, -20], [inp_dat['K_p'], inp_dat['K_p']],
+                ax.plot([-500, -20], [settings.reference_kp_kms, settings.reference_kp_kms],
                         color='firebrick', linestyle='--', linewidth=2., alpha=0.6)
-                ax.plot([20, 500], [inp_dat['K_p'], inp_dat['K_p']],
+                ax.plot([20, 500], [settings.reference_kp_kms, settings.reference_kp_kms],
                         color='firebrick', linestyle='--', linewidth=2., alpha=0.6)
-                ax.plot([0., 0.], [-500, inp_dat['K_p'] - 20], linestyle='--',
+                ax.plot([0., 0.], [-500, settings.reference_kp_kms - 20], linestyle='--',
                         linewidth=2., color='firebrick', alpha=0.6)
-                ax.plot([0., 0.], [inp_dat['K_p'] + 20, 500], linestyle='--',
+                ax.plot([0., 0.], [settings.reference_kp_kms + 20, 500], linestyle='--',
                         linewidth=2., color='firebrick', alpha=0.6)
                 if (xrange is None and yrange is not None) or (xrange is not None and yrange is None):
                     raise ValueError(
                         "Please provide either both xrange and yrange or None of them"
                         )
                 if xrange is None and yrange is None:
-                    ax.set_xlim(-inp_dat['MAX_CCF_V_STD'] + 5,
-                                inp_dat['MAX_CCF_V_STD'] - 5)
-                    ax.set_ylim(-inp_dat['kp_max'], inp_dat['kp_max'])
+                    ax.set_xlim(-settings.velocity_half_range_kms + 5,
+                                settings.velocity_half_range_kms - 5)
+                    ax.set_ylim(-settings.kp_max_kms, settings.kp_max_kms)
                 else:
                     ax.set_xlim(xrange[0], xrange[1])
                     ax.set_ylim(yrange[0], yrange[1])
@@ -702,15 +692,15 @@ def plot_Kp_Vrest(
     else:
         flag = "SNR"
     if save_plot and not CCF_Noise:
-        filename = (f"{inp_dat['plots_dir']}"
-                    f"sn_map_{inp_dat['Simulation_name']}_{flag}.pdf")
+        filename = (f"{settings.plots_dir}"
+                    f"sn_map_{settings.simulation_name}_{flag}.pdf")
         fig.savefig(filename)
-        filename = (f"{inp_dat['plots_dir']}"
-                    f"sn_map_{inp_dat['Simulation_name']}_{flag}.png")
+        filename = (f"{settings.plots_dir}"
+                    f"sn_map_{settings.simulation_name}_{flag}.png")
         fig.savefig(filename, transparent=True)
     elif save_plot and CCF_Noise:
-        filename = (f"{inp_dat['plots_dir']}"
-                    f"sn_map_noise_{inp_dat['Simulation_name']}_{flag}.pdf")
+        filename = (f"{settings.plots_dir}"
+                    f"sn_map_noise_{settings.simulation_name}_{flag}.pdf")
         fig.savefig(filename)
     if show_plot:
         plt.show()

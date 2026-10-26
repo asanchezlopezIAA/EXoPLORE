@@ -8,7 +8,7 @@ This module provides:
 
 - :func:`preparing_pipeline`, the main data-preparation dispatcher that
   selects and runs the correct pipeline (BL19, Blain24, ASL19, Gibson22)
-  based on ``inp_dat['preparing_pipeline']``.
+  based on ``inputs.pipeline.name``.
 
 - :func:`injection`, injects a synthetic planetary signal into the
   observed data matrix.
@@ -21,6 +21,8 @@ from __future__ import annotations
 
 import copy
 
+from exoplore.pipelines.models import PreparationInputs
+
 import numpy as np
 
 
@@ -30,36 +32,44 @@ import numpy as np
 
 
 def preparing_pipeline(
-        inp_dat, data, noise,
-        wave, useful_spectral_points, mask, airmass,
-        phase, without_signal, sysrem_pass, data_inj=None,
-        max_fit_BL19=False,
-        masks=True, correct_uncertainties=True,
-        retrieval=False, mask_inter_retrieval=None,
-        useful_spectral_points_inter_retrieval=None,
-        tell_mask_threshold_Blain24=0.8,
-        sysrem_division=False,
+    inputs: PreparationInputs,
+    data,
+    noise,
+    wave,
+    useful_spectral_points,
+    mask,
+    airmass,
+    phase,
+    without_signal,
+    sysrem_pass,
+    data_inj=None,
+    max_fit_BL19=False,
+    masks=True,
+    correct_uncertainties=True,
+    retrieval=False,
+    mask_inter_retrieval=None,
+    useful_spectral_points_inter_retrieval=None,
+    tell_mask_threshold_Blain24=0.8,
+    sysrem_division=False,
 ):
     """Prepare pipeline.
 
     Dispatches to the pipeline selected by
-    ``inp_dat['preparing_pipeline']``:
+    ``inputs.pipeline.name``:
 
     - ``'BL19'``, Brogi & Line (2019)
     - ``'Blain24'``, Blain, Sánchez-López & Mollière (2024)
     - ``'ASL19'``, ASL 2019 (BL19 normalisation + SYSREM)
     - ``'Gibson22'``, Gibson 2022 (normalisation + SYSREM)
 
-    When ``inp_dat['telluric_variation']`` is False, falls back to
+    When ``inputs.tellurics.include_tellurics`` is False, falls back to
     :func:`~exoplore.pipelines.tellurics.pipeline_fixedTellurics`.
 
     Parameters
     ----------
-    inp_dat : dict
-        Simulation input dictionary.  Relevant keys include
-        ``'preparing_pipeline'``, ``'telluric_variation'``,
-        ``'sysrem_its'``, ``'SYSREM_robust_halt'``,
-        ``'Opt_PCA_its_ord_by_ord'``, ``'Use_real_data'``.
+    inputs : PreparationInputs
+        Method configuration, mask settings, effective SYSREM pass count and
+        optional order-specific telluric transmission.
     Data : ndarray
         Spectral matrix, shape ``(n_spectra, n_pixels)``.
     Noise : ndarray
@@ -111,12 +121,16 @@ def preparing_pipeline(
     # Retrieval flags carry the mask and uncertainty settings needed to
     # compare the prepared model with the prepared data.
     # Lazy imports to avoid circular dependencies
-    if inp_dat['preparing_pipeline'] == 'Palle2020':
+    if inputs.pipeline.name == 'Palle2020':
         from exoplore.pipelines.palle2020 import preparing_pipeline_adapter
-        return preparing_pipeline_adapter(inp_dat, data, noise, wave, mask, masks, correct_uncertainties, retrieval)
-    if inp_dat['preparing_pipeline'] == 'czesla2024':
+        return preparing_pipeline_adapter(
+            inputs, data, noise, wave, mask, masks, correct_uncertainties, retrieval
+        )
+    if inputs.pipeline.name == 'czesla2024':
         from exoplore.pipelines.czesla2024 import preparing_pipeline_adapter
-        return preparing_pipeline_adapter(inp_dat, data, noise, wave, mask, masks, correct_uncertainties, retrieval)
+        return preparing_pipeline_adapter(
+            inputs, data, noise, wave, mask, masks, correct_uncertainties, retrieval
+        )
 
     from exoplore.pipelines.bl19 import (
         pipeline_BL19_norm, pipeline_BL19_tellcorr,
@@ -141,7 +155,7 @@ def preparing_pipeline(
 
     # Detrending operator shared by every pipeline branch: "sysrem" (default,
     # inverse-variance weighted) or "pca" (unweighted SVD component removal).
-    _detrend = inp_dat.get('detrend_method', 'sysrem')
+    _detrend = inputs.pipeline.detrend_method
     from exoplore.pipelines.tellurics import pipeline_fixedTellurics
 
     try:
@@ -160,14 +174,13 @@ def preparing_pipeline(
     data_prepared = np.ones_like(data)
     propag_noise = np.ones_like(data)
 
-    # Local aliases, inp_dat is accessed throughout. naming key values
-    # once avoids repeating long dict lookups and aids readability.
-    _pipeline      = inp_dat['preparing_pipeline']
-    _has_tellurics = inp_dat['telluric_variation']
-    _n_sysrem      = inp_dat['sysrem_its']
-    _robust_halt   = inp_dat['SYSREM_robust_halt']
-    _opt_ord       = inp_dat['Opt_PCA_its_ord_by_ord']
-    _use_real      = inp_dat['Use_real_data']
+    # Name the settings used by the preparation branches below.
+    _pipeline      = inputs.pipeline.name
+    _has_tellurics = inputs.tellurics.include_tellurics
+    _n_sysrem      = inputs.sysrem_iterations
+    _robust_halt   = inputs.pipeline.sysrem_robust_halt
+    _opt_ord       = inputs.pipeline.optimize_sysrem_order_by_order
+    _use_real      = inputs.use_real_data
 
     if _has_tellurics:
         if _pipeline == 'BL19':
@@ -181,7 +194,9 @@ def preparing_pipeline(
 
             if masks:
                 mask, useful_spectral_points = mask_tellurics(
-                    inp_dat, data_prepared, mask,
+                    data_prepared,
+                    mask,
+                    threshold=inputs.tellurics.mask_threshold,
                 )
                 inter_mask = np.copy(mask)
                 inter_useful = np.copy(useful_spectral_points)
@@ -277,7 +292,10 @@ def preparing_pipeline(
 
                     if masks:
                         mask, useful_spectral_points = mask_tellurics_window(
-                            inp_dat, data_prepared, mask
+                            data_prepared,
+                            mask,
+                            threshold=inputs.tellurics.mask_threshold,
+                            safety_window_pixels=inputs.tellurics.safety_window_pixels,
                         )
                         inter_mask = np.copy(mask)
                         inter_useful = np.copy(useful_spectral_points)
@@ -419,14 +437,14 @@ def preparing_pipeline(
                     cor = None
                     U = None
             else:
-                _criterion = inp_dat.get('Opt_criterion', 'DeltaSigma')
+                _criterion = inputs.pipeline.optimize_criterion
 
                 if _criterion == 'DeltaSigma':
                     # Model-independent per-order optimisation
                     # (Parker et al. 2025, MNRAS 538, 3263,
                     #  Peláez-Torres et al. 2026, A&A 705, A256).
                     # Halts when fractional σ-drop < threshold.
-                    _threshold = inp_dat.get('sysrem_delta_sigma_threshold', 0.01)
+                    _threshold = inputs.pipeline.sysrem_delta_sigma_threshold
                     data_prepared = np.ones_like(data)
                     propag_noise  = np.ones_like(data)
 
@@ -437,7 +455,11 @@ def preparing_pipeline(
                                 wave, data, noise, useful_spectral_points)
                         if masks:
                             mask, useful_spectral_points = mask_tellurics_window(
-                                inp_dat, data_prepared, mask)
+                                data_prepared,
+                                mask,
+                                threshold=inputs.tellurics.mask_threshold,
+                                safety_window_pixels=inputs.tellurics.safety_window_pixels,
+                            )
                             inter_mask  = np.copy(mask)
                             inter_useful = np.copy(useful_spectral_points)
 
@@ -483,7 +505,10 @@ def preparing_pipeline(
                                     wave, data_inj, noise, useful_spectral_points)
 
                     mask, useful_spectral_points = mask_tellurics_window(
-                        inp_dat, data_prepared[:, :, 0, 0], mask
+                        data_prepared[:, :, 0, 0],
+                        mask,
+                        threshold=inputs.tellurics.mask_threshold,
+                        safety_window_pixels=inputs.tellurics.safety_window_pixels,
                     )
                     # Intermediate mask/useful-point snapshot, required so the
                     # 9-value return signature is satisfied (inter_mask,
@@ -530,7 +555,7 @@ def preparing_pipeline(
             #             recipe Cheverall+26 inherit).
             #   "maxima", ASL19 80-bin maxima + 2nd-order fit.
             #   "polyfit", literal per-exposure 2nd-order continuum polynomial.
-            _cm = inp_dat.get('continuum_method') or 'cm2024'
+            _cm = inputs.pipeline.continuum_method or 'cm2024'
             if _cm == 'polyfit':
                 _norm_fn = chev26_normalise_polyfit
             elif _cm == 'maxima':
@@ -566,21 +591,23 @@ def preparing_pipeline(
                     noise_out[:, useful_spectral_points]
 
                 mask, useful_spectral_points = mask_tellurics_window(
-                    inp_dat, data_prepared, mask
+                    data_prepared,
+                    mask,
+                    threshold=inputs.tellurics.mask_threshold,
+                    safety_window_pixels=inputs.tellurics.safety_window_pixels,
                 )
                 inter_mask   = np.copy(mask)
                 inter_useful = np.copy(useful_spectral_points)
 
                 cor = np.zeros_like(data)
                 U   = np.zeros((n_spectra, _n_sysrem))
-                _criterion_ch = inp_dat.get('Opt_criterion', 'Max_Diff')
+                _criterion_ch = inputs.pipeline.optimize_criterion
                 if _opt_ord and _criterion_ch == 'DeltaSigma':
                     # Model-independent halt: subtract components until the
                     # marginal reduction in the residual scatter falls below a
                     # threshold (Gibson et al. 2022 style), choosing N per order
                     # from the data alone (no injected model).
-                    _threshold = inp_dat.get(
-                        'sysrem_delta_sigma_threshold', 0.01)
+                    _threshold = inputs.pipeline.sysrem_delta_sigma_threshold
                     _std_prev = np.std(
                         data_prepared[:, useful_spectral_points])
                     _n_used = _n_sysrem
@@ -631,7 +658,7 @@ def preparing_pipeline(
                 # uninjected (track 0) and injected (track 1) time-series and
                 # all SYSREM iterations. The per-order optimum N is selected
                 # downstream at CCF time.  data_inj carries the model injected
-                # at inp_dat['kp_vrest_injection'].
+                # at the configured injection velocity.
                 # ----------------------------------------------------------
                 data_prepared = np.ones(
                     (n_spectra, n_pixels, 2, _n_sysrem), float
@@ -655,7 +682,10 @@ def preparing_pipeline(
                             noise_out[:, useful_spectral_points]
 
                 mask, useful_spectral_points = mask_tellurics_window(
-                    inp_dat, data_prepared[:, :, 0, 0], mask
+                    data_prepared[:, :, 0, 0],
+                    mask,
+                    threshold=inputs.tellurics.mask_threshold,
+                    safety_window_pixels=inputs.tellurics.safety_window_pixels,
                 )
 
                 # Intermediate mask/useful-point snapshot (post-telluric-
@@ -711,7 +741,9 @@ def preparing_pipeline(
 
             if masks:
                 mask, useful_spectral_points = mask_tellurics(
-                    inp_dat, data_prepared, mask,
+                    data_prepared,
+                    mask,
+                    threshold=inputs.tellurics.mask_threshold,
                 )
                 inter_mask = np.copy(mask)
                 inter_useful = np.copy(useful_spectral_points)
@@ -723,11 +755,10 @@ def preparing_pipeline(
                 )
 
             if not retrieval:
-                _criterion_g22 = inp_dat.get('Opt_criterion', 'DeltaSigma')
+                _criterion_g22 = inputs.pipeline.optimize_criterion
                 if (_opt_ord and _criterion_g22 == 'DeltaSigma'):
                     # Model-independent per-order halt for Gibson22.
-                    _threshold_g22 = inp_dat.get(
-                        'sysrem_delta_sigma_threshold', 0.01)
+                    _threshold_g22 = inputs.pipeline.sysrem_delta_sigma_threshold
                     _std_prev = np.std(
                         data_prepared[:, useful_spectral_points])
                     _U_buf = np.zeros((n_spectra, _n_sysrem))
@@ -775,7 +806,7 @@ def preparing_pipeline(
             #      iteration time basis U for the Gibson 2022 model filter.
             # The theoretical telluric transmittance from molecfit is used for
             # the fit masks and the deep mask when the engine supplies it
-            # (inp_dat['nortmann_telluric_order']). Otherwise the deep mask is
+            # (inputs.telluric_transmission). Otherwise the deep mask is
             # taken from the out of transit master flux, the data driven
             # equivalent of the below 20% continuum rule.
             # -----------------------------------------------------------------
@@ -792,7 +823,7 @@ def preparing_pipeline(
             _d = data / _scale
             _nz = noise / _scale
 
-            _tell = inp_dat.get('nortmann_telluric_order', None)
+            _tell = inputs.telluric_transmission
             dn, nn, flagged = nortmann_normalise(
                 wave, _d, _nz, without_signal, telluric_transmittance=_tell,
             )
@@ -880,17 +911,35 @@ def preparing_pipeline(
 
 
 def injection(
-        inp_dat, wave_ins, mat_og, wave_pRT, syn_spec,
-        with_signal, without_signal, fraction, phase, mat_star,
-        T_0, syn_jd
+    wave_ins,
+    mat_og,
+    wave_pRT,
+    syn_spec,
+    with_signal,
+    without_signal,
+    fraction,
+    phase,
+    mat_star,
+    *,
+    event_type,
+    signal_scale,
+    limb_asymmetries,
+    limb_divisions,
+    resolving_power,
+    kp_kms,
+    vrest_kms,
+    berv_kms,
+    systemic_velocity_kms
 ):
     """Inject a synthetic planetary signal into the data matrix.
 
     Parameters
     ----------
-    inp_dat : dict
-        Simulation input dictionary.  Keys used:
-        ``"Kp_Vrest_inj"``, ``"BERV"``, ``"V_sys"``.
+    event_type, signal_scale, limb_asymmetries, limb_divisions, resolving_power
+        Settings passed to the spectral-matrix builder.
+    kp_kms, vrest_kms, berv_kms, systemic_velocity_kms
+        Orbital amplitude, additional offset, barycentric correction and
+        systemic velocity, all in km/s. berv_kms can vary by exposure.
     wave_ins : ndarray
         Instrument wavelength grid.
     mat_og : ndarray
@@ -909,10 +958,6 @@ def injection(
         Orbital phase per exposure.
     mat_star : ndarray
         Stellar spectrum matrix.
-    T_0 : float
-        Mid-transit time (BJD).
-    syn_jd : ndarray
-        Synthetic Julian dates.
 
     Returns
     -------
@@ -923,14 +968,23 @@ def injection(
     from exoplore.core.observation import spec_to_mat_fraction
 
     v_p_inj = get_V(
-        inp_dat["Kp_Vrest_inj"][0], phase, inp_dat['BERV'],
-        inp_dat['V_sys'], inp_dat["Kp_Vrest_inj"][1]
+        kp_kms, phase, berv_kms, systemic_velocity_kms, vrest_kms
     )
 
     spec_mat_inj, spec_mat_shift_inj = spec_to_mat_fraction(
-        inp_dat, syn_jd, T_0, v_p_inj, wave_ins, wave_pRT, syn_spec,
-        mat_star, with_signal, without_signal, fraction,
-        injection_setup=True
+        v_p_inj,
+        wave_ins,
+        wave_pRT,
+        syn_spec,
+        mat_star,
+        with_signal,
+        without_signal,
+        fraction,
+        event_type=event_type,
+        signal_scale=signal_scale,
+        limb_asymmetries=limb_asymmetries,
+        limb_divisions=limb_divisions,
+        resolving_power=resolving_power,
     )
 
     return mat_og * spec_mat_inj

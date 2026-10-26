@@ -317,9 +317,24 @@ def call_ccf_literature(lag, n_spectra, obs, ccf_iterations, wave,
                     wave_CC, ccf_values, template, uncertainties, with_signal)
 
 
-def get_shifted_ccf_matrix(inp_dat, with_signal, v_rest, v_erf, kp_range,
-                           phase, v_sys, berv, pixels_left_right,
-                           ccf_v_step, ccf_complete, sysrem_opt=False):
+def get_shifted_ccf_matrix(
+    with_signal,
+    v_rest,
+    v_erf,
+    kp_range,
+    phase,
+    v_sys,
+    berv,
+    pixels_left_right,
+    ccf_v_step,
+    ccf_complete,
+    sysrem_opt=False,
+    *,
+    significant_eccentricity,
+    eccentricity,
+    argument_of_periastron_deg,
+    sysrem_iterations
+):
     """Shift the CCF time series to the planet rest frame.
 
     For each in-transit exposure and each trial Kp, the CCF is
@@ -328,10 +343,14 @@ def get_shifted_ccf_matrix(inp_dat, with_signal, v_rest, v_erf, kp_range,
 
     Parameters
     ----------
-    inp_dat : dict
-        Simulation input dictionary.  Keys used:
-        ``"significant_eccentricity"``, ``"eccentricity"``,
-        ``"arg_periastron_w"``, ``"sysrem_its"`` (if sysrem_opt).
+    significant_eccentricity
+        Evaluate the eccentric orbital velocity track.
+    eccentricity
+        Orbital eccentricity.
+    argument_of_periastron_deg
+        Argument of periastron in degrees.
+    sysrem_iterations
+        Number of stored SYSREM iterations in optimisation mode.
     with_signal : array
         Indices of in-transit exposures.
     v_rest : array
@@ -373,16 +392,16 @@ def get_shifted_ccf_matrix(inp_dat, with_signal, v_rest, v_erf, kp_range,
         shape = (len(v_rest), len(with_signal), len(kp_range))
     else:
         shape = (len(v_rest), len(with_signal), len(kp_range),
-                 2, inp_dat["sysrem_its"])
+                 2, sysrem_iterations)
 
     ccf_values_shift = np.zeros(shape, float)
 
-    if not inp_dat["significant_eccentricity"]:
+    if not significant_eccentricity:
         vp_all = get_V(kp_range[:, np.newaxis], phase, berv, v_sys, 0)
     else:
         vp_all = get_V_eccentric(
             kp_range[:, np.newaxis], phase,
-            inp_dat["eccentricity"], inp_dat["arg_periastron_w"],
+            eccentricity, argument_of_periastron_deg,
             berv, v_sys, 0
         )
 
@@ -399,7 +418,7 @@ def get_shifted_ccf_matrix(inp_dat, with_signal, v_rest, v_erf, kp_range,
                 )
             else:
                 for n in range(2):
-                    for l in range(inp_dat["sysrem_its"]):
+                    for l in range(sysrem_iterations):
                         ccf_values_shift[:, idx, k_idx, n, l] = np.interp(
                             v_prf, v_erf, ccf_complete[:, i, n, l]
                         )
@@ -407,8 +426,21 @@ def get_shifted_ccf_matrix(inp_dat, with_signal, v_rest, v_erf, kp_range,
     return ccf_values_shift
 
 
-def get_max_CCF_peak(inp_dat, ccf_tot, v_rest, kp_range,
-                     b=None, stats=None, sysrem_opt=False, CCF_Noise=False):
+def get_max_CCF_peak(
+    ccf_tot,
+    v_rest,
+    kp_range,
+    b=None,
+    stats=None,
+    sysrem_opt=False,
+    CCF_Noise=False,
+    *,
+    snr_exclude_kms,
+    sysrem_iterations,
+    exclude_around="peak",
+    noise_source="peak_row",
+    noise_kp_exclude_kms=120.0
+):
     """Normalize the CCF map using the configured noise region and find its peak.
 
     The returned S/N is the implemented map statistic, not automatically a
@@ -417,9 +449,16 @@ def get_max_CCF_peak(inp_dat, ccf_tot, v_rest, kp_range,
 
     Parameters
     ----------
-    inp_dat : dict
-        Simulation input dictionary.  Key used: ``"CCF_SNR_exclude"``
-        (km/s exclusion window around the peak), ``"sysrem_its"``.
+    snr_exclude_kms
+        Velocity interval excluded from the noise estimate in km/s.
+    sysrem_iterations
+        Number of SYSREM iterations in optimisation mode.
+    exclude_around
+        Centre the exclusion on the row peak or on each trial point.
+    noise_source
+        Estimate noise within each row or from signal-free rows.
+    noise_kp_exclude_kms
+        Kp interval excluded when selecting signal-free rows in km/s.
     ccf_tot : ndarray
         Kp-Vsys CCF map.  Shape (n_v, n_kp) normally, or
         (n_v, n_kp, 2, sysrem_its) if ``sysrem_opt=True``.
@@ -462,8 +501,8 @@ def get_max_CCF_peak(inp_dat, ccf_tot, v_rest, kp_range,
         # std of CCF values >CCF_SNR_exclude km/s from THAT velocity (the trail
         # under test).  Computed per row with a sliding-window via cumulative
         # sums (assumes a uniform v_rest grid).
-        _excl_mode = inp_dat.get('ccf_snr_exclude_around', 'peak')
-        _excl = inp_dat['CCF_SNR_exclude']
+        _excl_mode = exclude_around
+        _excl = snr_exclude_kms
 
         # Noise-source convention.  "peak_row" (default): the noise std is
         # measured within each Kp row (below).  "signal_free_rows": one
@@ -475,9 +514,9 @@ def get_max_CCF_peak(inp_dat, ccf_tot, v_rest, kp_range,
         # signal-free rows share the map's noise statistics without that
         # structure, so co-added significances recover the expected
         # sqrt(N) scaling when the per-night noise is uncorrelated.
-        if inp_dat.get('CCF_SNR_noise_source', 'peak_row') == 'signal_free_rows':
+        if noise_source == 'signal_free_rows':
             _ipk = np.unravel_index(np.argmax(ccf_tot), ccf_tot.shape)
-            _kp_excl = float(inp_dat.get('CCF_SNR_kp_exclude', 120.0))
+            _kp_excl = float(noise_kp_exclude_kms)
             _rows = np.abs(kp_range - kp_range[_ipk[1]]) > _kp_excl
             _vsel = np.abs(v_rest - v_rest[_ipk[0]]) > _excl
             _reg = ccf_tot[np.ix_(_vsel, _rows)]
@@ -529,8 +568,8 @@ def get_max_CCF_peak(inp_dat, ccf_tot, v_rest, kp_range,
 
             max_index = np.argmax(ccf_tot[:, k])
             std_pts = (
-                (v_rest < (v_rest[max_index] - inp_dat['CCF_SNR_exclude'])) |
-                (v_rest > (v_rest[max_index] + inp_dat['CCF_SNR_exclude']))
+                (v_rest < (v_rest[max_index] - snr_exclude_kms)) |
+                (v_rest > (v_rest[max_index] + snr_exclude_kms))
             )
             ccf_tot_sig[:, k] = (
                 (ccf_tot[:, k] - np.mean(ccf_tot[std_pts, k]))
@@ -552,19 +591,19 @@ def get_max_CCF_peak(inp_dat, ccf_tot, v_rest, kp_range,
                 np.argwhere(v_rest == stats[b, 2])[0][0], max_kp_idx
             ]
     else:
-        max_sig = np.zeros((2, inp_dat["sysrem_its"]))
-        max_kp_idx = np.zeros((2, inp_dat["sysrem_its"]))
-        max_v_rest = np.zeros((2, inp_dat["sysrem_its"]))
+        max_sig = np.zeros((2, sysrem_iterations))
+        max_kp_idx = np.zeros((2, sysrem_iterations))
+        max_v_rest = np.zeros((2, sysrem_iterations))
         ccf_tot_sig = np.zeros(ccf_tot.shape)
         cc_values_std = np.zeros(ccf_tot.shape)
 
         for k in range(len(kp_range)):
             for n in range(2):
-                for l in range(inp_dat["sysrem_its"]):
+                for l in range(sysrem_iterations):
                     max_index = np.argmax(ccf_tot[:, k, n, l])
                     std_pts = (
-                        (v_rest < (v_rest[max_index] - inp_dat['CCF_SNR_exclude'])) |
-                        (v_rest > (v_rest[max_index] + inp_dat['CCF_SNR_exclude']))
+                        (v_rest < (v_rest[max_index] - snr_exclude_kms)) |
+                        (v_rest > (v_rest[max_index] + snr_exclude_kms))
                     )
                     ccf_tot_sig[:, k, n, l] = (
                         (ccf_tot[:, k, n, l] - np.mean(ccf_tot[std_pts, k, n, l]))
@@ -635,21 +674,37 @@ def call_ccf_numba_par_weighted_ordbord_opt(
 
 
 def quick_CCF(
-        inp_dat, ccf_iterations, n_spectra, data,
-        propag_noise, model, wave, v_ccf, night_max, night_min,
-        with_signal,
-        min_max=False, verbose=False):
+    ccf_iterations,
+    n_spectra,
+    data,
+    propag_noise,
+    model,
+    wave,
+    v_ccf,
+    night_max,
+    night_min,
+    with_signal,
+    min_max=False,
+    verbose=False,
+    *,
+    n_orders,
+    n_nights,
+    order_indices
+):
     """Run the per-order CCF loop and return the order-stacked CCF cube.
 
     Convenience wrapper that iterates over orders and nights, calling
-    :func:`call_ccf_numba_par_weighted` for each slice, then subtracts
-    the per-row median.
+    :func:`call_ccf_numba_par_weighted` for each slice. The final processed
+    order/night slice is median-centred along the velocity axis.
 
     Parameters
     ----------
-    inp_dat : dict
-        Simulation input dictionary.  Must contain ``'n_orders'``,
-        ``'n_nights'``, and ``'order_selection'``.
+    n_orders
+        Number of selected spectral orders.
+    n_nights
+        Number of nights.
+    order_indices
+        Physical order indices used to select the wavelength grid.
     ccf_iterations : int
         Number of CCF velocity steps.
     n_spectra : int
@@ -680,42 +735,42 @@ def quick_CCF(
     """
     if min_max:
         n_nights = 3
-        ccf_store = np.zeros((inp_dat['n_orders'], n_nights,
+        ccf_store = np.zeros((n_orders, n_nights,
                               ccf_iterations, n_spectra), float)
-        for h in range(inp_dat['n_orders']):
+        for h in range(n_orders):
             for b in range(n_nights):
                 if b == 0:
                     ccf_store[h, b, :] = call_ccf_numba_par_weighted(
                         lag=v_ccf, n_spectra=n_spectra, obs=data[h, b, :],
                         ccf_iterations=ccf_iterations, wave=wave,
                         wave_CC=wave, template=model[h, :],
-                        uncertainties=propag_noise[h, b, :])
+                        uncertainties=propag_noise[h, b, :], with_signal=with_signal)
                 elif b == 1:
                     ccf_store[h, b, :] = call_ccf_numba_par_weighted(
                         lag=v_ccf, n_spectra=n_spectra, obs=data[h, night_max, :],
                         ccf_iterations=ccf_iterations, wave=wave,
                         wave_CC=wave, template=model[h, :, :],
-                        uncertainties=propag_noise[h, night_max, :])
+                        uncertainties=propag_noise[h, night_max, :], with_signal=with_signal)
                 elif b == 2:
                     ccf_store[h, b, :] = call_ccf_numba_par_weighted(
                         lag=v_ccf, n_spectra=n_spectra, obs=data[h, night_min, :],
                         ccf_iterations=ccf_iterations, wave=wave,
                         wave_CC=wave, template=model[h, :],
-                        uncertainties=propag_noise[h, night_min, :])
+                        uncertainties=propag_noise[h, night_min, :], with_signal=with_signal)
     else:
         ccf_store = np.zeros(
-            (inp_dat['n_orders'], inp_dat['n_nights'],
+            (n_orders, n_nights,
              ccf_iterations, n_spectra), float
         )
-        for h in range(inp_dat['n_orders']):
+        for h in range(n_orders):
             if verbose:
                 print(f"Order {h}")
-            for b in range(inp_dat['n_nights']):
+            for b in range(n_nights):
                 ccf_store[h, b, :] = call_ccf_numba_par_weighted(
                     lag=v_ccf, n_spectra=n_spectra, obs=data[h, b, :],
                     ccf_iterations=ccf_iterations,
-                    wave=wave[inp_dat['order_selection'][h], :],
-                    wave_CC=wave[inp_dat['order_selection'][h], :],
+                    wave=wave[order_indices[h], :],
+                    wave_CC=wave[order_indices[h], :],
                     template=model[h, :],
                     uncertainties=propag_noise[h, b, :],
                     with_signal=with_signal)

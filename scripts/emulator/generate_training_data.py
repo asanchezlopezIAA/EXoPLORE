@@ -52,18 +52,19 @@ R_STAR_CM    = 5.5988e+10
 R_INSTRUMENT = 80400.0
 WAVE_BOUNDS  = (1.51258, 1.54068)   # CARMENES NIR order 23 (µm)
 
-INP_DAT = {
-    "Gravity":           GRAVITY,
-    "M_pl":              None,
-    "R_pl":              R_PL_CM,
-    "event":             "transit",
-    "T_star":            None,
-    "R_star":            R_STAR_CM,
-    "v_rotsini":         350000.0,
-    "R_instrument":      R_INSTRUMENT,
-    "pixels_per_res_el": 3.3,
-    "res":               R_INSTRUMENT,
-}
+from exoplore.atmosphere.models import RadiativeTransferInputs
+
+MODEL_INPUTS = RadiativeTransferInputs(
+    event_type="transit",
+    planet_mass_g=None,
+    planet_radius_cm=R_PL_CM,
+    stellar_radius_cm=R_STAR_CM,
+    stellar_teff_K=None,
+    resolving_power=R_INSTRUMENT,
+    internal_temperature_K=None,
+    gravity_cgs=GRAVITY,
+    convolve_to_resolution=None,
+)
 
 _atm = None
 _pressures = None
@@ -91,7 +92,7 @@ def _compute_spectrum(args):
     from exoplore.atmosphere.prt import call_pRT
     try:
         result = call_pRT(
-            inp_dat=_inp_dat if "_inp_dat" in globals() else INP_DAT,
+            model_inputs=MODEL_INPUTS,
             pressures=_pressures,
             prt_object=_atm,
             species=["H2", "He", "H2O"],

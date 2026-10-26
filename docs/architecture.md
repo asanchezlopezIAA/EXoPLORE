@@ -92,6 +92,27 @@ command-line tools, `notebooks/` holds executable tutorials and `docs/` holds
 the documentation. The [input guide](input_files.md) describes the external
 scientific datasets. Runs write their products to the configured output root.
 
+## How inputs reach a calculation
+
+`SimulationConfig` holds the choices read from JSON. `PlanetParameters` holds
+the physical system and its derived quantities. A calculation receives the
+section or numerical quantities it uses.
+
+| Input object | File | Used for |
+|---|---|---|
+| `InstrumentInputs` | `instruments/base.py` | Paths and observing settings used to read an instrument. |
+| `RadiativeTransferInputs` | `atmosphere/models.py` | System quantities and units shared by atmospheric spectra. |
+| `PreparationInputs` | `pipelines/models.py` | Method settings and order/night information for preparation. |
+| `HeliumObservation` | `pipelines/models.py` | Exposure velocities, dates and correction flags for observed helium. |
+| `NightStudyInputs` | `ccf/models.py` | Night counts, reference motion and choices for statistical comparisons. |
+| `TimeResolvedCCFInputs` | `ccf/models.py` | Settings for CCF comparisons between transit intervals. |
+| `DetectionPlotSettings` | `plotting/models.py` | Figure labels, velocity ranges and output location. |
+| `LimbRetrievalState` | `retrieval/models.py` | Regional abundances retained during likelihood evaluation. |
+
+Configuration objects describe the experiment. Arrays carry calculated spectra,
+uncertainties, masks and CCFs. Dictionaries remain useful for species-indexed
+abundances, registries and collections of saved products.
+
 ## Read completed results
 
 After a successful molecular run:

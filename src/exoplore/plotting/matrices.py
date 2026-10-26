@@ -10,6 +10,8 @@ different pipeline stages.
 
 from __future__ import annotations
 
+from exoplore.plotting.models import DetectionPlotSettings
+
 # Role in the calculation
 # Display wavelength/exposure and velocity/exposure matrices using the supplied masks,
 # colour scales and axis conventions.
@@ -145,11 +147,21 @@ def plot_ccf_timeseries(
 # ---------------------------------------------------------------------------
 
 def CCF_matrix_ERF(
-        inp_dat, v_ccf, phase, ccf_complete, with_signal,
-        without_signal, v_planet, ingress_idx=None, egress_idx=None,
-        show_plot=False, save_plot=True, xlims=None, ylims=None,
-        CCF_Noise=False
-        ):
+    settings: DetectionPlotSettings,
+    v_ccf,
+    phase,
+    ccf_complete,
+    with_signal,
+    without_signal,
+    v_planet,
+    ingress_idx=None,
+    egress_idx=None,
+    show_plot=False,
+    save_plot=True,
+    xlims=None,
+    ylims=None,
+    CCF_Noise=False,
+):
     """Plot the CCF matrix in the Earth's rest-frame (ERF).
 
     Shows the cross-correlation function as a function of velocity lag
@@ -158,9 +170,8 @@ def CCF_matrix_ERF(
 
     Parameters
     ----------
-    inp_dat : dict
-        Simulation input dictionary.  Keys used: ``'Opt_PCA_its_ord_by_ord'``,
-        ``'event'``, ``'sysrem_its'``, ``'plots_dir'``, ``'Simulation_name'``.
+    settings : DetectionPlotSettings
+        Plot labels, output directory and velocity-axis settings.
     v_ccf : ndarray
         Earth-frame velocity grid (km/s).
     phase : ndarray
@@ -199,7 +210,7 @@ def CCF_matrix_ERF(
         T3 = phase[egress_idx[0]]
         T4 = phase[egress_idx[-1]]
 
-    if not inp_dat["Opt_PCA_its_ord_by_ord"] or ccf_complete.ndim == 2:
+    if not settings.optimize_sysrem or ccf_complete.ndim == 2:
         plt.close('all')
         fig, ax = plt.subplots(figsize=(9, 7))
 
@@ -220,7 +231,7 @@ def CCF_matrix_ERF(
         ax.set_xlabel("Earth's rest-frame velocity (km s$^{-1}$)", fontsize=17, color='k')
         ax.set_ylabel('Phase', fontsize=17, color='k')
 
-        if inp_dat['event'] == 'transit':
+        if settings.event_type == 'transit':
             ax.axhline(y=phase[with_signal[0]], xmin=-500, xmax=500,
                        color='w', linestyle='--')
             ax.axhline(y=phase[with_signal[-1]], xmin=-500, xmax=500,
@@ -266,14 +277,14 @@ def CCF_matrix_ERF(
 
         if save_plot and not CCF_Noise:
             fig.savefig(
-                f"{inp_dat['plots_dir']}"
-                f"CC_ERF_{inp_dat['Simulation_name']}.pdf",
+                f"{settings.plots_dir}"
+                f"CC_ERF_{settings.simulation_name}.pdf",
                 bbox_inches='tight'
             )
         elif save_plot and CCF_Noise:
             fig.savefig(
-                f"{inp_dat['plots_dir']}"
-                f"CC_ERF_noise_{inp_dat['Simulation_name']}.pdf",
+                f"{settings.plots_dir}"
+                f"CC_ERF_noise_{settings.simulation_name}.pdf",
                 bbox_inches='tight'
             )
 
@@ -283,7 +294,7 @@ def CCF_matrix_ERF(
 
     else:
         plt.close('all')
-        n_rows = inp_dat["sysrem_its"]
+        n_rows = settings.sysrem_iterations
         n_cols = 2
         fig, axes = plt.subplots(n_rows, n_cols, figsize=(18, 5 * n_rows))
 
@@ -312,7 +323,7 @@ def CCF_matrix_ERF(
                 if j == 0:
                     ax.set_ylabel("Phase", fontsize=17)
 
-                if inp_dat['event'] == 'transit':
+                if settings.event_type == 'transit':
                     ax.axhline(y=phase[with_signal[0]], color='w', linestyle='--')
                     ax.axhline(y=phase[with_signal[-1]], color='w', linestyle='--')
                     ax.plot(v_planet[without_signal[3]:with_signal[5]],
@@ -329,14 +340,14 @@ def CCF_matrix_ERF(
 
         if save_plot and not CCF_Noise:
             fig.savefig(
-                f"{inp_dat['plots_dir']}"
-                f"CC_ERF_{inp_dat['Simulation_name']}.pdf",
+                f"{settings.plots_dir}"
+                f"CC_ERF_{settings.simulation_name}.pdf",
                 bbox_inches='tight'
             )
         elif save_plot and CCF_Noise:
             fig.savefig(
-                f"{inp_dat['plots_dir']}"
-                f"CC_ERF_noise_{inp_dat['Simulation_name']}.pdf",
+                f"{settings.plots_dir}"
+                f"CC_ERF_noise_{settings.simulation_name}.pdf",
                 bbox_inches='tight'
             )
 
@@ -349,14 +360,9 @@ def CCF_matrix_ERF(
 
 
 def plot_ccf_matrices_per_night(
-        inp_dat, ccf_store, output_dir, v_ccf, phase, with_signal
-        ):
+    ccf_store, output_dir, v_ccf, phase, with_signal, *, different_nights
+):
     """
-    CALL WITH:
-        output_directory = "/Users/alexsl/Documents/Simulador/CARMENES_NIR/GJ436b/transit/plots/"
-
-        exosims.plot_ccf_matrices_per_night(inp_dat,ccf_store, output_directory, v_ccf, phase, with_signal)
-
     Plots the CCF matrices for each night in a gridspec layout.
 
     Parameters:
@@ -366,6 +372,8 @@ def plot_ccf_matrices_per_night(
     Returns:
     - None
     """
+    import matplotlib.pyplot as plt
+
     import os
     from matplotlib.gridspec import GridSpec
     # Ensure output directory exists
@@ -375,7 +383,7 @@ def plot_ccf_matrices_per_night(
 
     #ipdb.set_trace()
     for night_idx in range(n_nights):
-        if inp_dat["Different_nights"]:
+        if different_nights:
             phase_run = phase[night_idx]
             with_signal_run = with_signal[night_idx]
         else:
@@ -427,12 +435,23 @@ def plot_ccf_matrices_per_night(
         print(f"Saved plot for night {night_idx + 1}: {output_path}")
 
 
-def plot_mat_with_collapse(x, y, z, inp_dat, h, name,
-                           with_signal=None,
-                           xrange=None, yrange=None,
-                           ccf_diff=False,
-                           save_plot=False, only_std=False,
-                           with_collapse=False):
+def plot_mat_with_collapse(
+    x,
+    y,
+    z,
+    h,
+    name,
+    with_signal=None,
+    xrange=None,
+    yrange=None,
+    ccf_diff=False,
+    save_plot=False,
+    only_std=False,
+    with_collapse=False,
+    *,
+    plots_dir,
+    order_indices
+):
     """
     This function generates a 2x2 grid of subplots for visualizing a
     matrix `z` as a contour plot in the upper-left subplot (bigger)
@@ -444,7 +463,8 @@ def plot_mat_with_collapse(x, y, z, inp_dat, h, name,
         x (ndarray): 1D array representing the x-axis values.
         y (ndarray): 1D array representing the y-axis values.
         z (ndarray): 2D array representing the data to visualize.
-        inp_dat (dict): Input data containing metadata.
+        order_indices: Physical instrument order IDs.
+        plots_dir: Output directory for the figure.
         save_plot (bool): Whether to save the plot as an image.
         h (int): Index or identifier related to the plot.
         name (str): Name for the saved plot.
@@ -456,6 +476,9 @@ def plot_mat_with_collapse(x, y, z, inp_dat, h, name,
     Returns:
         None
     """
+    import matplotlib.pyplot as plt
+    import os
+
     if with_collapse:
         if not only_std:
             # Create a 2x2 grid of subplots
@@ -470,7 +493,6 @@ def plot_mat_with_collapse(x, y, z, inp_dat, h, name,
                                   which='major', labelsize=17)
             axs[0, 0].set_xticklabels([])
             axs[0, 0].set_ylabel('Orbital phase', fontsize = 17)
-            #axs[0, 0].set_title(f"Order {inp_dat['order_selection'][h]}", fontsize = 17)
             axs[0, 0].set_xlim([x.min(), x.max()])
             axs[0, 0].set_ylim([y.min(), y.max()])
 
@@ -549,10 +571,10 @@ def plot_mat_with_collapse(x, y, z, inp_dat, h, name,
 
     # Save the plot if requested
     if save_plot:
-        os.makedirs(f"{inp_dat['plots_dir']}statistical/gauss_noise_minmax", exist_ok=True)
+        os.makedirs(f"{plots_dir}statistical/gauss_noise_minmax", exist_ok=True)
         fig.savefig(
-            f"{inp_dat['plots_dir']}statistical/"
-            f"gauss_noise_minmax/{name}_{inp_dat['order_selection'][h]}.png",
+            f"{plots_dir}statistical/"
+            f"gauss_noise_minmax/{name}_{order_indices[h]}.png",
             bbox_inches='tight'
             )
 
@@ -579,6 +601,9 @@ def plot_steps(
     panel. with_signal selects the exposures shown in the image panels and
     useful_spectral_points selects their wavelength columns.
     """
+    import matplotlib.pyplot as plt
+    from matplotlib import cm
+
     if len(mat_list) != n_panels - 1:
         raise Exception("Provide as many matrices as n_panels-1")
 
@@ -655,6 +680,9 @@ def plot_matrix_difference(wave, matrix1, matrix2, with_signal):
     with_signal : array-like of int or bool
         Indices (or Boolean mask) selecting the in-transit rows to compare.
     """
+    import matplotlib.pyplot as plt
+    from matplotlib import cm
+
     import inspect
     from scipy.stats import gaussian_kde
     from matplotlib.ticker import AutoMinorLocator

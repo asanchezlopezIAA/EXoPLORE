@@ -89,6 +89,11 @@ the injected planet, the cross-correlation template or a trial retrieval model,
 according to the supplied configuration. The injected atmosphere and search
 template have their own species lists and physical parameters.
 
+`RadiativeTransferInputs`, in `atmosphere/models.py`, supplies the masses,
+radii, internal temperature and instrumental resolving power used by these
+calculations. Masses and radii are in CGS units. The atmospheric configuration
+supplies the regional temperatures, species and chemistry choices.
+
 ### Construct the spectral time series
 
 Follow `spec_to_mat_fraction()` into `core/observation.py`.
@@ -114,6 +119,12 @@ uncertainties, column selections and the detrending information needed by later
 steps. Read the corresponding assignment in the caller to identify each
 returned array.
 
+`PreparationInputs`, in `pipelines/models.py`, carries the method and telluric
+settings together with the effective SYSREM count for this call. Some methods
+also use the selected order's theoretical telluric transmission. For observed
+helium spectra, `HeliumObservation` supplies exposure velocities and records
+the corrections already applied to the data.
+
 For Tutorial 1, the call sequence is:
 
 ```text
@@ -121,7 +132,7 @@ pipeline.name = "Blain24"
             |
 cfg.pipeline.name
             |
-_mini_pp["preparing_pipeline"]
+preparation_inputs.pipeline.name
             |
 preparing_pipeline(...) -> Blain24 branch in pipelines/prepare.py
             |
@@ -148,6 +159,17 @@ The inputs are prepared residual spectra and their uncertainty estimates.
 The ordinary result has axes `(velocity, exposure)`. Some optimization modes
 include extra injection or detrending-iteration axes.
 
+The orbital-alignment functions in `ccf/compute.py` receive the velocity grids,
+exposure selections and orbital quantities explicitly. Their keyword arguments
+specify the eccentricity convention and the noise-normalisation region.
+`NightStudyInputs`, in `ccf/models.py`, groups the configuration and reference
+motion needed to compare nights. `TimeResolvedCCFInputs` supplies the settings
+for comparisons between transit intervals.
+
+`DetectionPlotSettings`, in `plotting/models.py`, holds plot labels, velocity
+ranges and the output directory. The plotting functions read the completed
+arrays supplied by the runner.
+
 ## Read the loop variables and selections
 
 | Name in the runner | Meaning |
@@ -160,7 +182,10 @@ include extra injection or detrending-iteration axes.
 | `_nl` | Whether the run is noiseless. |
 | `_urd` | Whether observed spectra are used. |
 | `pm` / `cc` | Planet-model / CCF-template settings. |
-| `_mini_*` | Dictionaries mapping configuration fields to function arguments. |
+| `rt_inputs` | Masses, radii, temperature and resolving power shared by atmospheric calculations. |
+| `preparation_inputs` | Method settings, masks and effective SYSREM count for one order/night. |
+| `retrieval_orders` | Order IDs retained for the atmospheric retrieval. |
+| `detection_plot` | Output labels and velocity ranges shared by detection figures. |
 | `_b5`, `_b7`, `_b9` suffixes | The workflow block associated with a variable. |
 | `per_order_results` | Dictionaries holding the products for each order. |
 

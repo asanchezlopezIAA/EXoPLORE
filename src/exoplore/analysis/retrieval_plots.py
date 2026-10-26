@@ -16,13 +16,22 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import os, json
 
-def plot_live_posterior(base_dir, retrieval_name, night_index,
-                n_params, inp_dat, truths=None, refresh=True):
-    from pymultinest import Analyzer
-    import corner
-    import matplotlib.pyplot as plt
-    import numpy as np
-    import os
+def plot_live_posterior(
+    base_dir,
+    retrieval_name,
+    night_index,
+    n_params,
+    truths=None,
+    refresh=True,
+    *,
+    plots_dir,
+    run_dir=None,
+    all_significance_metrics=False,
+    volume_mixing_ratios=None,
+    reference_kp_kms=None,
+    equilibrium_temperature_K=None,
+    reference_vrest_kms=None
+):
     """
     Read the partial MultiNest output on disk, print parameter summaries,
     and plot a live corner plot.
@@ -37,28 +46,28 @@ def plot_live_posterior(base_dir, retrieval_name, night_index,
         The `i` in your filename f"{retrieval_name}_night_{i}_".
     n_params : int
         Number of fitted parameters.
-    inp_dat : dict
-        Your input data dict (for defaults in `truths` if not provided).
+    plots_dir : str
+        Output location for the live-posterior figure.
+    run_dir : str or None
+        Run root used for separate significance-metric output folders.
+    volume_mixing_ratios, reference_kp_kms, equilibrium_temperature_K,
+    reference_vrest_kms
+        Optional reference atmosphere and motion for the corner plot.
     truths : list of float, optional
-        True parameter values to overplot (default from inp_dat if None).
+        Reference values to overplot. If omitted, use the supplied atmosphere and motion.
     refresh : bool, default=True
         If True, clears the current figure before plotting.
         
-    USAGE:
-        base_dir = f"{inp_dat['matrix_dir']}matrices_{inp_dat['Simulation_name']}{'_SNR' if inp_dat['All_significance_metrics'] else ''}"
-        retrieval_name = "retrieval"
-        i=0
-        n_params = 5
-        
-        exosims.plot_live_posterior(
-            base_dir, retrieval_name, 0, n_params, inp_dat, 
-            truths=[
-                np.log10(inp_dat['vmr'][2]), 
-                np.log10(inp_dat['vmr'][3]), 
-                np.log10(inp_dat['vmr'][4]), 
-                np.log10(inp_dat['vmr'][5]), 
-                inp_dat['T_equ'], 1], refresh=True)
+    Example
+    -------
+    >>> plot_live_posterior("outputs/matrices", "retrieval", 0, 5,
+    ...                     plots_dir="outputs/plots/")
     """
+    from pymultinest import Analyzer
+    import corner
+    import matplotlib.pyplot as plt
+    import numpy as np
+    import os
     
     # build the basename exactly as used in run()
     basename = f"{base_dir}/{retrieval_name}_night_0_"
@@ -83,12 +92,12 @@ def plot_live_posterior(base_dir, retrieval_name, night_index,
         print(f"  θ{j+1}: {p50:.3f} (+{upper:.3f}/-{lower:.3f})")
 
     # default truths if not provided
-    if truths is None and 'vmr' in inp_dat:
+    if truths is None and volume_mixing_ratios is not None:
         truths = [
-            np.log10(inp_dat['vmr'][2]),
-            inp_dat.get('K_p', None),
-            inp_dat.get('T_equ', None),
-            inp_dat.get('V_wind', None),
+            np.log10(volume_mixing_ratios[2]),
+            reference_kp_kms,
+            equilibrium_temperature_K,
+            reference_vrest_kms,
             1.0   # your beta truth
         ]
 
@@ -118,9 +127,9 @@ def plot_live_posterior(base_dir, retrieval_name, night_index,
 
     # optionally save
     plotdir = (
-        inp_dat["home_dir"].rstrip("/") + "/plots_SNR"
-        if inp_dat.get("All_significance_metrics", False)
-        else inp_dat["plots_dir"].rstrip("/")
+        run_dir.rstrip("/") + "/plots_SNR"
+        if all_significance_metrics
+        else plots_dir.rstrip("/")
     )
     os.makedirs(plotdir, exist_ok=True)
     out = os.path.join(plotdir, f"{retrieval_name}_night_0_live_corner.pdf")
@@ -141,12 +150,6 @@ def plot_live_posterior2(output_basename: str,
     import corner
     import numpy as np
     from pymultinest import Analyzer
-    """
-    Read partial MultiNest output and produce a live-updating or saved corner plot.
-
-    Safely handles incomplete parameter rows by adapting to available dims.
-    Prints summaries and evidence to stdout.
-    """
     corner_kwargs = corner_kwargs or {}
 
     # Read raw data

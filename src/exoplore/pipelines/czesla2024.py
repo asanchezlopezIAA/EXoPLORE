@@ -10,6 +10,8 @@ choices. This module neither detrends with SYSREM nor declares a detection.
 """
 from __future__ import annotations
 
+from exoplore.pipelines.models import PreparationInputs
+
 # Role in the calculation
 # Run the CRIRES+ direct-helium analysis: select exposures, divide by the reference
 # spectrum, transform wavelength frames and combine the planetary spectra. Fit and
@@ -291,26 +293,37 @@ def validate_run_config(config) -> None:
         raise ValueError('Observed helium preparation does not support noise perturbations; remove monte_carlo_draws')
 
 
-def preparing_pipeline_adapter(inp_dat: dict,data: np.ndarray,noise: np.ndarray,
-                               wave: np.ndarray,mask: np.ndarray,masks: bool,
-                               correct_uncertainties: bool,retrieval: bool):
+def preparing_pipeline_adapter(
+    inputs: PreparationInputs,
+    data: np.ndarray,
+    noise: np.ndarray,
+    wave: np.ndarray,
+    mask: np.ndarray,
+    masks: bool,
+    correct_uncertainties: bool,
+    retrieval: bool,
+):
     """Expose the direct array preparation through the existing dispatcher.
 
-    Requires ``czesla2024_config``, ``berv_kms``, ``planet_rv_kms`` and an
-    explicit ``telluric_corrected=True`` statement in ``inp_dat``. Per-frame
+    The pipeline configuration supplies the method settings. The observation
+    supplies velocities and records the telluric correction. Per-frame
     native wavelengths and masked errors are required for an OH-mask run.
     Output noise is propagated analytically. No perturbed spectra are generated.
     """
+    observation = inputs.helium_observation
+    if observation is None:
+        raise ValueError("Observed helium preparation requires exposure information")
+
     if retrieval:raise ValueError('czesla2024 dispatcher does not implement molecular retrieval filtering')
-    if inp_dat.get('telluric_corrected') is not True:
+    if observation.telluric_corrected is not True:
         raise ValueError('czesla2024 requires separately validated telluric corrections')
-    config=inp_dat['czesla2024_config']
+    config=inputs.pipeline.czesla2024
     if isinstance(config,dict):config=Czesla2024Config(**config)
     if not config._reference_indices or not config._full_transit_indices:
-        if 'phase' in inp_dat:
-            times=config.t0_bjd_tdb+np.asarray(inp_dat['phase'])*config.period_days
-        elif 'julian_date' in inp_dat:
-            times=np.asarray(inp_dat['julian_date'])
+        if observation.phase is not None:
+            times=config.t0_bjd_tdb+np.asarray(observation.phase)*config.period_days
+        elif observation.julian_date is not None:
+            times=np.asarray(observation.julian_date)
         else:
             raise ValueError('Supply phase or julian_date for internal transit selection')
         config,_,_,_=timed_exposure_selection(config,times)
@@ -318,7 +331,7 @@ def preparing_pipeline_adapter(inp_dat: dict,data: np.ndarray,noise: np.ndarray,
     flux[:,np.asarray(mask,dtype=int)]=np.nan;error[:,np.asarray(mask,dtype=int)]=np.nan
     if config.oh_mode=='mask':
         bad=window_mask(waves,config.oh_topocentric_windows_nm);flux[bad]=np.nan;error[bad]=np.nan
-    result=prepare_transmission(waves,flux,error,np.asarray(inp_dat['berv_kms']),np.asarray(inp_dat['planet_rv_kms']),config)
+    result=prepare_transmission(waves,flux,error,np.asarray(observation.berv_kms),np.asarray(observation.planet_rv_kms),config)
     reference=np.asarray(config._reference_indices, dtype=int)
     var=result['normalized_stellar_variance'];f=result['normalized_stellar_flux'];master=result['master']
     marginal=var/master**2+f**2*result['master_variance']/master**4

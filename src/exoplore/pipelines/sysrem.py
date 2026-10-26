@@ -206,7 +206,16 @@ def sysrem(data_in, errors_in, useful_pts):
     return data_out, cor1, a1, c1
 
 
-def SYSREM_filtering_projector(inp_dat, n_spectra, propag_noise, U):
+def SYSREM_filtering_projector(
+    n_spectra,
+    propag_noise,
+    U,
+    *,
+    different_nights,
+    n_orders,
+    n_nights,
+    sysrem_iterations
+):
     """Build per-order SYSREM projection matrices from stored basis vectors.
 
     Constructs the weighted least-squares projector P for each spectral
@@ -215,10 +224,14 @@ def SYSREM_filtering_projector(inp_dat, n_spectra, propag_noise, U):
 
     Parameters
     ----------
-    inp_dat : dict
-        Simulation input dictionary.  Keys used:
-        ``"Different_nights"``, ``"n_orders"``, ``"n_nights"``,
-        ``"sysrem_its"``.
+    different_nights
+        Use a separate exposure count for each night.
+    n_orders
+        Number of selected spectral orders.
+    n_nights
+        Number of nights.
+    sysrem_iterations
+        Number of stored SYSREM basis vectors.
     n_spectra : int or array-like
         Number of spectra.  Scalar for single-night. array of length
         ``n_nights`` for multi-night.
@@ -236,21 +249,21 @@ def SYSREM_filtering_projector(inp_dat, n_spectra, propag_noise, U):
         ``(n_orders, n_nights, n_spectra, n_spectra)``.
     """
     reg = 1e-8
-    if not inp_dat["Different_nights"]:
+    if not different_nights:
         P = np.zeros(
-            (inp_dat["n_orders"], inp_dat["n_nights"], n_spectra, n_spectra),
+            (n_orders, n_nights, n_spectra, n_spectra),
             float
         )
     else:
         P = np.full(
-            (inp_dat["n_orders"], inp_dat["n_nights"],
+            (n_orders, n_nights,
              int(max(n_spectra)), int(max(n_spectra))),
             np.nan, float
         )
 
-    for i_ord in range(inp_dat["n_orders"]):
-        for j_night in range(inp_dat["n_nights"]):
-            if not inp_dat["Different_nights"]:
+    for i_ord in range(n_orders):
+        for j_night in range(n_nights):
+            if not different_nights:
                 sigma_hat = np.mean(
                     propag_noise[i_ord, j_night, :, :], axis=-1
                 )
@@ -262,7 +275,7 @@ def SYSREM_filtering_projector(inp_dat, n_spectra, propag_noise, U):
 
             lambda2 = 1.0 / sigma_hat ** 2
 
-            if not inp_dat["Different_nights"]:
+            if not different_nights:
                 U0 = U[i_ord, j_night, :, :]
                 ones_col = np.ones((n_spectra, 1))
             else:
@@ -270,7 +283,7 @@ def SYSREM_filtering_projector(inp_dat, n_spectra, propag_noise, U):
                 ones_col = np.ones((n_spectra[j_night], 1))
 
             U_aug = np.concatenate([U0, ones_col], axis=1)
-            n_bases = inp_dat["sysrem_its"] + 1
+            n_bases = sysrem_iterations + 1
 
             Mmat = U_aug.T @ (lambda2[:, None] * U_aug)
             invM = np.linalg.inv(Mmat + reg * np.eye(n_bases))
@@ -278,7 +291,7 @@ def SYSREM_filtering_projector(inp_dat, n_spectra, propag_noise, U):
             Ut_L2 = U_aug.T * lambda2[None, :]
             P_ij = U_aug @ (invM @ Ut_L2)
 
-            if not inp_dat["Different_nights"]:
+            if not different_nights:
                 P[i_ord, j_night, :, :] = P_ij
             else:
                 P[i_ord, j_night,
@@ -335,15 +348,16 @@ def filter_model_singleorder(P, model_mat, useful_spectral_points):
 
 
 def SYSREM_filtering_projector_singleorder(
-        inp_dat, n_spectra, propag_noise, U, no_night_loop=False
+    n_spectra, propag_noise, U, no_night_loop=False, *, n_nights, sysrem_iterations
 ):
     """Build SYSREM projection matrices for a single spectral order.
 
     Parameters
     ----------
-    inp_dat : dict
-        Simulation input dictionary.  Keys used: ``"n_nights"``,
-        ``"sysrem_its"``.
+    n_nights
+        Number of nights.
+    sysrem_iterations
+        Number of stored SYSREM basis vectors.
     n_spectra : int
         Number of spectra per night.
     propag_noise : ndarray
@@ -369,21 +383,21 @@ def SYSREM_filtering_projector_singleorder(
         U0 = U[0, 0, :, :]
         ones_col = np.ones((n_spectra, 1))
         U_aug = np.concatenate([U0, ones_col], axis=1)
-        n_bases = inp_dat["sysrem_its"] + 1
+        n_bases = sysrem_iterations + 1
         Mmat = U_aug.T @ (lambda2[:, None] * U_aug)
         invM = np.linalg.inv(Mmat + reg * np.eye(n_bases))
         Ut_L2 = U_aug.T * lambda2[None, :]
         P_ij = U_aug @ (invM @ Ut_L2)
         P[0, 0, :, :] = P_ij
     else:
-        P = np.zeros((1, inp_dat["n_nights"], n_spectra, n_spectra), float)
-        for j_night in range(inp_dat["n_nights"]):
+        P = np.zeros((1, n_nights, n_spectra, n_spectra), float)
+        for j_night in range(n_nights):
             sigma_hat = np.mean(propag_noise[0, j_night, :, :], axis=-1)
             lambda2 = 1.0 / sigma_hat ** 2
             U0 = U[0, j_night, :, :]
             ones_col = np.ones((n_spectra, 1))
             U_aug = np.concatenate([U0, ones_col], axis=1)
-            n_bases = inp_dat["sysrem_its"] + 1
+            n_bases = sysrem_iterations + 1
             Mmat = U_aug.T @ (lambda2[:, None] * U_aug)
             invM = np.linalg.inv(Mmat + reg * np.eye(n_bases))
             Ut_L2 = U_aug.T * lambda2[None, :]
@@ -394,9 +408,21 @@ def SYSREM_filtering_projector_singleorder(
 
 
 def get_SYSREM_its_ordbyord(
-        inp_dat, ccf_store, v_rest, with_signal, phase, berv, v_sys,
-        pixels_left_right, ccf_v_step, v_erf
-        ):
+    ccf_store,
+    v_rest,
+    with_signal,
+    phase,
+    berv,
+    v_sys,
+    pixels_left_right,
+    ccf_v_step,
+    v_erf,
+    *,
+    n_orders,
+    n_nights,
+    sysrem_iterations,
+    injection_velocity_kms
+):
     """Determine the optimal number of SYSREM iterations order-by-order.
 
     For each order and each night, evaluates which number of SYSREM
@@ -405,10 +431,14 @@ def get_SYSREM_its_ordbyord(
 
     Parameters
     ----------
-    inp_dat : dict
-        Simulation input dictionary.  Keys used: ``"n_orders"``,
-        ``"n_nights"``, ``"sysrem_its"``, ``"Kp_Vrest_inj"``,
-        ``"BERV"``, ``"V_sys"``, ``"V_wind"``.
+    n_orders
+        Number of selected orders.
+    n_nights
+        Number of observing nights.
+    sysrem_iterations
+        Number of candidate SYSREM passes.
+    injection_velocity_kms
+        Injected orbital amplitude and residual offset (Kp, Vrest) in km/s.
     ccf_store : ndarray, shape (n_orders, n_nights, n_lags, n_spectra, 2, sysrem_its)
         CCF store for all orders and SYSREM iterations.
     v_rest : ndarray
@@ -439,14 +469,14 @@ def get_SYSREM_its_ordbyord(
     from exoplore.atmosphere.winds import find_nearest
 
     ccf_values_shift = np.zeros(
-        (inp_dat["n_orders"], inp_dat["n_nights"], len(v_rest), len(with_signal),
-         2, inp_dat["sysrem_its"]), float
+        (n_orders, n_nights, len(v_rest), len(with_signal),
+         2, sysrem_iterations), float
         )
 
     # Calculate injected-planetary velocities during the night
     vp = get_V(
-        inp_dat["Kp_Vrest_inj"][0], phase, berv,
-        v_sys, inp_dat["Kp_Vrest_inj"][1]
+        injection_velocity_kms[0], phase, berv,
+        v_sys, injection_velocity_kms[1]
         )
 
     # Move all matrices to INJECTION REST-FRAME
@@ -456,10 +486,10 @@ def get_SYSREM_its_ordbyord(
             vp[i] + pixels_left_right * ccf_v_step,
             num=2 * pixels_left_right + 1
             )
-        for b in range(inp_dat["n_nights"]):
-            for h in range(inp_dat["n_orders"]):
+        for b in range(n_nights):
+            for h in range(n_orders):
                 for n in range(2):
-                    for l in range(inp_dat["sysrem_its"]):
+                    for l in range(sysrem_iterations):
                         ccf_values_shift[h, b, :, idx, n, l] = np.interp(
                             v_inj_prf, v_erf, ccf_store[h, b, :, idx, n, l]
                             )
@@ -470,15 +500,15 @@ def get_SYSREM_its_ordbyord(
     # Find the velocity index nearest to 0 (V_wind of the injected signal)
     injection_v = np.argwhere(v_rest == find_nearest(v_rest, 0))[0][0]
     ccf_maxinj_pos = np.zeros(
-        (inp_dat["n_orders"], inp_dat["n_nights"], 2, inp_dat["sysrem_its"]), float
+        (n_orders, n_nights, 2, sysrem_iterations), float
         )
     v_maxinj_pos = np.zeros(
-        (inp_dat["n_orders"], inp_dat["n_nights"], inp_dat["sysrem_its"]), int
+        (n_orders, n_nights, sysrem_iterations), int
         )
 
-    for b in range(inp_dat["n_nights"]):
-        for h in range(inp_dat["n_orders"]):
-            for l in range(inp_dat["sysrem_its"]):
+    for b in range(n_nights):
+        for h in range(n_orders):
+            for l in range(sysrem_iterations):
                 v_maxinj_pos[h, b, l] = np.where(
                     ccf_tot[h, b, :, 1, l] == np.amax(
                         ccf_tot[h, b, injection_v - 20:injection_v + 21, 1, l]
@@ -487,9 +517,9 @@ def get_SYSREM_its_ordbyord(
                 ccf_maxinj_pos[h, b, 1, l] = ccf_tot[h, b, v_maxinj_pos[h, b, l], 1, l]
                 ccf_maxinj_pos[h, b, 0, l] = ccf_tot[h, b, v_maxinj_pos[h, b, l], 0, l]
 
-    sysrem_opt = np.zeros((inp_dat["n_orders"], inp_dat["n_nights"], 2), float)
-    for b in range(inp_dat["n_nights"]):
-        for h in range(inp_dat["n_orders"]):
+    sysrem_opt = np.zeros((n_orders, n_nights, 2), float)
+    for b in range(n_nights):
+        for h in range(n_orders):
             diff = ccf_maxinj_pos[h, b, 1, :] - ccf_maxinj_pos[h, b, 0, :]
             # Exclude the first SYSREM iteration (index 0 and 1) as it often
             # has strong residuals that can artificially dominate the optimum.

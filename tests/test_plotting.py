@@ -12,6 +12,8 @@ No figures are shown or saved (matplotlib is used in non-interactive
 mode via the 'Agg' backend).
 """
 
+from exoplore.plotting.models import DetectionPlotSettings
+
 import inspect
 import pytest
 
@@ -73,7 +75,7 @@ class TestSignatures:
         from exoplore.plotting import plot_Kp_Vrest
         sig = inspect.signature(plot_Kp_Vrest)
         params = list(sig.parameters)
-        assert "inp_dat" in params
+        assert "settings" in params
         assert "kp_range" in params
         assert "ccf_tot_sn" in params
         assert "v_rest" in params
@@ -85,7 +87,7 @@ class TestSignatures:
         from exoplore.plotting import plot_1D_CCF
         sig = inspect.signature(plot_1D_CCF)
         params = list(sig.parameters)
-        assert "inp_dat" in params
+        assert "settings" in params
         assert "v_rest" in params
         assert "ccf_tot_sn" in params
         assert "max_kp" in params
@@ -98,7 +100,7 @@ class TestSignatures:
         from exoplore.plotting import plot_combined_KpVrest_1DCCF
         sig = inspect.signature(plot_combined_KpVrest_1DCCF)
         params = list(sig.parameters)
-        assert "inp_dat" in params
+        assert "settings" in params
         assert "v_rest" in params
         assert "kp_range" in params
         assert "ccf_tot_sn" in params
@@ -109,7 +111,7 @@ class TestSignatures:
         from exoplore.plotting import CCF_matrix_ERF
         sig = inspect.signature(CCF_matrix_ERF)
         params = list(sig.parameters)
-        assert "inp_dat" in params
+        assert "settings" in params
         assert "v_ccf" in params
         assert "phase" in params
         assert "ccf_complete" in params
@@ -121,7 +123,7 @@ class TestSignatures:
         from exoplore.plotting import plot_ccf_matrices_per_night
         sig = inspect.signature(plot_ccf_matrices_per_night)
         params = list(sig.parameters)
-        assert "inp_dat" in params
+        assert "different_nights" in params
         assert "ccf_store" in params
         assert "output_dir" in params
         assert "v_ccf" in params
@@ -166,29 +168,36 @@ class TestSignatures:
 # ---------------------------------------------------------------------------
 
 class TestPlotKpVrestValidation:
-    def _make_inp_dat(self):
-        return {
-            "MAX_CCF_V_STD": 200,
-            "PLOT_CCF_XSTEP": 50,
-            "kp_max": 250,
-            "K_p": 150.0,
-            "sysrem_its": 1,
-            "plots_dir": "/tmp/",
-            "Simulation_name": "test",
-        }
+    def _make_settings(self):
+        return DetectionPlotSettings(
+            simulation_name="test",
+            plots_dir="/tmp/",
+            reference_kp_kms=150.0,
+            kp_max_kms=250,
+            velocity_half_range_kms=200,
+            velocity_tick_step_kms=50,
+            sysrem_iterations=1,
+            optimize_sysrem=False,
+            event_type="transit",
+        )
 
     def test_mismatched_range_raises(self):
         import numpy as np
         from exoplore.plotting import plot_Kp_Vrest
-        inp_dat = self._make_inp_dat()
+        settings = self._make_settings()
         v_rest = np.linspace(-100, 100, 50)
         kp_range = np.linspace(0, 250, 40)
         ccf_tot_sn = np.random.randn(50, 40)
         with pytest.raises(ValueError, match="xrange and yrange"):
             plot_Kp_Vrest(
-                inp_dat, kp_range, ccf_tot_sn, v_rest,
-                xrange=[-100, 100], yrange=None,
-                show_plot=False, save_plot=False,
+                settings,
+                kp_range,
+                ccf_tot_sn,
+                v_rest,
+                xrange=[-100, 100],
+                yrange=None,
+                show_plot=False,
+                save_plot=False,
             )
 
     def test_steps_wrong_mat_list_raises(self):

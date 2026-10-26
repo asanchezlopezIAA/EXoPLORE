@@ -41,16 +41,19 @@ from petitRADTRANS.radtrans import Radtrans          # noqa: E402
 from exoplore.atmosphere.prt import call_pRT          # noqa: E402
 
 # HD 189733 b parameters in CGS (from the planet parameter file)
-_INP = {
-    "Gravity": None,
-    "M_pl": 2.1828495e30,      # g
-    "R_pl": 8.1357896e9,       # cm
-    "R_star": 5.5987750e10,    # cm
-    "T_star": None,            # None -> skip stellar spectrum (we only need the planet)
-    "event": "transit",
-    "T_int": 200.0,            # internal temperature for the Guillot profile
-    "res": 100000.0,           # instrument resolving power
-}
+from exoplore.atmosphere.models import RadiativeTransferInputs
+
+MODEL_INPUTS = RadiativeTransferInputs(
+    event_type="transit",
+    planet_mass_g=2.1828495e30,
+    planet_radius_cm=8135789600.0,
+    stellar_radius_cm=55987750000.0,
+    stellar_teff_K=None,
+    resolving_power=100000.0,
+    internal_temperature_K=200.0,
+    gravity_cgs=None,
+    convolve_to_resolution=None,
+)
 
 _SPECIES = ["H2", "He", "H2O", "CH4", "NH3", "CO", "H2S", "HCN"]
 _WAV_MIN, _WAV_MAX = 1.00, 1.70   # NIR window (µm)
@@ -59,7 +62,7 @@ _WAV_MIN, _WAV_MAX = 1.00, 1.70   # NIR window (µm)
 def _spectrum(prt, pressures, c_to_o):
     """Return (wavelength µm, transit depth %) for a given C/O ratio."""
     wave, spec, *_ = call_pRT(
-        _INP, pressures, prt,
+        MODEL_INPUTS, pressures, prt,
         _SPECIES, None, 2.33, 0.01,
         False, None, False, None, None,
         0.01, 0.4, 1170.0,

@@ -5,10 +5,11 @@ exoplore.analysis.stats
 Statistical analysis tools for high-resolution cross-correlation spectroscopy.
 """
 
+
 # Role in the calculation
-# Calculate night-stack summaries, correlations, iteration choices and evidence
-# conversions. Each function defines the statistic it returns and the data needed to
-# calculate it.
+# Plot statistical summaries and correlations, and convert evidence ratios.
+# Night-study calculations and Pearson summaries come from ccf/statistics.py.
+# SYSREM pass selection comes from pipelines/sysrem.py.
 
 
 import numpy as np
@@ -17,10 +18,11 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import os, shutil
 
-from exoplore.ccf.statistics import Welch_ttest_map, Combine_Nights
-from exoplore.io.utils import find_nearest, format_number
-from exoplore.observation.velocity import get_V
-from exoplore.ccf.compute import get_max_CCF_peak, get_shifted_ccf_matrix
+from exoplore.ccf.statistics import statistical_study, get_corr_coeff
+# Per-order pass selection uses the SYSREM implementation shared by the runner.
+from exoplore.pipelines.sysrem import get_SYSREM_its_ordbyord
+from exoplore.io.utils import format_number, bootstrap_corrcoeffs
+from exoplore.ccf.compute import get_shifted_ccf_matrix
 
 
 def bayes_factor_to_sigma(bayes_factor):
@@ -64,40 +66,42 @@ def bayes_factor_to_sigma(bayes_factor):
     return sigma, p
 
 
-def _planet_area_stats(stat_map, v_rest_arr, kp, kp_max, v_wind, kp_range, b):
-    """Extract peak S/N and its location from a Kp-Vsys map near the planet.
 
-    Searches a ±5 velocity / ±40 Kp window around the injected planet
-    position (V_wind, Kp) and returns the peak value, its Kp index offset
-    from the map centre, and the corresponding Vsys.
-
-    Used to compute ``stats_planet_area`` for both the CCF_SNR and
-    Welch t-test branches, which differ only in which stat array and
-    velocity grid they use.
-    """
-    v_idx    = np.argwhere(v_rest_arr == v_wind)[0][0]
-    kp_ctr   = int(kp + kp_max)
-    region   = stat_map[v_idx - 5 : v_idx + 5,
-                        kp_ctr - 40 : kp_ctr + 41, b]
-    peak_val = np.max(region)
-    kp_off   = (np.where(stat_map[v_idx - 5 : v_idx + 5, :, b] == peak_val)[1][0]
-                - len(kp_range) // 2)
-    v_peak   = v_rest_arr[
-        np.where(stat_map[:, kp_ctr - 40 : kp_ctr + 41, b] == peak_val)[0][0]
-    ]
-    return peak_val, kp_off, v_peak
-
-def plot_stats(stats, kp_lim_inf, kp_lim_sup, 
-               kp_step, vrest_lim_inf, vrest_lim_sup, vrest_step,
-               sn_lim_inf, sn_lim_sup, sn_lim_step, 
-               binwidth_sn, binwidth_kp, binwidth_v_rest, 
-               significance_metric, inp_dat, v_rest, auto_lims = False,
-               show_SN_quantile = False, shade_true_region = False, 
-               mark_true_values = False, 
-               kp_shade_width = None, vrest_shade_width = None,
-               show_dist_CC_values = True, 
-               show_plot = False, save_plot = True,
-               CCF_Noise = False):
+def plot_stats(
+    stats,
+    kp_lim_inf,
+    kp_lim_sup,
+    kp_step,
+    vrest_lim_inf,
+    vrest_lim_sup,
+    vrest_step,
+    sn_lim_inf,
+    sn_lim_sup,
+    sn_lim_step,
+    binwidth_sn,
+    binwidth_kp,
+    binwidth_v_rest,
+    significance_metric,
+    v_rest,
+    auto_lims=False,
+    show_SN_quantile=False,
+    shade_true_region=False,
+    mark_true_values=False,
+    kp_shade_width=None,
+    vrest_shade_width=None,
+    show_dist_CC_values=True,
+    show_plot=False,
+    save_plot=True,
+    CCF_Noise=False,
+    *,
+    reference_kp_kms,
+    reference_vrest_kms,
+    plots_dir,
+    simulation_name,
+    kp_max_kms,
+    velocity_step_kms,
+    systemic_velocity_kms
+):
     """
     Corner plot of statistics related to simulating n nights of
     observation.
@@ -185,16 +189,16 @@ def plot_stats(stats, kp_lim_inf, kp_lim_sup,
     
     if shade_true_region: 
         # Shade the region of interest
-        plt.axvspan(inp_dat['K_p'] - kp_shade_width, 
-                    inp_dat['K_p'] + kp_shade_width, 
+        plt.axvspan(reference_kp_kms - kp_shade_width,
+                    reference_kp_kms + kp_shade_width,
                     facecolor='coral', alpha=0.4)
     elif mark_true_values:
-        plt.axvline(x = inp_dat['K_p'], color = 'r', linestyle = '--',
+        plt.axvline(x = reference_kp_kms, color = 'r', linestyle = '--',
                     linewidth = 2)
 
     ax = plt.subplot(gs[2, 2]) # row 2, col 2
     # Identical recovered velocities occupy a single histogram bin.
-    if np.all(stats[:,2] == inp_dat['V_wind']) or all(element == stats[:,2][0] for element in stats[:,2]):
+    if np.all(stats[:,2] == reference_vrest_kms) or all(element == stats[:,2][0] for element in stats[:,2]):
         hist, bins = np.histogram(stats[:,2], bins=[0, 1])
         plt.bar(bins[:-1], hist, width=1)
     else:
@@ -216,15 +220,15 @@ def plot_stats(stats, kp_lim_inf, kp_lim_sup,
     else:
         xticks = np.arange(np.floor(stats[:,2].min()/5)*5, np.ceil(stats[:,2].max()/5)*5+5, 5)
         ax.set_xticks(xticks)
-        ax.set_xlim([np.round(inp_dat["V_wind"])-15, np.round(inp_dat["V_wind"])+15])
+        ax.set_xlim([np.round(reference_vrest_kms)-15, np.round(reference_vrest_kms)+15])
     
     if shade_true_region: 
         # Shade the region of interest
-        plt.axvspan(inp_dat['V_wind'] - vrest_shade_width, 
-                    inp_dat['V_wind'] + vrest_shade_width, 
+        plt.axvspan(reference_vrest_kms - vrest_shade_width,
+                    reference_vrest_kms + vrest_shade_width,
                     facecolor='coral', alpha=0.4)
     elif mark_true_values:
-        plt.axvline(x = inp_dat['V_wind'], color = 'r', linestyle = '--',
+        plt.axvline(x = reference_vrest_kms, color = 'r', linestyle = '--',
                     linewidth = 2)
 
     
@@ -254,12 +258,12 @@ def plot_stats(stats, kp_lim_inf, kp_lim_sup,
     
     if shade_true_region: 
         # Shade the region of interest
-        plt.fill_betweenx([inp_dat['K_p'] - kp_shade_width, 
-                           inp_dat['K_p'] + kp_shade_width],
+        plt.fill_betweenx([reference_kp_kms - kp_shade_width,
+                           reference_kp_kms + kp_shade_width],
                           sn_lim_inf,  sn_lim_sup, color='coral', 
                           alpha=0.4)
     elif mark_true_values:
-        plt.axhline(y = inp_dat['K_p'], color = 'r', linestyle = '--',
+        plt.axhline(y = reference_kp_kms, color = 'r', linestyle = '--',
                     linewidth = 2)
 
     ax = plt.subplot(gs[2,0]) # row 2, col 0
@@ -283,16 +287,16 @@ def plot_stats(stats, kp_lim_inf, kp_lim_sup,
         ax.set_xlim([stats[:,0].min()-1.5, stats[:,0].max()+1.5])
         yticks = np.arange(np.floor(stats[:,2].min()/5)*5, np.ceil(stats[:,2].max()/5)*5+5, 5)
         ax.set_yticks(yticks)
-        ax.set_ylim([np.round(inp_dat["V_wind"])-15, np.round(inp_dat["V_wind"])+15])
+        ax.set_ylim([np.round(reference_vrest_kms)-15, np.round(reference_vrest_kms)+15])
     
     if shade_true_region: 
         # Shade the region of interest
-        plt.fill_betweenx([inp_dat['V_wind'] - vrest_shade_width, 
-                           inp_dat['V_wind'] + vrest_shade_width],
+        plt.fill_betweenx([reference_vrest_kms - vrest_shade_width,
+                           reference_vrest_kms + vrest_shade_width],
                           sn_lim_inf,  sn_lim_sup, color='coral', 
                           alpha=0.4)
     elif mark_true_values:
-        plt.axhline(y = inp_dat['V_wind'], color = 'r', linestyle = '--',
+        plt.axhline(y = reference_vrest_kms, color = 'r', linestyle = '--',
                     linewidth = 2)
 
 
@@ -316,288 +320,40 @@ def plot_stats(stats, kp_lim_inf, kp_lim_sup,
         ax.set_xlim([kp_lim_inf, kp_lim_sup])
         yticks = np.arange(np.floor(stats[:,2].min()/5)*5, np.ceil(stats[:,2].max()/5)*5+5, 5)
         ax.set_yticks(yticks)
-        ax.set_ylim([np.round(inp_dat["V_wind"])-15, np.round(inp_dat["V_wind"])+15])
+        ax.set_ylim([np.round(reference_vrest_kms)-15, np.round(reference_vrest_kms)+15])
     if shade_true_region: 
         # Shade the region of interest
         x_values = plt.gca().get_xlim()
-        plt.fill_betweenx([inp_dat['V_wind'] - vrest_shade_width, 
-                           inp_dat['V_wind'] + vrest_shade_width],
+        plt.fill_betweenx([reference_vrest_kms - vrest_shade_width,
+                           reference_vrest_kms + vrest_shade_width],
                           x_values[0], x_values[1],
                           color='coral', 
                           alpha=0.4)
         y_values = plt.gca().get_ylim()
         plt.fill_betweenx([y_values[0], y_values[1]],
-              inp_dat['K_p'] - kp_shade_width,
-              inp_dat['K_p'] + kp_shade_width,
+              reference_kp_kms - kp_shade_width,
+              reference_kp_kms + kp_shade_width,
               color='coral',
               alpha=0.4)
     elif mark_true_values:
-        plt.axhline(y = inp_dat['V_wind'], color = 'r', linestyle = '--',
+        plt.axhline(y = reference_vrest_kms, color = 'r', linestyle = '--',
                     linewidth = 2.5)
-        plt.axvline(x = inp_dat['K_p'], color = 'r', linestyle = '--',
+        plt.axvline(x = reference_kp_kms, color = 'r', linestyle = '--',
                     linewidth = 2.5)
 
     fig.tight_layout()
     
     # Save it and show it
     if save_plot and not CCF_Noise: 
-        plt.savefig(f"{inp_dat['plots_dir']}Corner_plot_{inp_dat['Simulation_name']}.pdf")
-        plt.savefig(f"{inp_dat['plots_dir']}Corner_plot_{inp_dat['Simulation_name']}.png", transparent = True)
+        plt.savefig(f"{plots_dir}Corner_plot_{simulation_name}.pdf")
+        plt.savefig(f"{plots_dir}Corner_plot_{simulation_name}.png", transparent = True)
     elif save_plot and CCF_Noise:
-        plt.savefig(f"{inp_dat['plots_dir']}Corner_plot_noise_{inp_dat['Simulation_name']}.pdf")
+        plt.savefig(f"{plots_dir}Corner_plot_noise_{simulation_name}.pdf")
     if show_plot: plt.show()
     plt.close()
     
-    """
-    # Create 3D subplot with projections   
-    X = stats[:,0]
-    Y = stats[:,1]
-    Z = stats[:,2]
-    
-    # Mock plot to get the axes consistent afterwards
-    plt.figure()
-    ax1 = plt.subplot(111,  projection='3d')
-
-    ax1.scatter(X, Y, Z, c='b', marker='.', alpha=0.2)
-
-    plt.figure()
-    ax2 = plt.subplot(111,  projection='3d')
-
-    cx = np.ones_like(X) * ax1.get_xlim3d()[0]
-    cy = np.ones_like(X) * ax1.get_ylim3d()[1]
-    cz = np.ones_like(Z) * ax1.get_zlim3d()[0]
-
-    ax2.scatter(X, Y, cz.min(), color = 'grey',  marker='.', lw=0, alpha=0.8)
-    ax2.scatter(X, cy.min(), Z, color = 'grey', marker='.', lw=0, alpha=0.8)
-    ax2.scatter(cx.min(), Y, Z, color = 'grey',  marker='.', lw=0, alpha=0.8)
-
-    ax2.scatter(X, Y, Z, c='navy', marker='.', alpha=0.8)
-    
-    # Fixed Y value for the vertical line
-    true_Kp = inp_dat['K_p']
-    true_vrest = inp_dat['V_wind']
-    
-    # Plot a vertical line at the fixed Y value in the Y-Z plane
-    ax2.plot([cx.min(), cx.min()], [true_Kp, true_Kp], [Z.min(), Z.max()], color='r')
-    ax2.plot([cx.min(), cx.min()], [Y.min(), Y.max()], [true_vrest, true_vrest], color='r')
-    ax2.plot([X.min(), X.max()], [true_Kp, true_Kp], [cz.min(), cz.min()], color='r')
-    ax2.plot([X.min(), X.max()], [cy.min(), cy.min()], [true_vrest, true_vrest], color='r')
-
-
-    ax2.set_xlim3d(ax1.get_xlim3d())
-    ax2.set_ylim3d(ax1.get_ylim3d())
-    ax2.set_zlim3d(ax1.get_zlim3d())
-    
-    # Customize plot appearance
-    ax2.set_xlabel('S/N', fontsize=12)
-    ax2.set_ylabel('$K_p$', fontsize=12)
-    ax2.set_zlabel('$V_{rest}$', fontsize=12)
-    ax2.xaxis.set_tick_params(labelsize=10)
-    ax2.yaxis.set_tick_params(labelsize=10)
-    ax2.zaxis.set_tick_params(labelsize=10)
-    #ax.legend(loc = 'best', prop={'size': 10})
-
-    
-    plt.tight_layout()
-    
-    # Save it in PDF and png and show
-    plt.savefig(f"{plot_name}_3D.pdf")
-    plt.show()
-    """
-    
-    """
-    # Histograms 
-    gs = gridspec.GridSpec(1, 1)
-
-    fig = plt.figure(figsize=(8,8))
-
-    ax = plt.subplot(gs[0, 0]) # row 0, col 0
-    # Histograms with or without quantile        
-    if show_SN_quantile:
-        a = sns.ecdfplot(stats[:,0], complementary = True, color='gold', 
-                         alpha = 0.)
-        l1 = a.lines[0]
-        x1 = l1.get_xydata()[:,0]
-        y1 = l1.get_xydata()[:,1]
-        ax.fill_between(x1,y1, color="gold", alpha=0.5, label='Quantile')
-        ax.plot(x1,y1, color='gold', marker='o', markersize=0.2, alpha=0.1)
-        sns.histplot(stats[:,0], binwidth = binwidth_sn, color='black', 
-                     stat='density', label='Max. S/N', alpha = 0.7)
-    else:
-        sns.histplot(stats[:,0], binwidth = binwidth_sn, color='black', 
-                     stat='density', label='Max. S/N')        
-    ax.set_ylabel('', fontsize = 17)
-    ax.legend(prop={'size': 10})
-    xticks = np.arange(sn_lim_inf, sn_lim_sup, sn_lim_step)
-    ax.set_xticks(xticks)
-    ax.set_xlim([sn_lim_inf, sn_lim_sup])
-    ax.grid(True, which='both')
-    ax.tick_params(axis = 'both', width = 1.5, direction = 'in', 
-                   labelsize=16)
-    
-    # Save it in PDF and png
-    plt.savefig(f"{plot_name}_SNR_distribution.pdf")
-    plt.savefig(f"{plot_name}_SNR_distribution.png", transparent=True)
-    plt.show()
     
     
-    # Histograms 
-    gs = gridspec.GridSpec(1, 1)
-
-    fig = plt.figure(figsize=(8,8))
-    ax = plt.subplot(gs[0,0]) # row 1, col 1
-    sns.histplot(stats[:,1], binwidth = binwidth_kp, color = 'black',
-                 stat='density',
-                 label='Max. $K_P$')
-    ax.grid(True, which='both')
-    ax.legend(prop={'size': 10})
-    ax.set_ylabel('', fontsize = 17)
-    ax.tick_params(axis = 'both', width = 1.5, direction = 'in', 
-                   labelsize=16)
-    xticks = np.arange(kp_lim_inf, kp_lim_sup + kp_step, kp_step)
-    ax.set_xticks(xticks)
-    ax.set_xlim([kp_lim_inf, kp_lim_sup])
-    if shade_true_region: 
-        # Shade the region of interest
-        plt.axvspan(inp_dat['K_p'] - kp_shade_width, 
-                    inp_dat['K_p'] + kp_shade_width, 
-                    facecolor='coral', alpha=0.4)
-    elif mark_true_values:
-        plt.axvline(x = inp_dat['K_p'], color = 'goldenrod', linestyle = '--',
-                    linewidth = 2)
-        
-    # Save it in PDF and png
-    plt.savefig(f"{plot_name}_Kp_distribution.pdf")
-    plt.savefig(f"{plot_name}_Kp_distribution.png", transparent=True)
-    plt.show()
-
-    # Histograms 
-    gs = gridspec.GridSpec(1, 1)
-
-    fig = plt.figure(figsize=(8,8))
-    ax = plt.subplot(gs[0,0]) # row 2, col 2
-    # If the injected signal is found clearly, V_rest is 
-    # always = inp_dat['V_wind'] and a histogram cannot be shown as before
-    if np.all(stats[:,2] == inp_dat['V_wind']):
-        hist, bins = np.histogram(stats[:,2], bins=[0, 1])
-        plt.bar(bins[:-1], hist, width=1)
-    else:
-        sns.histplot(stats[:,2], binwidth = binwidth_v_rest, color='black',
-                      stat='density',
-                      label='Max. $V_{rest}$')
-    ax.set_xlabel('V$_{rest}$ (km/s)', fontsize = 17)
-    ax.grid(True, which='both')
-    ax.legend(prop={'size': 10})
-    ax.set_ylabel('', fontsize = 17)
-    ax.tick_params(axis = 'both', width = 1.5, direction = 'in', 
-                   labelsize=16)
-    xticks = np.arange(vrest_lim_inf, vrest_lim_sup + vrest_step, 
-                       vrest_step)
-    ax.set_xticks(xticks)
-    ax.set_xlim([vrest_lim_inf, vrest_lim_sup])
-    if shade_true_region: 
-        # Shade the region of interest
-        plt.axvspan(inp_dat['V_wind'] - vrest_shade_width, 
-                    inp_dat['V_wind'] + vrest_shade_width, 
-                    facecolor='coral', alpha=0.4)
-    elif mark_true_values:
-        plt.axvline(x = inp_dat['V_wind'], color = 'goldenrod', linestyle = '--',
-                    linewidth = 2)
-        
-    # Save it in PDF and png
-    plt.savefig(f"{plot_name}_Vrest_distribution.pdf")
-    plt.savefig(f"{plot_name}_Vrest_distribution.png", transparent=True)
-    plt.show()
-    """
-    
-    """
-    # Histograms but all in a column
-    gs = gridspec.GridSpec(3, 1)
-
-    fig = plt.figure(figsize=(10,16))
-
-    ax = plt.subplot(gs[0, 0]) # row 0, col 0
-    # Histograms with or without quantile        
-    if show_SN_quantile:
-        a = sns.ecdfplot(stats[:,0], complementary = True, color='gold', 
-                         alpha = 0.)
-        l1 = a.lines[0]
-        x1 = l1.get_xydata()[:,0]
-        y1 = l1.get_xydata()[:,1]
-        ax.fill_between(x1,y1, color="gold", alpha=0.5, label='Quantile')
-        ax.plot(x1,y1, color='gold', marker='o', markersize=0.2, alpha=0.1)
-        sns.histplot(stats[:,0], binwidth = binwidth_sn, color='black', 
-                     stat='density', label='Max. S/N', alpha = 0.7)
-    else:
-        sns.histplot(stats[:,0], binwidth = binwidth_sn, color='black', 
-                     stat='density', label='Max. S/N')        
-    ax.set_ylabel('', fontsize = 17)
-    ax.legend(prop={'size': 10})
-    xticks = np.arange(sn_lim_inf, sn_lim_sup, sn_lim_step)
-    ax.set_xticks(xticks)
-    ax.set_xlim([sn_lim_inf, sn_lim_sup])
-    ax.grid(True, which='both')
-    ax.tick_params(axis = 'both', width = 1.5, direction = 'in', 
-                   labelsize=16)
-    
-    
-    # Histograms 
-    ax = plt.subplot(gs[1,0]) # row 1, col 1
-    sns.histplot(stats[:,1], binwidth = binwidth_kp, color = 'black',
-                 stat='density',
-                 label='Max. $K_P$')
-    ax.grid(True, which='both')
-    ax.legend(prop={'size': 10})
-    ax.set_ylabel('', fontsize = 17)
-    ax.tick_params(axis = 'both', width = 1.5, direction = 'in', 
-                   labelsize=16)
-    xticks = np.arange(kp_lim_inf, kp_lim_sup + kp_step, kp_step)
-    ax.set_xticks(xticks)
-    ax.set_xlim([kp_lim_inf, kp_lim_sup])
-    if shade_true_region: 
-        # Shade the region of interest
-        plt.axvspan(inp_dat['K_p'] - kp_shade_width, 
-                    inp_dat['K_p'] + kp_shade_width, 
-                    facecolor='coral', alpha=0.4)
-    elif mark_true_values:
-        plt.axvline(x = inp_dat['K_p'], color = 'goldenrod', linestyle = '--',
-                    linewidth = 2)
-
-    # Histograms 
-    ax = plt.subplot(gs[2,0]) # row 2, col 2
-    # If the injected signal is found clearly, V_rest is 
-    # always = inp_dat['V_wind'] and a histogram cannot be shown as before
-    if np.all(stats[:,2] == inp_dat['V_wind']):
-        hist, bins = np.histogram(stats[:,2], bins=[0, 1])
-        plt.bar(bins[:-1], hist, width=1)
-    else:
-        sns.histplot(stats[:,2], binwidth = binwidth_v_rest, color='black',
-                      stat='density',
-                      label='Max. $V_{rest}$')
-    ax.set_xlabel('V$_{rest}$ (km/s)', fontsize = 17)
-    ax.grid(True, which='both')
-    ax.legend(prop={'size': 10})
-    ax.set_ylabel('', fontsize = 17)
-    ax.tick_params(axis = 'both', width = 1.5, direction = 'in', 
-                   labelsize=16)
-    xticks = np.arange(vrest_lim_inf, vrest_lim_sup + vrest_step, 
-                       vrest_step)
-    ax.set_xticks(xticks)
-    ax.set_xlim([vrest_lim_inf, vrest_lim_sup])
-    if shade_true_region: 
-        # Shade the region of interest
-        plt.axvspan(inp_dat['V_wind'] - vrest_shade_width, 
-                    inp_dat['V_wind'] + vrest_shade_width, 
-                    facecolor='coral', alpha=0.4)
-    elif mark_true_values:
-        plt.axvline(x = inp_dat['V_wind'], color = 'goldenrod', linestyle = '--',
-                    linewidth = 2)
-        
-    # Save it in PDF and png
-    plt.savefig(f"{plot_name}_columnHistograms.pdf")
-    plt.savefig(f"{plot_name}_columnHistograms.png", transparent=True)
-    plt.show()
-    """
     
     
     # And now the dist. of CC values, if specified by user
@@ -607,8 +363,8 @@ def plot_stats(stats, kp_lim_inf, kp_lim_sup,
         
 
         ax = plt.subplot(gs[0, 0]) # row 0, col 0
-        true_area = significance_metric[np.argwhere(v_rest == inp_dat['V_wind'])[0][0] - 5 : np.argwhere(v_rest == inp_dat['V_wind'])[0][0] + 5,
-                                      int(inp_dat['K_p']+inp_dat['kp_max']+1) - 40 : int(inp_dat['K_p']+inp_dat['kp_max']+1) + 60, :]
+        true_area = significance_metric[np.argwhere(v_rest == reference_vrest_kms)[0][0] - 5 : np.argwhere(v_rest == reference_vrest_kms)[0][0] + 5,
+                                      int(reference_kp_kms+kp_max_kms+1) - 40 : int(reference_kp_kms+kp_max_kms+1) + 60, :]
         
         sns.histplot(np.ndarray.flatten(true_area), 
                      color = 'black', stat='density')
@@ -635,22 +391,9 @@ def plot_stats(stats, kp_lim_inf, kp_lim_sup,
             ax.set_xlim([np.floor(true_area.min())-2, np.ceil(true_area.max())+2])
             
         
-        """
-        ax = plt.subplot(gs[0, 2]) # row 0, col 2
-        sns.histplot(np.ndarray.flatten(ccf_tot_sn_stat[120, 300,:]), 
-                     color = 'black', stat='density', alpha = 0.8, 
-                     label='S/N random \n$K_p-V_{rest}$')
-        xticks = np.arange(-3, 3.1, 1)
-        ax.set_xticks(xticks)
-        ax.grid(True, which='both')
-        ax.legend()
-        ax.set_ylabel('', fontsize = 17)
-        ax.tick_params(axis = 'both', width = 1.5, direction = 'in', 
-                       labelsize=16)
-        """
         
         ax = plt.subplot(gs[0, 1]) # row 0, col 1
-        plot_variable = np.ndarray.flatten(significance_metric[np.argwhere(v_rest == inp_dat['V_wind'])[0][0], int(inp_dat['K_p']+inp_dat['kp_max']+1), :])
+        plot_variable = np.ndarray.flatten(significance_metric[np.argwhere(v_rest == reference_vrest_kms)[0][0], int(reference_kp_kms+kp_max_kms+1), :])
         sns.histplot(
             plot_variable,
             color = 'k', stat='density'
@@ -674,7 +417,7 @@ def plot_stats(stats, kp_lim_inf, kp_lim_sup,
         ax = plt.subplot(gs[0, 2]) # row 0, col 1
         
         telluric_area = np.ndarray.flatten(
-            significance_metric[int(np.argwhere(v_rest == 0)[0][0] + np.ceil(int(inp_dat['V_sys']) / inp_dat['CCF_V_STEP']) - 15) : int(np.argwhere(v_rest == 0)[0][0] + np.ceil(int(inp_dat['V_sys']) / inp_dat['CCF_V_STEP']) + 15), 
+            significance_metric[int(np.argwhere(v_rest == 0)[0][0] + np.ceil(int(systemic_velocity_kms) / velocity_step_kms) - 15) : int(np.argwhere(v_rest == 0)[0][0] + np.ceil(int(systemic_velocity_kms) / velocity_step_kms) + 15),
                                 320 - 30 : 320 + 30, :]
             )
         sns.histplot(telluric_area, 
@@ -699,7 +442,7 @@ def plot_stats(stats, kp_lim_inf, kp_lim_sup,
         # Removing tellurics
         away_from_signal_and_tellurics = np.delete(
             significance_metric, 
-            np.s_[int(np.argwhere(v_rest == 0)[0][0] + np.ceil(int(inp_dat['V_sys']) / inp_dat['CCF_V_STEP']) - 15) : int(np.argwhere(v_rest == 0)[0][0] + np.ceil(int(inp_dat['V_sys']) / inp_dat['CCF_V_STEP']) + 15)], 
+            np.s_[int(np.argwhere(v_rest == 0)[0][0] + np.ceil(int(systemic_velocity_kms) / velocity_step_kms) - 15) : int(np.argwhere(v_rest == 0)[0][0] + np.ceil(int(systemic_velocity_kms) / velocity_step_kms) + 15)],
             axis=0
             )
         
@@ -710,13 +453,13 @@ def plot_stats(stats, kp_lim_inf, kp_lim_sup,
         # Removing planet signal
         away_from_signal_and_tellurics = np.delete(
             significance_metric, 
-            np.s_[np.argwhere(v_rest == inp_dat['V_wind'])[0][0]-5:np.argwhere(v_rest == inp_dat['V_wind'])[0][0]+5], 
+            np.s_[np.argwhere(v_rest == reference_vrest_kms)[0][0]-5:np.argwhere(v_rest == reference_vrest_kms)[0][0]+5],
             axis=0
             )
         
         away_from_signal_and_tellurics = np.delete(
             significance_metric, 
-            np.s_[int(inp_dat['K_p']+inp_dat['kp_max']+1) - 40:int(inp_dat['K_p']+inp_dat['kp_max']+1) + 40],
+            np.s_[int(reference_kp_kms+kp_max_kms+1) - 40:int(reference_kp_kms+kp_max_kms+1) + 40],
             axis=1
             )
         
@@ -739,545 +482,43 @@ def plot_stats(stats, kp_lim_inf, kp_lim_sup,
         
         # Save it and show it
         if save_plot and not CCF_Noise: 
-            plt.savefig(f"{inp_dat['plots_dir']}CC_distributions_{inp_dat['Simulation_name']}.pdf")
+            plt.savefig(f"{plots_dir}CC_distributions_{simulation_name}.pdf")
         elif save_plot and CCF_Noise:
-            plt.savefig(f"{inp_dat['plots_dir']}CC_distributions_noise_{inp_dat['Simulation_name']}.pdf")
+            plt.savefig(f"{plots_dir}CC_distributions_noise_{simulation_name}.pdf")
         if show_plot: plt.show()
         plt.close()
     
     return
 
 
-def statistical_study(inp_dat, ccf_v_step, ccf_stat, kp_range, phase,
-        v_ccf, v_rest, with_signal, pixels_left_right, sysrem_it_opt,
-        ccf_iterations, in_trail_pix, auto_lims, input_stats = None,
-        input_stats_tvalue = None, input_stats_pvalue = None,
-        previous_shuffle = None, verbose = True, show_plot = False,
-        save_plot = True, CCF_Noise = False, ccf_SSIM = False
-        ):
-    """Build cumulative Kp-Vsys significance maps and extract detection statistics.
-
-    This is the central analysis loop for the Monte-Carlo statistical study.
-    For each simulated night it shifts the CCF matrix into the planet rest
-    frame, co-adds in time, applies the chosen significance metric (S/N or
-    Welch t-test), and records the peak S/N and its Kp-Vsys coordinates.
-
-    The loop iterates over nights, accumulating ``stats`` which allows the
-    user to study how detection significance grows with co-added nights and
-    to identify best/worst nights from the resulting distribution.
-
-    Parameters
-    ----------
-    inp_dat : dict
-        Simulation input dictionary.  Keys used include ``"n_nights"``,
-        ``"CCF_SNR"``, ``"Welch_ttest"``, ``"Stack_Group_Size"``,
-        ``"Opt_PCA_its_ord_by_ord"``, ``"K_p"``, ``"V_wind"``,
-        ``"kp_max"``, and ``"CCF_V_STEP"``.
-    ccf_v_step : float
-        Velocity step of the CCF grid in km/s.
-    ccf_stat : ndarray
-        CCF matrix cube from the simulator.  Shape depends on the pipeline
-        mode: ``(n_orders, n_nights, n_lags, n_spectra)`` (standard) or
-        ``(n_orders, n_nights, n_lags, n_spectra, 2, sysrem_its)``
-        (order-by-order SYSREM optimisation).
-    kp_range : ndarray, shape (n_kp_steps,)
-        Grid of trial Kp values in km/s over which the map is evaluated.
-    Phase : ndarray
-        Orbital phase array (or list of arrays for multi-night simulations).
-    v_ccf : ndarray
-        Earth-frame CCF velocity grid in km/s.
-    v_rest : ndarray
-        Planet-rest-frame velocity axis in km/s.
-    with_signal : ndarray or list of ndarray
-        Indices of in-transit exposures.
-    pixels_left_right : int
-        Half-width (in pixels) of the velocity window centred on the
-        planet's instantaneous velocity for the rest-frame shift.
-    sysrem_it_opt : ndarray
-        Optimal SYSREM iteration indices per order and night, shape
-        ``(n_orders, n_nights, 2)``.  Only used when
-        ``inp_dat["Opt_PCA_its_ord_by_ord"]`` is True.
-    ccf_iterations : int
-        Total number of CCF lag steps.
-    in_trail_pix : int
-        Width of the in-trail velocity window (pixels, must be odd) used
-        by the Welch t-test significance metric.
-    auto_lims : bool
-        If True, axis limits in the corner plot are determined automatically.
-    input_stats, input_stats_tvalue, input_stats_pvalue : ndarray or None
-        Pre-existing statistics arrays from a previous run (used when
-        computing noise-only CCF significance for comparison).
-    previous_shuffle : ndarray or None
-        Shuffled night order from a previous call (for reproducibility of
-        the stacking sequence).
-    verbose : bool
-        If True, print progress messages every 10 nights.
-    show_plot, save_plot : bool
-        Display and/or save the corner plot.
-    CCF_Noise : bool
-        If True, process the noise-only CCF.
-    ccf_SSIM : bool
-        Reserved for structural similarity metric (not yet implemented).
-
-    Returns
-    -------
-    tuple
-        ``(ccf_tot_stat, significance_metric, significance_metric2,
-        significance_metric3, stats, stats_tvalue, stats_pvalue,
-        stats_planet_pos, stats_planet_area, stats_cc_values,
-        stats_cc_values_planet_pos, stats_cc_values_std,
-        stats_cc_values_std_planet_pos, ccf_complete_stat,
-        ccf_values_shift_stat, shuffled_nights, v_rest_sigma)``
-
-        * ``ccf_tot_stat``: co-added CCF map, shape
-          ``(n_v_rest, n_kp, n_nights)``.
-        * ``significance_metric``: S/N or σ map, same shape.
-        * ``stats``: peak detection statistics per night, shape
-          ``(n_nights, 3)``, columns are [S/N, Kp, Vrest].
-    """
-
-    # Co-adding of orders in each night with NO WEIGHTS
-    if np.logical_or(not inp_dat["Opt_PCA_its_ord_by_ord"], CCF_Noise):
-        if len(ccf_stat.shape) == 4:
-            ccf_complete_stat = np.sum(ccf_stat, 0)
-        else: ccf_complete_stat = ccf_stat
-        
-        # Analyse n_nigts individually or study co-addings? This
-        # allows us to study how the varibility in signal's
-        # significance is (hopefully) reduced when co-adding nights.
-        if inp_dat["Stack_Group_Size"] is not None and inp_dat["Stack_Group_Size"] > 1:
-            ccf_complete_stat, shuffled_nights= Combine_Nights(
-                inp_dat, ccf_complete_stat, CCF_Noise, previous_shuffle
-                )
-        else: shuffled_nights = None
-    else:
-        # We can already set the criterion selected by the user
-        if inp_dat["Opt_crit"] == "Maximum":
-            crit_choice = 0
-        elif inp_dat["Opt_crit"] == "Max_Diff":
-            crit_choice = 1
-   
-            
-    # Define planet velocity vector as a function of Kp
-    vp = np.zeros((kp_range.shape[0], len(phase)))
-    for k in range(len(kp_range)): 
-        vp[k, :] = get_V(
-            kp_range[k], phase, inp_dat['BERV'],
-            inp_dat['V_sys'], inp_dat['V_wind']
-            )
-    
-    for b in range(inp_dat["n_nights"]):
-        
-        # If optimising SYSREM its., then the actual ccf_complete_stat
-        # has to be computed for each night's selection iterations 
-        # for each order
-       
-        if inp_dat["Opt_PCA_its_ord_by_ord"] and not CCF_Noise:
-            
-            if sysrem_it_opt.shape[0] == inp_dat["n_orders"] and len(ccf_stat.shape) == 6:
-                # Extract the relevant data based on sysrem_it_opt
-                # Create a new matrix for storing the selected data
-                ccf_complete_stat = np.zeros(
-                    (ccf_stat.shape[:4]), float
-                    )
-                
-                # Iterate over dimensions to select data based on sysrem_it_opt
-                for h in range(inp_dat["n_orders"]):
-                    #ccf_complete_stat = ccf_stat[:,:,:,:,0,2]
-                    for n in range(ccf_stat.shape[3]): # Loop in spectra
-                        sysrem_index = sysrem_it_opt[h, b, crit_choice]
-                        ccf_complete_stat[h, b, :, n] = ccf_stat[h, b, :, n, 0, sysrem_index]
-                
-                # Co-adding the orders with the selected iterations
-                ccf_complete_stat = np.sum(ccf_complete_stat, axis=0)
-            # Now we make sure the shuffling and co-adding of nights 
-            # gets done only once
-            if b == 0:
-                if inp_dat["Stack_Group_Size"] is not None and inp_dat["Stack_Group_Size"] > 1:
-                    ccf_complete_stat, shuffled_nights= Combine_Nights(
-                        inp_dat, ccf_complete_stat, CCF_Noise, previous_shuffle
-                        )
-                else: shuffled_nights = None
-                
-        # The rest of the loop is the same regardless 
-        # of SYSREM optimisation
-        if inp_dat["n_nights"] > 20 and (b % 10 == 0) and verbose:
-            print('STATISTICAL STUDY: Co-adding night ' + str(b+1) + '/'
-              + str(inp_dat["n_nights"]))
-
-        ######################################################################
-        
-        ######################################################################
-
-        # Variable that stores all shifts as a function of Kp
-        if b == 0:
-            left_right = in_trail_pix #// 2
-            ccf_values_shift_stat = np.zeros((len(v_rest), len(with_signal),
-                                              kp_range.shape[0]), float)
-            ccf_tot_stat = np.zeros((len(v_rest), kp_range.shape[0], 
-                                     inp_dat["n_nights"]), 
-                                    float) 
-            if inp_dat['CCF_SNR']:
-                ccf_tot_sn_stat = np.zeros_like(ccf_tot_stat)
-            elif inp_dat["Welch_ttest"]:
-                ccf_tot_sigma_stat = np.zeros(
-                    (v_rest.shape[0] - 2 * left_right, len(kp_range), 
-                     inp_dat["n_nights"])
-                    )
-                ccf_tot_t_stat = np.zeros(
-                    (v_rest.shape[0] - 2 * left_right, len(kp_range), 
-                     inp_dat["n_nights"])
-                    )
-                ccf_tot_p_stat = np.zeros(
-                    (v_rest.shape[0] - 2 * left_right, len(kp_range), 
-                     inp_dat["n_nights"])
-                    )
-                
-            stats = np.zeros((inp_dat["n_nights"], 3))
-            stats_tvalue = np.zeros((inp_dat["n_nights"], 3))
-            stats_pvalue = np.zeros((inp_dat["n_nights"], 3))
-            stats_planet_pos = np.zeros((inp_dat["n_nights"], 3))
-            stats_planet_area = np.zeros((inp_dat["n_nights"], 3))
-            stats_cc_values = np.zeros((inp_dat["n_nights"], 3))
-            stats_cc_values_planet_pos = np.zeros((inp_dat["n_nights"], 3))
-            stats_cc_values_std = np.zeros((inp_dat["n_nights"], 3))
-            stats_cc_values_std_planet_pos = np.zeros((inp_dat["n_nights"], 3))
-            
-            v_aux = np.zeros((len(with_signal), len(v_rest), kp_range.shape[0]))
-       
-        # Loop over the signal frames and velocity values
-        for idx, i in enumerate(with_signal):
-            # Loop over the planetary velocities
-            for k_idx in range(len(kp_range)):
-                # We create a velocity array centered in the pixel with signal vp[i]
-                v_aux[idx, :, k_idx] = np.linspace(
-                    vp[k_idx, i] - pixels_left_right * ccf_v_step, 
-                    vp[k_idx, i] + pixels_left_right * ccf_v_step, 
-                    num=2*pixels_left_right+1
-                    )
-                
-                # CCF centered at the bin where the planet signal should be
-                ccf_values_shift_stat[:, idx, k_idx] = np.interp(
-                    v_aux[idx, :, k_idx], v_ccf, ccf_complete_stat[b, :, i]
-                    )   
-        # Co-adding in time
-        ccf_tot_stat[:, :, b] = np.sum(
-            ccf_values_shift_stat, axis=1, out=ccf_tot_stat[:, :, b]
-            )
-        
-        
-        if inp_dat['CCF_SNR'] and not CCF_Noise:
-            ccf_tot_sn_stat[:,:,b], max_sig, max_kp_idx, max_v_rest, cc_values_std = \
-                get_max_CCF_peak(
-                    inp_dat=inp_dat, ccf_tot=ccf_tot_stat[:,:,b], v_rest=v_rest, kp_range=kp_range, 
-                    b = None, stats = None,
-                    sysrem_opt = False,
-                    CCF_Noise = False,
-                    )
-            significance_metric = ccf_tot_sn_stat
-            significance_metric2 = None
-            significance_metric3 = None
-            v_rest_sigma = None
-        elif inp_dat['CCF_SNR'] and CCF_Noise:
-            ccf_tot_sn_stat[:,:,b], max_sig_noise, max_kp_noise_idx, max_v_rest_noise, cc_values_std_noise = \
-                get_max_CCF_peak(
-                    inp_dat, ccf_tot_stat[:,:,b], v_rest, kp_range, 
-                    b, input_stats, False,
-                    CCF_Noise = True,
-                    )
-            significance_metric = ccf_tot_sn_stat
-            significance_metric2 = None
-            significance_metric3 = None
-            v_rest_sigma = None
-        elif not inp_dat['CCF_SNR'] and inp_dat["Welch_ttest"] and not CCF_Noise:
-            #custom_start_time = time.time()
-            ccf_tot_sigma_stat[:,:,b], ccf_tot_t_stat[:,:,b], ccf_tot_p_stat[:,:,b], v_rest_sigma , max_sig, max_kp_idx, max_v_rest, max_t_value, max_kp_idx_t, max_v_rest_t, max_p_value, max_kp_idx_p, max_v_rest_p = \
-                Welch_ttest_map(
-                    ccf_values_shift_stat, v_rest, kp_range,
-                    inp_dat, CCF_Noise = CCF_Noise, plotting = show_plot
-                    )
-            significance_metric = ccf_tot_sigma_stat
-            significance_metric2 = ccf_tot_t_stat
-            significance_metric3 = ccf_tot_p_stat
-        elif not inp_dat['CCF_SNR'] and inp_dat["Welch_ttest"] and CCF_Noise:
-            #custom_start_time = time.time()
-            ccf_tot_sigma_stat[:,:,b], ccf_tot_t_stat[:,:,b], ccf_tot_p_stat[:,:,b], v_rest_sigma, max_sig_noise, max_kp_noise_idx, max_v_rest_noise, max_t_value_noise, max_kp_idx_t_noise, max_v_rest_t_noise, max_p_value_noise, max_kp_idx_p_noise, max_v_rest_p_noise  = \
-                Welch_ttest_map(
-                    ccf_values_shift_stat, v_rest, kp_range,
-                    inp_dat, stats=input_stats, stats_tvalue=input_stats_tvalue, stats_pvalue=input_stats_pvalue, b=b, CCF_Noise = CCF_Noise, 
-                    plotting = show_plot
-                    )
-            significance_metric = ccf_tot_sigma_stat
-            significance_metric2 = ccf_tot_t_stat
-            significance_metric3 = ccf_tot_p_stat
-            # Record the end time
-            #end_time = time.time()
-            
-            # Calculate the elapsed time
-            #elapsed_time = end_time - custom_start_time
-            
-            #print(f"Time elapsed: {elapsed_time:.4f} seconds")
-            
-        ######################################################################
-        ######################################################################
-        """
-        Now we will search the maximum SNR around the expected position (where
-        we put the fake planet originally) and store its value to
-        do the plot.
-        
-        Playing with the stats variable below allows us to see Kp-Vrest maps
-        for each night, to check for the best and worst nights, e.g.
-        np.where(stats[:,0] < 3.8)[0] and then re-use the code 
-        for Kp-Vrest plot with ccf_tot_sn_stat[:, :,
-                                               np.where(stats[:,0] < 3.8)[0]]
-        """
-        ######################################################################
-        ######################################################################
-        
-        if not CCF_Noise:
-            stats[b, 0] = max_sig
-            stats[b, 1] = max_kp_idx - (len(kp_range) // 2)
-            stats[b, 2] = max_v_rest
-            
-            # The stats for maximum value in cc maps (no S/N)
-            stats_cc_values[b, 0] = ccf_tot_stat[np.argwhere(v_rest == max_v_rest)[0][0], 
-                                                 max_kp_idx, 
-                                                 b]
-            stats_cc_values[b, 1] = max_kp_idx - (len(kp_range) // 2)
-            stats_cc_values[b, 2] = max_v_rest
-            
-            if inp_dat['CCF_SNR']:
-                stats_cc_values_std[b, 0] = cc_values_std[np.argwhere(v_rest == max_v_rest)[0][0], 
-                                                          max_kp_idx]
-                stats_cc_values_std[b, 1] = max_kp_idx - (len(kp_range) // 2)
-                stats_cc_values_std[b, 2] = max_v_rest
-            else:
-                stats_cc_values_std = None
-            
-            # And now the stats at exactly the Kp-Vrest of the planet
-            if inp_dat['CCF_SNR']:
-                stats_planet_pos[b, 0] = ccf_tot_sn_stat[np.argwhere(v_rest == inp_dat['V_wind'])[0][0], 
-                                                         int(np.ceil(inp_dat['K_p'])+len(kp_range)//2), 
-                                                         b]
-                stats_planet_pos[b, 1] = np.ceil(inp_dat['K_p'])
-                stats_planet_pos[b, 2] = v_rest[np.argwhere(v_rest == inp_dat['V_wind'])[0][0]]
-            
-                stats_tvalue = None
-                stats_pvalue = None
-            elif inp_dat["Welch_ttest"]:
-                
-                stats_tvalue[b, 0] = max_t_value
-                stats_tvalue[b, 1] = max_kp_idx_t - (len(kp_range) // 2)
-                stats_tvalue[b, 2] = max_v_rest_t
-                
-                stats_pvalue[b, 0] = max_p_value
-                stats_pvalue[b, 1] = max_kp_idx_p - (len(kp_range) // 2)
-                stats_pvalue[b, 2] = max_v_rest_p
-                
-                stats_planet_pos[b, 0] = ccf_tot_sigma_stat[np.argwhere(v_rest_sigma == inp_dat['V_wind'])[0][0], 
-                                                         int(np.ceil(inp_dat['K_p'])+inp_dat['kp_max']), 
-                                                         b]
-                stats_planet_pos[b, 1] = np.ceil(inp_dat['K_p'])
-                stats_planet_pos[b, 2] = v_rest_sigma[np.argwhere(v_rest_sigma == inp_dat['V_wind'])[0][0]]
-            
-            # Stats at around the Kp-Vrest of the planet
-            if inp_dat['CCF_SNR']:
-                (stats_planet_area[b, 0],
-                 stats_planet_area[b, 1],
-                 stats_planet_area[b, 2]) = _planet_area_stats(
-                    ccf_tot_sn_stat, v_rest,
-                    inp_dat['K_p'], inp_dat['kp_max'],
-                    inp_dat['V_wind'], kp_range, b)
-
-            elif inp_dat["Welch_ttest"]:
-                (stats_planet_area[b, 0],
-                 stats_planet_area[b, 1],
-                 stats_planet_area[b, 2]) = _planet_area_stats(
-                    ccf_tot_sigma_stat, v_rest_sigma,
-                    inp_dat['K_p'], inp_dat['kp_max'],
-                    inp_dat['V_wind'], kp_range, b)
-                
-                
-                
-            stats_cc_values_planet_pos[b, 0] = ccf_tot_stat[np.argwhere(v_rest == inp_dat['V_wind'])[0][0], 
-                                                     int(np.ceil(inp_dat['K_p'])+inp_dat['kp_max']), 
-                                                     b]
-            stats_cc_values_planet_pos[b, 1] = np.ceil(inp_dat['K_p'])
-            stats_cc_values_planet_pos[b, 2] = v_rest[np.argwhere(v_rest == inp_dat['V_wind'])[0][0]]
-            
-            if inp_dat['CCF_SNR']:
-                stats_cc_values_std_planet_pos[b, 0] = cc_values_std[np.argwhere(v_rest == inp_dat['V_wind'])[0][0], 
-                                                         int(np.ceil(inp_dat['K_p'])+inp_dat['kp_max'])]
-                stats_cc_values_std_planet_pos[b, 1] = np.ceil(inp_dat['K_p'])
-                stats_cc_values_std_planet_pos[b, 2] = v_rest[np.argwhere(v_rest == inp_dat['V_wind'])[0][0]]
-            else:
-                stats_cc_values_std_planet_pos = None
-        else:
-            stats[b, 0] = max_sig_noise
-            stats[b, 1] = max_kp_noise_idx - (len(kp_range) // 2)
-            stats[b, 2] = max_v_rest_noise
-            
-            # And now the stats at exactly the Kp-Vrest of the planet
-            if inp_dat['CCF_SNR']:
-                stats_planet_pos[b, 0] = ccf_tot_sn_stat[np.argwhere(v_rest == inp_dat['V_wind'])[0][0], 
-                                                     int(np.ceil(inp_dat['K_p'])+len(kp_range)//2), 
-                                                     b]
-                stats_planet_pos[b, 1] = np.ceil(inp_dat['K_p'])
-                stats_planet_pos[b, 2] = v_rest[np.argwhere(v_rest == inp_dat['V_wind'])[0][0]]
-            
-                stats_tvalue = None
-                stats_pvalue = None
-            elif inp_dat["Welch_ttest"]: 
-                
-                stats_tvalue[b, 0] = max_t_value_noise
-                stats_tvalue[b, 1] = max_kp_idx_t_noise - (len(kp_range) // 2)
-                stats_tvalue[b, 2] = max_v_rest_t_noise
-                
-                stats_pvalue[b, 0] = max_p_value_noise
-                stats_pvalue[b, 1] = max_kp_idx_p_noise - (len(kp_range) // 2)
-                stats_pvalue[b, 2] = max_v_rest_p_noise
-                
-                stats_planet_pos[b, 0] = ccf_tot_sigma_stat[np.argwhere(v_rest_sigma == inp_dat['V_wind'])[0][0], 
-                                                         int(np.ceil(inp_dat['K_p'])+len(kp_range)//2), 
-                                                         b]
-                stats_planet_pos[b, 1] = np.ceil(inp_dat['K_p'])
-                stats_planet_pos[b, 2] = v_rest_sigma[np.argwhere(v_rest_sigma == inp_dat['V_wind'])[0][0]]
-            
-            
-    return ccf_tot_stat, significance_metric, significance_metric2, significance_metric3, stats, stats_tvalue, stats_pvalue, stats_planet_pos, stats_planet_area,\
-           stats_cc_values, stats_cc_values_planet_pos,\
-           stats_cc_values_std, stats_cc_values_std_planet_pos,\
-           ccf_complete_stat, ccf_values_shift_stat, shuffled_nights,\
-           v_rest_sigma
 
 
-def get_SYSREM_its_ordbyord(inp_dat, ccf_store, v_rest, with_signal, phase, berv, v_sys,
-        pixels_left_right, ccf_v_step, v_erf
-        ):
-    """Select the optimal SYSREM iteration count order-by-order via signal injection.
-
-    For each spectral order and each night, shifts the CCF into the planet
-    rest frame using the known injection velocity (``inp_dat['K_p']``,
-    ``inp_dat['V_wind']``) and evaluates a detection criterion (S/N or
-    maximum CCF value) as a function of SYSREM iteration count.  The
-    iteration index that maximises the criterion is stored in
-    ``sysrem_it_opt``.
-
-    .. warning::
-        This optimisation is performed using the *injected* signal and
-        should only be applied to the noiseless or signal-injected dataset.
-        Applying it to a real detection will inflate the reported S/N because
-        SYSREM is tuned against the specified injected signal.
-
-    Parameters
-    ----------
-    inp_dat : dict
-        Simulation input dictionary.  Keys used: ``"n_orders"``,
-        ``"n_nights"``, ``"sysrem_its"``, ``"K_p"``, ``"V_wind"``,
-        ``"kp_max"``, ``"CCF_V_STEP"``, ``"Opt_crit"``.
-    ccf_store : ndarray, shape (n_orders, n_nights, n_lags, n_spectra, 2, sysrem_its)
-        Per-order CCF cubes for each SYSREM iteration count.
-    v_rest : ndarray, shape (n_v_rest,)
-        Planet rest-frame velocity axis in km/s.
-    with_signal : ndarray or list
-        In-transit exposure indices per night.
-    phase : ndarray or list
-        Orbital phase arrays.
-    berv : float or ndarray
-        Barycentric Earth RV correction in km/s.
-    v_sys : float
-        Systemic velocity in km/s.
-    pixels_left_right : int
-        Half-width of the in-trail integration window in pixels.
-    ccf_v_step : float
-        CCF velocity step size in km/s.
-    v_erf : ndarray
-        Planet-frame velocity grid used for the ERF (rest-frame) plot axis.
-
-    Returns
-    -------
-    ndarray, shape (n_orders, n_nights, 2)
-        Optimal SYSREM iteration indices, one per order per night.
-        The third axis holds [index_criterion_0, index_criterion_1].
-    """
-    ccf_values_shift = np.zeros(
-        (inp_dat["n_orders"], inp_dat["n_nights"], len(v_rest), len(with_signal), 
-         2, inp_dat["sysrem_its"]), float
-        )
-    
-    # Calculate injected-planetary velocities during the night
-    vp = get_V(
-        inp_dat["Kp_Vrest_inj"][0], phase, berv,
-        v_sys, inp_dat["Kp_Vrest_inj"][1]
-        )
-    
-    # Move all matrices to INJECTION REST-FRAME
-    for idx, i in enumerate(with_signal):
-        # We create a velocity array centered in the 
-        # pixel with signal vp[i]
-        v_inj_prf = np.linspace(
-            vp[i] - pixels_left_right * ccf_v_step, 
-            vp[i] + pixels_left_right * ccf_v_step, 
-            num=2*pixels_left_right+1
-            )
-        for b in range(inp_dat["n_nights"]):
-            for h in range(inp_dat["n_orders"]):
-                for n in range(2):
-                    for l in range(inp_dat["sysrem_its"]):
-                        ccf_values_shift[h, b, :, idx, n, l] = np.interp(
-                            v_inj_prf, v_erf, ccf_store[h, b, :, idx, n, l]
-                            )
-                        
-    # Co-adding in time. The new matrix ccf_tot has a shape of
-    # (inp_dat["n_orders"], inp_dat["n_nights"], len(v_rest),
-    #  2, inp_dat["sysrem_its"])
-    ccf_tot = np.sum(ccf_values_shift, axis = 3)
-    
-    # Now we extract the value of the CCFs with and without injection
-    # at 0 (the V_wind of the injected signal)
-    injection_v = np.argwhere(v_rest == find_nearest(
-        v_rest, 0
-        )
-        )[0][0]
-    ccf_maxinj_pos = np.zeros(
-        (inp_dat["n_orders"], inp_dat["n_nights"],
-         2, inp_dat["sysrem_its"]), float
-        )
-    v_maxinj_pos = np.zeros(
-        (inp_dat["n_orders"], inp_dat["n_nights"],
-         inp_dat["sysrem_its"]), int
-        )
-    
-    for b in range(inp_dat["n_nights"]):
-        for h in range(inp_dat["n_orders"]):
-            for l in range(inp_dat["sysrem_its"]):
-                v_maxinj_pos[h,b,l] = np.where(
-                    ccf_tot[h,b,:,1,l] == np.amax(ccf_tot[h, b, injection_v-20:injection_v+21, 1, l])
-                    )[0][0]
-                ccf_maxinj_pos[h, b, 1, l] = ccf_tot[h, b, v_maxinj_pos[h,b,l], 1, l]
-                ccf_maxinj_pos[h, b, 0, l] = ccf_tot[h, b, v_maxinj_pos[h,b,l], 0, l]
-    
-    # Now we store both which iteration maximises the recovery
-    # of the injected signal and the CCF difference between 
-    # injected and non-injected cases
-    sysrem_opt = np.zeros(
-        (inp_dat["n_orders"], inp_dat["n_nights"], 2), float
-        )
-    for b in range(inp_dat["n_nights"]):
-        for h in range(inp_dat["n_orders"]):
-            diff = ccf_maxinj_pos[h, b, 1, :] - ccf_maxinj_pos[h, b, 0, :]
-            # I esclude the first SYSREM iteration because it is
-            # really bad and it messes up results (i.e. sometimes
-            # the maximum recovery or difference is reached in that
-            # iteration because it still has strong residuals)
-            sysrem_opt[h, b, 0] = int(np.where(ccf_maxinj_pos[h, b, 1, 2:] == np.amax(ccf_maxinj_pos[h, b, 1, 2:]))[0][0] + 2)
-            sysrem_opt[h, b, 1] = int(np.where(diff[2:] == np.amax(diff[2:]))[0] + 2)
-    return sysrem_opt
 
 
-def get_CCvalues_dist(inp_dat, ccf_matrix, v_ccf, v_rest, in_trail_pix,
-                      night1, night2, with_signal, kp_range, phase, pixels_left_right,
-                      ccf_v_step, Kp, name, save_plot):
+def get_CCvalues_dist(
+    ccf_matrix,
+    v_ccf,
+    v_rest,
+    in_trail_pix,
+    night1,
+    night2,
+    with_signal,
+    kp_range,
+    phase,
+    pixels_left_right,
+    ccf_v_step,
+    Kp,
+    name,
+    save_plot,
+    *,
+    systemic_velocity_kms,
+    berv_kms,
+    plots_dir,
+    significant_eccentricity,
+    eccentricity,
+    argument_of_periastron_deg,
+    sysrem_iterations
+):
     """Plot distributions of in-trail and out-of-trail CCF values for two nights.
 
     Shifts the CCF matrix into the planet rest frame at trial orbital velocity
@@ -1288,8 +529,14 @@ def get_CCvalues_dist(inp_dat, ccf_matrix, v_ccf, v_rest, in_trail_pix,
 
     Parameters
     ----------
-    inp_dat : dict
-        Simulation input dictionary (``"V_sys"``, ``"BERV"``, ``"CCF_V_STEP"``).
+    systemic_velocity_kms, berv_kms
+        Systemic velocity and barycentric correction in km/s.
+    plots_dir : str
+        Output directory including its trailing path separator.
+    significant_eccentricity, eccentricity, argument_of_periastron_deg
+        Orbit settings used to align the exposure CCFs.
+    sysrem_iterations : int
+        Stored SYSREM pass count for optimisation arrays.
     ccf_matrix : ndarray, shape (n_v_rest, n_kp, n_nights)
         Co-added CCF significance map.
     v_ccf : ndarray
@@ -1317,20 +564,45 @@ def get_CCvalues_dist(inp_dat, ccf_matrix, v_ccf, v_rest, in_trail_pix,
     save_plot : bool
         If True, write figures to the simulation output directory.
     """
+    from matplotlib import gridspec
+    import seaborn as sns
+
     if in_trail_pix % 2 == 0:
         raise ValueError("The width of the in-trail distribution\
                          should be an odd number")
     # Get the shifted matrices at the desired Kp, no winds considered
     ccf_matrix_shifted1 = get_shifted_ccf_matrix(
-        with_signal, v_rest, v_ccf, kp_range, phase, inp_dat['V_sys'], 
-        inp_dat['BERV'], pixels_left_right, ccf_v_step, 
-        ccf_matrix[:, :, night1]
-        )[:, :, Kp+int(np.floor(len(kp_range)/2))]
+        with_signal,
+        v_rest,
+        v_ccf,
+        kp_range,
+        phase,
+        systemic_velocity_kms,
+        berv_kms,
+        pixels_left_right,
+        ccf_v_step,
+        ccf_matrix[:, :, night1],
+        significant_eccentricity=significant_eccentricity,
+        eccentricity=eccentricity,
+        argument_of_periastron_deg=argument_of_periastron_deg,
+        sysrem_iterations=sysrem_iterations,
+    )[:, :, Kp+int(np.floor(len(kp_range)/2))]
     ccf_matrix_shifted2 = get_shifted_ccf_matrix(
-        with_signal, v_rest, v_ccf, kp_range, phase, inp_dat['V_sys'], 
-        inp_dat['BERV'], pixels_left_right, ccf_v_step, 
-        ccf_matrix[:, :, night2]
-        )[:, :, Kp+int(np.floor(len(kp_range)/2))]
+        with_signal,
+        v_rest,
+        v_ccf,
+        kp_range,
+        phase,
+        systemic_velocity_kms,
+        berv_kms,
+        pixels_left_right,
+        ccf_v_step,
+        ccf_matrix[:, :, night2],
+        significant_eccentricity=significant_eccentricity,
+        eccentricity=eccentricity,
+        argument_of_periastron_deg=argument_of_periastron_deg,
+        sysrem_iterations=sysrem_iterations,
+    )[:, :, Kp+int(np.floor(len(kp_range)/2))]
 
     # Create the array of velocity indices centred in exoplanet signal
     # (in the planet's rest-frame, that is 0) for the in-trail distribution
@@ -1367,7 +639,7 @@ def get_CCvalues_dist(inp_dat, ccf_matrix, v_ccf, v_rest, in_trail_pix,
         histtype = 'bar', linewidth = 1.6, label = f"Night {night2}",
         )
     if save_plot:
-        os.makedirs(f"{inp_dat['plots_dir']}statistical/ccf_minmax", exist_ok=True)
+        os.makedirs(f"{plots_dir}statistical/ccf_minmax", exist_ok=True)
     plt.title('Out-of-trail Cross correlation values', fontsize = 15)
     plt.xlabel("Cross correlation value", fontsize = 17)
     plt.ylabel("Frequency", fontsize = 17)
@@ -1377,7 +649,7 @@ def get_CCvalues_dist(inp_dat, ccf_matrix, v_ccf, v_rest, in_trail_pix,
 
     if save_plot:
         plt.savefig(
-            f"{inp_dat['plots_dir']}statistical/"
+            f"{plots_dir}statistical/"
             f"ccf_minmax/{name}_out_trail_dist.png",
             bbox_inches='tight')
 
@@ -1403,7 +675,7 @@ def get_CCvalues_dist(inp_dat, ccf_matrix, v_ccf, v_rest, in_trail_pix,
     
     if save_plot:
         plt.savefig(
-            f"{inp_dat['plots_dir']}statistical/"
+            f"{plots_dir}statistical/"
             f"ccf_minmax/{name}_in_trail_dist.png",
             bbox_inches='tight')
 
@@ -1413,8 +685,18 @@ def get_CCvalues_dist(inp_dat, ccf_matrix, v_ccf, v_rest, in_trail_pix,
     return
 
 
-def compare_empirical_SN(matrix, inp_dat, n_pixels, night1, night2,
-                         name, save_plot):
+def compare_empirical_SN(
+    matrix,
+    n_pixels,
+    night1,
+    night2,
+    name,
+    save_plot,
+    *,
+    n_orders,
+    order_indices,
+    plots_dir
+):
     """Plot and compare per-order empirical S/N between two observing nights.
 
     For each spectral order computes the empirical signal-to-noise ratio as
@@ -1427,8 +709,12 @@ def compare_empirical_SN(matrix, inp_dat, n_pixels, night1, night2,
     ----------
     matrix : ndarray, shape (n_nights, n_orders, n_spectra, n_pixels)
         Spectral matrix cube.
-    inp_dat : dict
-        Simulation input dictionary (``"n_orders"``, ``"order_selection"``).
+    n_orders
+        Number of selected spectral orders.
+    order_indices
+        Physical spectral-order indices.
+    plots_dir
+        Output directory including its trailing path separator.
     n_pixels : int
         Number of wavelength pixels per order.
     night1, night2 : int
@@ -1438,9 +724,11 @@ def compare_empirical_SN(matrix, inp_dat, n_pixels, night1, night2,
     save_plot : bool
         If True, save the figure to the simulation output directory.
     """
-    sn_night1 = np.zeros((inp_dat['n_orders'], n_pixels))
-    sn_night2 = np.zeros((inp_dat['n_orders'], n_pixels))
-    for h in range(inp_dat['n_orders']):
+    import seaborn as sns
+
+    sn_night1 = np.zeros((n_orders, n_pixels))
+    sn_night2 = np.zeros((n_orders, n_pixels))
+    for h in range(n_orders):
         master_spectrum1 = np.mean(matrix[night1, h, :, :], axis = 0)
         master_spectrum2 = np.mean(matrix[night2, h, :, :], axis = 0)
         std_noise1 = np.std(matrix[night1, h, :, :], axis = 0)
@@ -1453,20 +741,19 @@ def compare_empirical_SN(matrix, inp_dat, n_pixels, night1, night2,
     sn_night2_mean = np.mean(sn_night2, axis = 1)
     
     if save_plot:
-        os.makedirs(f"{inp_dat['plots_dir']}statistical", exist_ok=True)
+        os.makedirs(f"{plots_dir}statistical", exist_ok=True)
     # Plot
-    plt.plot(inp_dat['order_selection'], sn_night1_mean, 'ko-', label = f"Night {night1}")
-    plt.plot(inp_dat['order_selection'], sn_night2_mean, 'ro-', label = f"Night {night2}")
+    plt.plot(order_indices, sn_night1_mean, 'ko-', label = f"Night {night1}")
+    plt.plot(order_indices, sn_night2_mean, 'ro-', label = f"Night {night2}")
     plt.xlabel("Empirical S/N", fontsize = 17)
     plt.ylabel("Spectral order", fontsize = 17)
-    #plt.xticks(np.arange(0, inp_dat['n_orders'], 1))
     plt.tick_params(axis = 'both', width = 1.8, direction = 'in', 
             labelsize=15)
     plt.legend(loc='best', prop={'size': 12})
     
     if save_plot:
         plt.savefig(
-            f"{inp_dat['plots_dir']}statistical/"
+            f"{plots_dir}statistical/"
             f"{name}_empirical_SN.png",
             bbox_inches='tight')
 
@@ -1476,8 +763,7 @@ def compare_empirical_SN(matrix, inp_dat, n_pixels, night1, night2,
     return 
 
 
-def plot_std_errors(inp_dat, save_plot, error, prop_error, stats
-        ):
+def plot_std_errors(save_plot, error, prop_error, stats, *, n_nights, plots_dir):
     """Plot the per-night standard deviations of pipeline noise residuals.
 
     Computes the standard deviation of the residual error and propagated
@@ -1488,9 +774,10 @@ def plot_std_errors(inp_dat, save_plot, error, prop_error, stats
 
     Parameters
     ----------
-    inp_dat : dict
-        Simulation input dictionary. uses ``'n_nights'``, ``'plots_dir'``,
-        ``'Simulation_name'``.
+    n_nights
+        Number of observing nights.
+    plots_dir
+        Output directory including its trailing path separator.
     save_plot : bool
         If True, save the figure as a PDF.
     error : ndarray, shape (n_nights, n_orders, n_spectra, n_pixels)
@@ -1500,15 +787,14 @@ def plot_std_errors(inp_dat, save_plot, error, prop_error, stats
     stats : ndarray, shape (n_nights, 3)
         Per-night detection statistics. column 0 is the peak CCF S/N.
     """
-    std_error = np.zeros((inp_dat['n_nights']))
-    std_prop_error = np.zeros((inp_dat['n_nights']))
-    #axs[0, 0].set_title(f"Order {inp_dat['order_selection
-    for n in range(inp_dat['n_nights']): 
+    std_error = np.zeros((n_nights))
+    std_prop_error = np.zeros((n_nights))
+    for n in range(n_nights):
         std_prop_error[n] = np.std(prop_error[n,:,:,:])
         std_error[n] = np.std(error[n,:,:,:])
         
     if save_plot:
-        os.makedirs(f"{inp_dat['plots_dir']}statistical", exist_ok=True)
+        os.makedirs(f"{plots_dir}statistical", exist_ok=True)
     # Original uncertainties
     plt.close()
     plt.plot(std_error[1:],stats[1:,0], marker = 'o', color = 'k',linewidth = 0)
@@ -1520,7 +806,7 @@ def plot_std_errors(inp_dat, save_plot, error, prop_error, stats
     plt.gca().set_axisbelow(True)  # Ensure grid is behind the data
     if save_plot:
         plt.savefig(
-            f"{inp_dat['plots_dir']}statistical/"
+            f"{plots_dir}statistical/"
             f"std_original_additive_error.png",
             bbox_inches='tight')
     
@@ -1538,7 +824,7 @@ def plot_std_errors(inp_dat, save_plot, error, prop_error, stats
 
     if save_plot:
         plt.savefig(
-            f"{inp_dat['plots_dir']}statistical/"
+            f"{plots_dir}statistical/"
             f"std_propagated_error.png",
             bbox_inches='tight')
     
@@ -1549,8 +835,20 @@ def plot_std_errors(inp_dat, save_plot, error, prop_error, stats
     return 
 
 
-def compare_KpVr_dist(inp_dat, v_rest, ccf_matrix, night1,
-                      night2, saveplot, SNR = True):
+def compare_KpVr_dist(
+    v_rest,
+    ccf_matrix,
+    night1,
+    night2,
+    saveplot,
+    SNR=True,
+    *,
+    reference_kp_kms,
+    kp_max_kms,
+    reference_vrest_kms,
+    velocity_step_kms,
+    systemic_velocity_kms
+):
     """Compare the Kp-Vsys signal distributions between two nights.
 
     Produces a four-panel diagnostic figure showing: the Kp-Vsys maps for
@@ -1562,9 +860,16 @@ def compare_KpVr_dist(inp_dat, v_rest, ccf_matrix, night1,
 
     Parameters
     ----------
-    inp_dat : dict
-        Simulation input dictionary. uses ``'V_wind'``, ``'K_p'``,
-        ``'kp_max'``, ``'plots_dir'``, ``'Simulation_name'``.
+    reference_kp_kms
+        Configured orbital velocity amplitude in km/s.
+    kp_max_kms
+        Maximum trial Kp in km/s.
+    reference_vrest_kms
+        Configured reference velocity offset in km/s.
+    velocity_step_kms
+        Velocity grid spacing in km/s.
+    systemic_velocity_kms
+        Systemic velocity in km/s.
     v_rest : ndarray, shape (n_v_rest,)
         Planet rest-frame velocity axis in km/s.
     ccf_matrix : ndarray, shape (n_v_rest, n_kp_steps, n_nights)
@@ -1576,16 +881,19 @@ def compare_KpVr_dist(inp_dat, v_rest, ccf_matrix, night1,
     SNR : bool
         If True, treat ``ccf_matrix`` values as S/N. If False, as raw CCF.
     """
+    from matplotlib import gridspec
+    import seaborn as sns
+
     plt.close()
     gs = gridspec.GridSpec(1, 4)
     fig = plt.figure(figsize=(16,4))
     
 
     ax = plt.subplot(gs[0, 0]) # row 0, col 0
-    signal_area1 = ccf_matrix[np.argwhere(v_rest == inp_dat['V_wind'])[0][0] - 5 : np.argwhere(v_rest == inp_dat['V_wind'])[0][0] + 5,
-                                  int(inp_dat['K_p']+inp_dat['kp_max']+1) - 40 : int(inp_dat['K_p']+inp_dat['kp_max']+1) + 60, night1]
-    signal_area2 = ccf_matrix[np.argwhere(v_rest == inp_dat['V_wind'])[0][0] - 5 : np.argwhere(v_rest == inp_dat['V_wind'])[0][0] + 5,
-                                  int(inp_dat['K_p']+inp_dat['kp_max']+1) - 40 : int(inp_dat['K_p']+inp_dat['kp_max']+1) + 60, night2]
+    signal_area1 = ccf_matrix[np.argwhere(v_rest == reference_vrest_kms)[0][0] - 5 : np.argwhere(v_rest == reference_vrest_kms)[0][0] + 5,
+                                  int(reference_kp_kms+kp_max_kms+1) - 40 : int(reference_kp_kms+kp_max_kms+1) + 60, night1]
+    signal_area2 = ccf_matrix[np.argwhere(v_rest == reference_vrest_kms)[0][0] - 5 : np.argwhere(v_rest == reference_vrest_kms)[0][0] + 5,
+                                  int(reference_kp_kms+kp_max_kms+1) - 40 : int(reference_kp_kms+kp_max_kms+1) + 60, night2]
 
     
     sns.histplot(np.ndarray.flatten(signal_area1), 
@@ -1610,11 +918,11 @@ def compare_KpVr_dist(inp_dat, v_rest, ccf_matrix, night1,
     
     ax = plt.subplot(gs[0, 1]) # row 0, col 1
     telluric_area1 = np.ndarray.flatten(
-        ccf_matrix[int(np.argwhere(v_rest == 0)[0][0] + np.ceil(int(inp_dat['V_sys']) / inp_dat['CCF_V_STEP']) - 15) : int(np.argwhere(v_rest == 0)[0][0] + np.ceil(int(inp_dat['V_sys']) / inp_dat['CCF_V_STEP']) + 15), 
+        ccf_matrix[int(np.argwhere(v_rest == 0)[0][0] + np.ceil(int(systemic_velocity_kms) / velocity_step_kms) - 15) : int(np.argwhere(v_rest == 0)[0][0] + np.ceil(int(systemic_velocity_kms) / velocity_step_kms) + 15),
                    320 - 30 : 320 + 30, night1]
         )
     telluric_area2 = np.ndarray.flatten(
-        ccf_matrix[int(np.argwhere(v_rest == 0)[0][0] + np.ceil(int(inp_dat['V_sys']) / inp_dat['CCF_V_STEP']) - 15) : int(np.argwhere(v_rest == 0)[0][0] + np.ceil(int(inp_dat['V_sys']) / inp_dat['CCF_V_STEP']) + 15), 
+        ccf_matrix[int(np.argwhere(v_rest == 0)[0][0] + np.ceil(int(systemic_velocity_kms) / velocity_step_kms) - 15) : int(np.argwhere(v_rest == 0)[0][0] + np.ceil(int(systemic_velocity_kms) / velocity_step_kms) + 15),
                    320 - 40 : 320 + 40, night2]
         )
     sns.histplot(telluric_area1, 
@@ -1643,7 +951,7 @@ def compare_KpVr_dist(inp_dat, v_rest, ccf_matrix, night1,
     
     # Removing tellurics
     away_from_signal_and_tellurics = np.delete(
-        ccf_matrix, np.s_[int(np.argwhere(v_rest == 0)[0][0] + np.ceil(int(inp_dat['V_sys']) / inp_dat['CCF_V_STEP']) - 15) : int(np.argwhere(v_rest == 0)[0][0] + np.ceil(int(inp_dat['V_sys']) / inp_dat['CCF_V_STEP']) + 15)], 
+        ccf_matrix, np.s_[int(np.argwhere(v_rest == 0)[0][0] + np.ceil(int(systemic_velocity_kms) / velocity_step_kms) - 15) : int(np.argwhere(v_rest == 0)[0][0] + np.ceil(int(systemic_velocity_kms) / velocity_step_kms) + 15)],
         axis=0
         )
     
@@ -1654,12 +962,12 @@ def compare_KpVr_dist(inp_dat, v_rest, ccf_matrix, night1,
     # Removing planet signal
     away_from_signal_and_tellurics = np.delete(
         ccf_matrix, 
-        np.s_[np.argwhere(v_rest == inp_dat['V_wind'])[0][0]-5:np.argwhere(v_rest == inp_dat['V_wind'])[0][0]+5], 
+        np.s_[np.argwhere(v_rest == reference_vrest_kms)[0][0]-5:np.argwhere(v_rest == reference_vrest_kms)[0][0]+5],
         axis=0
         )
     
     away_from_signal_and_tellurics = np.delete(
-        ccf_matrix, np.s_[int(inp_dat['K_p']+inp_dat['kp_max']+1) - 40:int(inp_dat['K_p']+inp_dat['kp_max']+1) + 40],
+        ccf_matrix, np.s_[int(reference_kp_kms+kp_max_kms+1) - 40:int(reference_kp_kms+kp_max_kms+1) + 40],
         axis=1
         )
     
@@ -1703,184 +1011,25 @@ def compare_KpVr_dist(inp_dat, v_rest, ccf_matrix, night1,
     return
 
 
-def get_corr_coeff(inp_dat, with_signal, data, model, color_variable,
-        h, stats, title, night_max, night_min, phase, plotname,
-        CC_2D = True, show_plot = False, save_plot = True
-        ):
-    """Compute and plot the correlation between spectral residuals and a model.
-
-    For each night, computes the Pearson correlation coefficient between the
-    pipeline residual data and the injected atmospheric model spectrum in the
-    in-transit frames.  The per-night correlation is plotted against
-    ``color_variable`` (typically orbital phase, airmass, or S/N) to look for
-    trends that would indicate systematic effects or signal leakage.
-
-    In 2D mode (``CC_2D=True``) the correlation is computed as a function of
-    both order and night, producing a 2D diagnostic.  In 1D mode a single
-    correlation coefficient per night is returned.
-
-    Parameters
-    ----------
-    inp_dat : dict
-        Simulation input dictionary.
-    with_signal : ndarray or list
-        In-transit exposure indices per night.
-    Data : ndarray, shape (n_orders, n_nights, n_spectra, n_pixels)
-        Pipeline residual data.
-    Model : ndarray, shape (n_orders, n_nights, n_spectra, n_pixels)
-        Injected atmospheric model spectra.
-    color_variable : ndarray, shape (n_nights,)
-        Per-night scalar variable used to colour the scatter plot
-        (e.g., mean airmass, BERV, or peak S/N).
-    h : int
-        Spectral order index to use for the 1D correlation.
-    stats : ndarray, shape (n_nights, 3)
-        Per-night detection statistics. column 0 is peak S/N.
-    title : str
-        Figure title string.
-    night_max, night_min : int
-        Indices of the best and worst nights (from
-        :func:`exoplore.observation.timing.find_nights_with_extrema`), highlighted in the plot.
-    Phase : ndarray or list
-        Orbital phase arrays.
-    plotname : str
-        Output filename suffix for the saved PDF.
-    CC_2D : bool
-        If True, compute the 2D (order × night) correlation matrix.
-    show_plot, save_plot : bool
-        Display and/or save the figure.
-    """
-    
-    if inp_dat['first_night_noiseless']: 
-        stats_0 = stats[1:, 0]
-    else: stats_0 = stats[:, 0]
-
-    if CC_2D:
-        corr_coeff=np.zeros(
-            (inp_dat['n_nights']-1), float
-            )
-        #standard_error=np.zeros(
-        #    (inp_dat['n_nights']-1), float
-        #    )
-        for n in range(1,inp_dat['n_nights']):
-            X = data[h, n, with_signal, :].flatten()
-            Y = model[h, with_signal,:].flatten()
-            corr_coeff[n-1] = np.corrcoef(
-                X, 
-                Y
-                )[0,1]
-            #standard_error[n-1] = bootstrap_corrcoeffs(X, Y)
-    else:
-        corr_coeff=np.zeros(
-            (inp_dat['n_nights']-1, len(with_signal)), float
-            )
-        for n in range(1,inp_dat['n_nights']):
-            for idx, i in enumerate(with_signal):
-                corr_coeff[n-1, idx] = np.corrcoef(
-                    data[h, n, i, :], model[h, i, :]
-                    )[0,1]
-    
-    # Now look for a correlation between higher correlations
-    # and higher S/N of the MSS in the reference analysis
-
-    # Calculate Pearson correlation coefficient and p-value
-    if CC_2D:
-        X = stats_0
-        Y = corr_coeff
-        pearson_coeff = sc.pearsonr(X, Y)[0]
-        standard_error = bootstrap_corrcoeffs(X, Y)
-        
-    else:
-        pearson_coeff = sc.pearsonr(stats_0, 
-                                    np.sum(corr_coeff, axis = 1))
-        
-    #print(f"Pearson coeff & p-value = {pearson_coeff}")
-    
-    if show_plot:
-        plt.close()
-        plt.figure(figsize=(8, 6))
-        if CC_2D:
-            plt.scatter(stats_0, corr_coeff, 
-                        c=color_variable, cmap='viridis', 
-                        marker='o', s = 70, edgecolors='k',
-                        label=f"Pearson coeff & p-value = "
-                        f"{np.round(pearson_coeff, 5)}")
-            colorbar = plt.colorbar()
-
-            # Set the fontsize for the colorbar labels and tick labels
-            colorbar.ax.tick_params(labelsize=14)
-            colorbar.set_label(label = 'Night index', fontsize=17)
-        else:
-            plt.plot(stats_0, np.sum(corr_coeff, axis = 1), 
-                     'k', marker = 'o', linewidth = 0,
-                     label=f"Pearson coeff & p-value = "
-                     f"{np.round(pearson_coeff, 5)}")
-            
-        plt.tick_params(axis='both', width=1.5, direction='in',
-                        labelsize=16)
-        plt.xlabel('S/N', fontsize=17)
-        plt.ylabel('Corr. Coeff.', fontsize=17)
-        plt.title(title, fontsize=17)
-        plt.legend()
-        plt.grid()
-        plt.ticklabel_format(useOffset=False)
-        plt.gca().set_axisbelow(True)  # Ensure grid is behind the data
-        if save_plot:
-            plt.savefig(f"{inp_dat['plots_dir']}{plotname}.pdf")
-        plt.show()
-        plt.close()
-    
-    if CC_2D:
-        return pearson_coeff, standard_error
-    else: return np.sum(corr_coeff, axis = 1)
 
 
-def bootstrap_corrcoeffs(X, Y, samples = 1000):
-    """Estimate the standard error of the Pearson correlation coefficient by bootstrapping.
-
-    Resamples (X, Y) with replacement ``samples`` times and computes the
-    Pearson correlation coefficient for each resample.  The standard deviation
-    of the resulting distribution is returned as the standard error of the
-    original correlation.
-
-    Parameters
-    ----------
-    X, Y : array-like, shape (n,)
-        Two arrays of equal length to correlate (e.g., per-night S/N values
-        and per-night model-data correlation coefficients).
-    samples : int
-        Number of bootstrap resamples (default 1000).
-
-    Returns
-    -------
-    float
-        Bootstrap standard error of the Pearson correlation coefficient.
-    """
-    # Number of bootstrap samples
-    num_samples = samples
-
-    # Store the calculated correlation coefficients
-    bootstrap_corrcoeffs = []
-
-    # Perform bootstrapping
-    for _ in range(num_samples):
-        # Resample with replacement
-        resampled_x = np.random.choice(X, size=len(X), replace=True)
-        resampled_y = np.random.choice(Y, size=len(Y), replace=True)
-
-        # Calculate Pearson correlation coefficient for the resampled data
-        correlation = np.corrcoef(resampled_x, resampled_y)[0, 1]
-
-        bootstrap_corrcoeffs.append(correlation)
-
-    # Calculate the standard error of the correlation coefficients
-    return np.std(bootstrap_corrcoeffs)
 
 
-def compare_correlations(inp_dat, corr_x, corr_y, filename_flag, plotname,
-        xlabel, ylabel, title="", plot_lims = None,
-        show_plot = True, save_plot = True
-        ):
+def compare_correlations(
+    corr_x,
+    corr_y,
+    filename_flag,
+    plotname,
+    xlabel,
+    ylabel,
+    title="",
+    plot_lims=None,
+    show_plot=True,
+    save_plot=True,
+    *,
+    correlations_dir,
+    simulation_name
+):
     """Scatter-plot two per-night arrays and compute their Pearson correlation.
 
     Plots ``corr_y`` vs ``corr_x`` with a linear best-fit line and annotates
@@ -1891,9 +1040,10 @@ def compare_correlations(inp_dat, corr_x, corr_y, filename_flag, plotname,
 
     Parameters
     ----------
-    inp_dat : dict
-        Simulation input dictionary (``"correlations_dir"``,
-        ``"Simulation_name"``).
+    correlations_dir
+        Directory for correlation diagnostics.
+    simulation_name
+        Name used in output filenames.
     corr_x, corr_y : ndarray, shape (n_nights,)
         The two arrays to correlate and plot.
     filename_flag : str
@@ -1951,7 +1101,7 @@ def compare_correlations(inp_dat, corr_x, corr_y, filename_flag, plotname,
     plt.title(title)
     plt.legend()
     if save_plot:
-        plt.savefig(f"{inp_dat['correlations_dir']}{inp_dat['Simulation_name']}/{plotname}.pdf")
+        plt.savefig(f"{correlations_dir}{simulation_name}/{plotname}.pdf")
     if show_plot: plt.show()
     plt.close()
     return original_correlation, standard_error
@@ -1959,14 +1109,28 @@ def compare_correlations(inp_dat, corr_x, corr_y, filename_flag, plotname,
 
 
 
-def perform_correlations_with_noise(inp_dat, stats, stats_tvalue, stats_pvalue,
-        stats_planet_pos, #stats_cc_values,
-        #stats_cc_values_planet_pos, stats_cc_values_std,
-        #stats_cc_values_std_planet_pos,
-        stats_noise, stats_tvalue_noise, stats_pvalue_noise,
-        stats_planet_pos_noise,
-        show_plot = False, save_plot = True, etiqueta = "",
-        ):
+def perform_correlations_with_noise(
+    stats,
+    stats_tvalue,
+    stats_pvalue,
+    stats_planet_pos,  # stats_cc_values,
+    # stats_cc_values_planet_pos, stats_cc_values_std,
+    # stats_cc_values_std_planet_pos,
+    stats_noise,
+    stats_tvalue_noise,
+    stats_pvalue_noise,
+    stats_planet_pos_noise,
+    show_plot=False,
+    save_plot=True,
+    etiqueta="",
+    *,
+    welch_ttest,
+    noise_scaling_factor,
+    all_significance_metrics,
+    ccf_snr,
+    correlations_dir,
+    simulation_name
+):
     """Correlate signal-detection statistics with noise-only statistics across nights.
 
     For each significance metric (S/N maximum, Welch t-value, Welch p-value,
@@ -1982,10 +1146,18 @@ def perform_correlations_with_noise(inp_dat, stats, stats_tvalue, stats_pvalue,
 
     Parameters
     ----------
-    inp_dat : dict
-        Simulation input dictionary (``"CCF_SNR"``, ``"Welch_ttest"``,
-        ``"All_significance_metrics"``, ``"Simulation_name"``,
-        ``"Noise_scaling_factor"``, ``"correlations_dir"``).
+    welch_ttest
+        Use the Welch t-test statistic.
+    noise_scaling_factor
+        Configured multiplicative noise scale.
+    all_significance_metrics
+        Save separate products for each significance metric.
+    ccf_snr
+        Use the normalised map S/N statistic.
+    correlations_dir
+        Directory for correlation diagnostics.
+    simulation_name
+        Name used in output filenames.
     stats : ndarray, shape (n_nights, 3)
         Signal+noise detection statistics. column 0 is the S/N maximum.
     stats_tvalue, stats_pvalue : ndarray or None
@@ -2006,14 +1178,14 @@ def perform_correlations_with_noise(inp_dat, stats, stats_tvalue, stats_pvalue,
     """
     from scipy.stats import norm
     mean_SNR, mean_SNR_error = norm.fit(stats[:,0])
-    if not inp_dat["CCF_SNR"] and inp_dat["Welch_ttest"]:
+    if not ccf_snr and welch_ttest:
         mean_SNR_tvalue, mean_SNR_error_tvalue = norm.fit(stats_tvalue[:,0])
         mean_SNR_pvalue, mean_SNR_error_pvalue = norm.fit(stats_pvalue[:,0])
         stats_tvalue = stats_tvalue[:, 0]
         stats_pvalue = stats_pvalue[:, 0]
         stats_tvalue_noise = stats_tvalue_noise[:, 0]
         stats_pvalue_noise = stats_pvalue_noise[:, 0]
-    elif inp_dat["CCF_SNR"] and not inp_dat["Welch_ttest"]: 
+    elif ccf_snr and not welch_ttest:
         mean_SNR_tvalue = None
         mean_SNR_error_tvalue = None
         mean_SNR_pvalue = None
@@ -2030,34 +1202,58 @@ def perform_correlations_with_noise(inp_dat, stats, stats_tvalue, stats_pvalue,
     #mean_cc_std, mean_cc_std_error = norm.fit(stats_cc_values_std[:,0])
     #mean_cc_std_planet_pos, mean_cc_std_planet_pos_error = norm.fit(stats_cc_values_std_planet_pos[:,0])
 
-    filename_flag = format_number(inp_dat["Noise_scaling_factor"])
+    filename_flag = format_number(noise_scaling_factor)
     pearson_coeff_SNR_max, pearson_coeff_SNR_error_max = compare_correlations(
-        inp_dat, stats_noise, stats, filename_flag,
-        plotname = f"scatter_MAX_{filename_flag}",
-        xlabel="", ylabel="", title="MSS",
-        plot_lims=[np.amin([stats_noise,stats])-1,
-                   np.amax([stats_noise,stats])+1], 
-        show_plot = show_plot, save_plot = save_plot
+        stats_noise,
+        stats,
+        filename_flag,
+        plotname=f"scatter_MAX_{filename_flag}",
+        xlabel="",
+        ylabel="",
+        title="MSS",
+        plot_lims=[np.amin([stats_noise, stats]) - 1, np.amax([stats_noise, stats]) + 1],
+        show_plot=show_plot,
+        save_plot=save_plot,
+        correlations_dir=correlations_dir,
+        simulation_name=simulation_name,
+    )
+
+    if welch_ttest:
+        pearson_coeff_SNR_max_tvalue, pearson_coeff_SNR_error_max_tvalue = compare_correlations(
+            stats_tvalue_noise,
+            stats_tvalue,
+            filename_flag,
+            plotname=f"scatter_MAX_tvalue_{filename_flag}",
+            xlabel="",
+            ylabel="",
+            title="MSS",
+            plot_lims=[
+                np.amin([stats_tvalue_noise, stats_tvalue]) - 1,
+                np.amax([stats_tvalue_noise, stats_tvalue]) + 1,
+            ],
+            show_plot=show_plot,
+            save_plot=save_plot,
+            correlations_dir=correlations_dir,
+            simulation_name=simulation_name,
         )
     
-    if inp_dat["Welch_ttest"]:
-        pearson_coeff_SNR_max_tvalue, pearson_coeff_SNR_error_max_tvalue = compare_correlations(
-            inp_dat, stats_tvalue_noise, stats_tvalue, filename_flag,
-            plotname = f"scatter_MAX_tvalue_{filename_flag}",
-            xlabel="", ylabel="", title="MSS",
-            plot_lims=[np.amin([stats_tvalue_noise,stats_tvalue])-1,
-                       np.amax([stats_tvalue_noise,stats_tvalue])+1], 
-            show_plot = show_plot, save_plot = save_plot
-            )
-    
         pearson_coeff_SNR_max_pvalue, pearson_coeff_SNR_error_max_pvalue = compare_correlations(
-            inp_dat, stats_pvalue_noise, stats_pvalue, filename_flag,
-            plotname = f"scatter_MAX_pvalue_{filename_flag}",
-            xlabel="", ylabel="", title="MSS",
-            plot_lims=[np.amin([stats_pvalue_noise,stats_pvalue])-1,
-                       np.amax([stats_pvalue_noise,stats_pvalue])+1], 
-            show_plot = show_plot, save_plot = save_plot
-            )
+            stats_pvalue_noise,
+            stats_pvalue,
+            filename_flag,
+            plotname=f"scatter_MAX_pvalue_{filename_flag}",
+            xlabel="",
+            ylabel="",
+            title="MSS",
+            plot_lims=[
+                np.amin([stats_pvalue_noise, stats_pvalue]) - 1,
+                np.amax([stats_pvalue_noise, stats_pvalue]) + 1,
+            ],
+            show_plot=show_plot,
+            save_plot=save_plot,
+            correlations_dir=correlations_dir,
+            simulation_name=simulation_name,
+        )
     else:
         pearson_coeff_SNR_max_tvalue = None
         pearson_coeff_SNR_error_max_tvalue = None
@@ -2065,18 +1261,27 @@ def perform_correlations_with_noise(inp_dat, stats, stats_tvalue, stats_pvalue,
         pearson_coeff_SNR_error_max_pvalue = None
     
     pearson_coeff_SNR_planet_pos, pearson_coeff_SNR_error_planet_pos = compare_correlations(
-        inp_dat, stats_planet_pos_noise, stats_planet_pos, filename_flag,
-        plotname = f"scatter_PLANETPOS_{filename_flag}",
-        xlabel="", ylabel="", title="planet_pos",
-        plot_lims=[np.amin([stats_planet_pos_noise,stats_planet_pos])-1,
-                   np.amax([stats_planet_pos_noise,stats_planet_pos])+1], 
-        show_plot = show_plot, save_plot = save_plot
-        )
+        stats_planet_pos_noise,
+        stats_planet_pos,
+        filename_flag,
+        plotname=f"scatter_PLANETPOS_{filename_flag}",
+        xlabel="",
+        ylabel="",
+        title="planet_pos",
+        plot_lims=[
+            np.amin([stats_planet_pos_noise, stats_planet_pos]) - 1,
+            np.amax([stats_planet_pos_noise, stats_planet_pos]) + 1,
+        ],
+        show_plot=show_plot,
+        save_plot=save_plot,
+        correlations_dir=correlations_dir,
+        simulation_name=simulation_name,
+    )
     
     # Save the plotting variables in a dictionary
     
     outputs = {}
-    outputs['scaling_factors_noise'] = inp_dat["Noise_scaling_factor"]
+    outputs['scaling_factors_noise'] = noise_scaling_factor
     outputs['pearson_coeff_SNR'] = pearson_coeff_SNR_max
     outputs['pearson_coeff_SNR_tvalue'] = pearson_coeff_SNR_max_tvalue
     outputs['pearson_coeff_SNR_pvalue'] = pearson_coeff_SNR_max_pvalue
@@ -2105,10 +1310,10 @@ def perform_correlations_with_noise(inp_dat, stats, stats_tvalue, stats_pvalue,
     
     
     # Save the data in a file
-    if not inp_dat["All_significance_metrics"]:
-        filename = f"{inp_dat['correlations_dir']}/outputs_{inp_dat['Simulation_name']}" 
+    if not all_significance_metrics:
+        filename = f"{correlations_dir}/outputs_{simulation_name}"
         np.savez_compressed(filename, a = outputs)
     else:
-        filename = f"{inp_dat['correlations_dir']}/outputs_{inp_dat['Simulation_name']}_{etiqueta}" 
+        filename = f"{correlations_dir}/outputs_{simulation_name}_{etiqueta}"
         np.savez_compressed(filename, a = outputs)
     return
