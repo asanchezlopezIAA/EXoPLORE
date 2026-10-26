@@ -11,7 +11,10 @@ from exoplore.config import SimulationConfig
 from exoplore.config.czesla2024 import Czesla2024Config
 from exoplore.core.simulator import ExoploreSimulator
 from exoplore.instruments.crires_czesla2024 import protected_windows
-from exoplore.pipelines.czesla2024 import exposure_indices,fit_helium_multiplet,prepare_transmission
+from exoplore.pipelines.czesla2024 import (
+    exposure_indices, fit_helium_multiplet, prepare_transmission,
+    timed_exposure_selection,
+)
 from exoplore.pipelines.helium_math import C_KMS,air_to_vacuum_nm,multiplet,resample,stellar_wavelength
 from exoplore.pipelines.prepare import preparing_pipeline
 from exoplore.pipelines.models import HeliumObservation,PreparationInputs
@@ -23,7 +26,14 @@ def example() -> SimulationConfig:
 
 
 def small_config() -> Czesla2024Config:
-    return replace(example().pipeline.czesla2024,reference_running_numbers=[1,2,8,9],in_transit_running_numbers=[3,4,5,6,7],monte_carlo_draws=100)
+    config = replace(example().pipeline.czesla2024, monte_carlo_draws=0)
+    t1, t2, t3, t4 = config.optical_contact_phases
+    # Place five exposures inside the full transit and four outside its contacts.
+    phases = np.r_[t1 - .04, t1 - .02,
+                   np.linspace(t2 * .8, t3 * .8, 5), t4 + .02, t4 + .04]
+    times = config.t0_bjd_tdb + phases * config.period_days
+    resolved, _, _, _ = timed_exposure_selection(config, times)
+    return resolved
 
 
 def synthetic(config):
@@ -44,10 +54,16 @@ def test_config_round_trip_and_existing_defaults():
 
 def test_explicit_conventions_and_selections():
     config=small_config()
+    assert config._reference_indices == (0, 1, 7, 8)
+    assert config._full_transit_indices == (2, 3, 4, 5, 6)
     with pytest.raises(ValueError):replace(config,wavelength_frame='air')
     with pytest.raises(ValueError):replace(config,oh_mode='model')
-    with pytest.raises(ValueError):replace(config,reference_running_numbers=[1,1])
-    with pytest.raises(ValueError):replace(config,in_transit_running_numbers=[1,3])
+    with pytest.raises(ValueError):exposure_indices([1,1],9)
+    # A usable night includes both a reference and full-transit observations.
+    with pytest.raises(ValueError):
+        timed_exposure_selection(config, np.array([config.t0_bjd_tdb]))
+    with pytest.raises(ValueError):
+        timed_exposure_selection(config, np.array([config.t0_bjd_tdb + config.period_days * .2]))
     with pytest.raises(ValueError):exposure_indices([10],9)
     assert exposure_indices([1,2,8,9],9).tolist()==[0,1,7,8]
 
@@ -58,7 +74,7 @@ def test_stellar_then_planet_alignment_preserves_moving_line():
     np.testing.assert_array_equal(flux,before)
     center=np.argmin(abs(result['planet_wave_nm']-1083.327))
     assert .977<result['planet_coadd'][center]<.984
-    ref=exposure_indices(config.reference_running_numbers,9)
+    ref=np.asarray(config._reference_indices)
     weights=1/result['normalized_stellar_variance'][ref]
     averaged=np.sum(weights*result['stellar_transmission'][ref],axis=0)/weights.sum(axis=0)
     np.testing.assert_allclose(averaged,1,atol=1e-12)
