@@ -183,7 +183,8 @@ def make_corner(
             if row == n_params - 1:
                 ax.set_xlabel(param_names[col], fontsize=13, labelpad=5)
                 if col == max_npar - 1:
-                    ax.xaxis.set_major_formatter(ticker.FormatStrFormatter('%.3f'))
+                    # Adaptive precision keeps narrow beta-prior ticks distinct.
+                    ax.xaxis.set_major_formatter(ticker.ScalarFormatter(useOffset=False))
                     ax.xaxis.set_major_locator(ticker.MaxNLocator(3))
             else:
                 ax.set_xticklabels([])
@@ -192,7 +193,7 @@ def make_corner(
             if col == 0 and row > 0:
                 ax.set_ylabel(param_names[row], fontsize=13, labelpad=5)
                 if row == max_npar - 1:
-                    ax.yaxis.set_major_formatter(ticker.FormatStrFormatter('%.3f'))
+                    ax.yaxis.set_major_formatter(ticker.ScalarFormatter(useOffset=False))
                     ax.yaxis.set_major_locator(ticker.MaxNLocator(3))
             else:
                 ax.set_yticklabels([])

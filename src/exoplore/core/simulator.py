@@ -183,9 +183,15 @@ def build_simulation_name(cfg: SimulationConfig) -> str:
         kp_flag = opt_flag = ""
 
     sf_str = _format_number(obs.noise_scaling_factor)
+    # Keep the fitted-beta retrieval in its own directory so its posterior
+    # files can be compared with the fixed-beta Blain24 run.
+    pipeline_label = pipe.name
+    if cfg.retrieval.enabled and cfg.retrieval.log_likelihood == "Blain24_beta":
+        pipeline_label = ("Blain24_beta" if pipe.name == "Blain24"
+                          else f"{pipe.name}_Blain24_beta")
 
     return (
-        f"{pipe.name}_{signal_flag}_"
+        f"{pipeline_label}_{signal_flag}_"
         f"{pca_flag}{kp_flag}{opt_flag}"
         f"{obs.n_nights}nights_"
         f"{signif_flag}_{stack_flag}_{real_flag}_"
@@ -4759,13 +4765,13 @@ class ExoploreSimulator:
         # BLOCK 9, RETRIEVAL
         # ======================================================================
 
-        # Coupling validation: logL_choice and Ret_dim must be compatible.
-        # The beta noise-scaling parameter is only part of '1D_Gibson22', using Gibson22
-        # likelihood with any other dimensionality is undefined, and using
-        # Blain24/BL19 with '1D_Gibson22' samples beta but never uses it.
+        # Validate the likelihood against its sampled parameter space.
+        # Each beta-enabled parameter space samples one global uncertainty
+        # scale. Its likelihood must include the beta-dependent normalization.
         _VALID_LL_FOR_DIM = {
             "1D":          ("BL19", "Blain24"),
             "1D_Gibson22":      ("Gibson22",),
+            "1D_Blain24_beta": ("Blain24_beta",),
             "1D_CtoO_met": ("BL19", "Blain24"),
             "2D":          ("BL19", "Blain24"),
             # Amplitude-scaling retrieval: free Kp, V_rest, α on a fixed
@@ -4785,9 +4791,7 @@ class ExoploreSimulator:
                     f"dimensionality='{_ret_dim}' requires "
                     f"log_likelihood in {_VALID_LL_FOR_DIM[_ret_dim]}, "
                     f"got '{_logL}'. "
-                    f"The beta noise-scaling parameter is only sampled in "
-                    f"'1D_Gibson22', combining it with Blain24/BL19 produces "
-                    f"meaningless posteriors. Use '1D_Gibson22' only with Gibson22."
+                    "Choose the parameter space paired with the selected likelihood."
                 )
 
         # -- Parameter labels per Ret_dim --
@@ -4795,6 +4799,8 @@ class ExoploreSimulator:
             "1D":   ["log(X$_{H_2O}$)", "$K_P$", "T$_{equ}$", "V$_{rest}$"],
             "1D_Gibson22": ["log(X$_{H_2O}$)", "$K_P$", "T$_{equ}$", "V$_{rest}$",
                        r"$\beta$"],
+            "1D_Blain24_beta": ["log(X$_{H_2O}$)", "$K_P$", "T$_{equ}$",
+                                "V$_{rest}$", r"$\beta$"],
             "1D_CtoO_met": ["C/O", "[(C+O)/H]"],
             "2D": ["log(X$_{H_2O,\\,LL}$)", "log(X$_{H_2O,\\,TL}$)",
                    "$K_P$", "T$_{equ,\\,LL}$", "T$_{equ,\\,TL}$"],
@@ -4807,6 +4813,8 @@ class ExoploreSimulator:
             "1D":          [(-8., 0.), (85., 200.), (400., 1500.), (-25., 25.)],
             "1D_Gibson22":      [(-8., 0.), (85., 200.), (400., 1500.), (-25., 25.),
                             (0.01, 100.)],
+            "1D_Blain24_beta": [(-8., 0.), (85., 200.), (400., 1500.),
+                                (-25., 25.), (0.01, 100.)],
             "1D_CtoO_met": [(0., 2.), (-2.5, 2.5)],
             "2D":          [(-8., 0.), (-8., 0.), (85., 200.), (400., 1500.),
                             (400., 1500.), (-20., 20.)],
@@ -4845,7 +4853,7 @@ class ExoploreSimulator:
             # Select species in the same order as the abundances constructed by each
             # likelihood. The species list and abundance array must align.
             _ret_dim_b9 = cfg.retrieval.dimensionality
-            if _ret_dim_b9 in ("1D", "1D_Gibson22"):
+            if _ret_dim_b9 in ("1D", "1D_Gibson22", "1D_Blain24_beta"):
                 # Single-species abundance retrieval: honour the species
                 # named in retrieval.atmosphere when provided (H2/He filler
                 # + one line species, matching the abundances array built in
@@ -5174,7 +5182,8 @@ class ExoploreSimulator:
             # 9i, 1D retrieval branch (lines 6091-8453)
             # ------------------------------------------------------------------
             if cfg.retrieval.dimensionality in [
-                "1D", "1D_CtoO_met", "1D_Gibson22", "1D_alpha", "1D_alpha_Gibson22"
+                "1D", "1D_CtoO_met", "1D_Gibson22", "1D_Blain24_beta",
+                "1D_alpha", "1D_alpha_Gibson22"
             ]:
                 retrieval_limb_asymmetries = False
 
@@ -5195,7 +5204,7 @@ class ExoploreSimulator:
                         T_equ = cube[2]; v_wind = cube[3]
                     elif cfg.retrieval.dimensionality == "1D_CtoO_met":
                         c_to_o = cube[0]; met = cube[1]
-                    elif cfg.retrieval.dimensionality == "1D_Gibson22":
+                    elif cfg.retrieval.dimensionality in ("1D_Gibson22", "1D_Blain24_beta"):
                         log10_X1 = cube[0]; K_p = cube[1]
                         T_equ = cube[2]; v_wind = cube[3]; beta = cube[4]
                     elif cfg.retrieval.dimensionality == "1D_alpha":
@@ -5210,7 +5219,7 @@ class ExoploreSimulator:
                     log_likelihood = 0.
 
                     # ---- abundances ----
-                    if cfg.retrieval.dimensionality in ["1D", "1D_Gibson22"]:
+                    if cfg.retrieval.dimensionality in ["1D", "1D_Gibson22", "1D_Blain24_beta"]:
                         abundances = np.asarray(
                             [pm.vmr[0], pm.vmr[1], 10.**log10_X1])
                     else:
@@ -5457,7 +5466,7 @@ class ExoploreSimulator:
                                 -(len(_d) / 2.)
                                 * np.log(sf2 - 2.*R + sg2))
 
-                    elif cfg.retrieval.log_likelihood == "Blain24":
+                    elif cfg.retrieval.log_likelihood in ("Blain24", "Blain24_beta"):
                         _up9 = useful_spectral_points_ret[_night_index, :]
                         # σ error model (Cheverall26 pipeline): MAD-of-residuals
                         # (paper-faithful: σ_j = 1.4826·MAD over in-transit
@@ -5515,6 +5524,17 @@ class ExoploreSimulator:
                                       - model_mat_prepared[n, _up9])
                                      / _propag_ret[_night_index, n, _up9])**2)
 
+                        if cfg.retrieval.log_likelihood == "Blain24_beta":
+                            # P-19 adds one global uncertainty scale to the same
+                            # prepared model, residuals and fixed noise estimates.
+                            beta_low, beta_high = _PRIOR_BOUNDS_B9[
+                                cfg.retrieval.dimensionality][-1]
+                            if not (beta_low <= beta <= beta_high) or beta <= 0:
+                                return -np.inf
+                            n_data = len(with_signal_ret) * np.count_nonzero(_up9)
+                            log_likelihood = (log_likelihood / beta**2
+                                              - n_data * np.log(beta))
+
                     elif cfg.retrieval.log_likelihood == "Gibson22":
                         # Enforce beta prior (reads from prior_bounds config).
                         # beta is the last sampled parameter: index 4 for 1D_Gibson22,
@@ -5563,7 +5583,7 @@ class ExoploreSimulator:
                         T_equ = cube[2]; v_wind = cube[3]
                     elif cfg.retrieval.dimensionality == "1D_CtoO_met":
                         c_to_o = cube[0]; met = cube[1]
-                    elif cfg.retrieval.dimensionality == "1D_Gibson22":
+                    elif cfg.retrieval.dimensionality in ("1D_Gibson22", "1D_Blain24_beta"):
                         log10_X1 = cube[0]; K_p = cube[1]
                         T_equ = cube[2]; v_wind = cube[3]; beta = cube[4]
                     elif cfg.retrieval.dimensionality == "1D_alpha":
@@ -5574,7 +5594,7 @@ class ExoploreSimulator:
 
                     log_likelihood = 0.
 
-                    if cfg.retrieval.dimensionality in ["1D", "1D_Gibson22"]:
+                    if cfg.retrieval.dimensionality in ["1D", "1D_Gibson22", "1D_Blain24_beta"]:
                         abundances = np.asarray(
                             [pm.vmr[0], pm.vmr[1], 10.**log10_X1])
                     else:
@@ -5747,7 +5767,7 @@ class ExoploreSimulator:
                                        useful_spectral_points_ret[_night_index,:]]
                                      )**2)
 
-                        elif cfg.retrieval.log_likelihood == "Gibson22":
+                        elif cfg.retrieval.log_likelihood in ("Gibson22", "Blain24_beta"):
                             _beta_lo2, _beta_hi2 = _PRIOR_BOUNDS_B9[
                                 cfg.retrieval.dimensionality][-1]
                             if not (_beta_lo2 <= beta <= _beta_hi2):
@@ -5953,7 +5973,7 @@ class ExoploreSimulator:
                             _truth_for_range = (
                                 _truths_g229
                                 if cfg.retrieval.dimensionality in (
-                                    "1D_Gibson22", "Blain24_beta")
+                                    "1D_Gibson22", "1D_Blain24_beta")
                                 else _truths_1d9)
 
                             def _wrange9(_col, _tv=None):
@@ -6002,7 +6022,7 @@ class ExoploreSimulator:
                                     label_kwargs={"fontsize": 18},
                                     title_kwargs={"fontsize": 18},
                                     **_cstyle9)
-                            elif cfg.retrieval.dimensionality in ["1D_Gibson22", "Blain24_beta"]:
+                            elif cfg.retrieval.dimensionality in ["1D_Gibson22", "1D_Blain24_beta"]:
                                 _fig9 = _corner.corner(
                                     _dat9[_mask9, :],
                                     weights=_wts9[_mask9],
@@ -6073,6 +6093,7 @@ class ExoploreSimulator:
                                            r"$T_{\rm eq}$", r"$v_{\rm wind}$",
                                            r"$\beta$"],
                             }
+                            _PNAMES9["1D_Blain24_beta"] = _PNAMES9["1D_Gibson22"]
                             _lbls9 = _PNAMES9.get(cfg.retrieval.dimensionality,
                                                    parameters)
                             _no_truths9 = (
@@ -6086,6 +6107,9 @@ class ExoploreSimulator:
                                        planet.kp_kms, pm.equilibrium_temperature_K,
                                        pm.wind_velocity_kms],
                                 "1D_Gibson22": [np.log10(pm.vmr[2]),
+                                           planet.kp_kms, pm.equilibrium_temperature_K,
+                                           pm.wind_velocity_kms, 1.0],
+                                "1D_Blain24_beta": [np.log10(pm.vmr[2]),
                                            planet.kp_kms, pm.equilibrium_temperature_K,
                                            pm.wind_velocity_kms, 1.0],
                             }.get(cfg.retrieval.dimensionality)

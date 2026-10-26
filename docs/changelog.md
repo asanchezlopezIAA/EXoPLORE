@@ -41,8 +41,9 @@ high-resolution transmission and emission spectra of exoplanet atmospheres.
 **Retrieval**
 - Bayesian atmospheric retrieval with nested sampling (PyMultiNest) using the
   log-likelihoods of Brogi & Line (2019), Blain et al. (2024), and
-  Gibson et al. (2022), selected in the config via the `BL19`, `Blain24`, and
-  `Gibson22` tags respectively.
+  Gibson et al. (2022), selected via `BL19`, `Blain24`, `Blain24_beta` and
+  `Gibson22`. `Blain24_beta` adds a fitted uncertainty scale β following
+  Appendix G setup P-19 of Blain et al. (2024).
 - Statistical validation tools: significance studies over many noise
   realisations.
 

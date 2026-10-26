@@ -5,8 +5,7 @@ exoplore.retrieval.likelihood
 Log-likelihood functions for atmospheric retrieval from high-resolution
 spectroscopic time series.
 
-Three log-likelihood formulations are implemented, selected by the
-``logL_choice`` parameter:
+The JSON field ``retrieval.log_likelihood`` selects the formulation:
 
 ``BL19``
     Brogi & Line (2019): scale-invariant log-likelihood based on the
@@ -17,6 +16,10 @@ Three log-likelihood formulations are implemented, selected by the
     Blain, Sánchez-López & Mollière (2024): chi-squared log-likelihood
     using propagated per-pixel uncertainties.
     Requires well-calibrated uncertainties.
+
+``Blain24_beta``
+    Blain et al. (2024), Appendix G P-19: propagated uncertainties scaled
+    by a fitted global β, including the Gaussian normalization ``-N ln β``.
 
 ``Gibson22``
     Gibson et al. (2022)-style: chi-squared with a global noise-scaling
@@ -135,6 +138,28 @@ def log_likelihood_blain24(
     return float(-0.5 * chi2)
 
 
+def log_likelihood_blain24_beta(
+    data_matrix: np.ndarray,
+    model_matrix: np.ndarray,
+    uncertainties: np.ndarray,
+    beta: float,
+) -> float:
+    """Evaluate Blain24 with one fitted uncertainty scale, as in setup P-19.
+
+    The prepared data and model keep the Blain24 convention. Multiplying every
+    uncertainty by beta gives log L = -chi2/(2 beta**2) - N log(beta), up to
+    terms independent of the fitted parameters. The normalization term must
+    remain when beta varies. The sampler applies the configured beta prior.
+    """
+    if not np.isfinite(beta) or beta <= 0:
+        return -np.inf
+    data = np.asarray(data_matrix, dtype=float)
+    model = np.asarray(model_matrix, dtype=float)
+    sigma = np.asarray(uncertainties, dtype=float)
+    chi2 = np.sum(((data - model) / (beta * sigma)) ** 2)
+    return float(-0.5 * chi2 - data.size * np.log(beta))
+
+
 # ---------------------------------------------------------------------------
 # Gibson22 log-likelihood (noise-scaling β)
 # ---------------------------------------------------------------------------
@@ -185,15 +210,10 @@ def log_likelihood_gibson22(
 
     chi2_tot = np.sum(((data - model) / (beta * sigma)) ** 2)
     N = data.size
-    # The extra -N ln β term is a penalty that prevents β from collapsing to
-    # zero.  Physically, β scales the estimated noise: β < 1 means the
-    # pipeline has over-estimated the uncertainties. β > 1 means they were
-    # under-estimated.  Without this penalty, maximising the likelihood would
-    # always drive β → 0 (making σ → ∞ and the χ² trivially small).  The
-    # -N ln β term arises from marginalising the Gaussian normalisation factor
-    # (2π (βσ)²)^{-N/2} over the data, penalising inflation of the noise
-    # envelope.  At the optimum β the two terms balance, yielding the
-    # least-biased noise estimate for the given model.
+    # Scaling sigma by beta changes both the squared residuals and the
+    # Gaussian normalization. -N ln(beta) penalizes inflating the uncertainties.
+    # Without it, increasing beta would keep reducing chi-squared. beta < 1
+    # reduces the supplied uncertainties, while beta > 1 increases them.
     log_L = -0.5 * chi2_tot - N * np.log(beta)
     return float(log_L)
 
@@ -206,6 +226,7 @@ def log_likelihood_gibson22(
 LIKELIHOOD_REGISTRY: dict = {
     "BL19": log_likelihood_bl19,
     "Blain24": log_likelihood_blain24,
+    "Blain24_beta": log_likelihood_blain24_beta,
     "Gibson22": log_likelihood_gibson22,
 }
 
@@ -222,15 +243,15 @@ def compute_log_likelihood(
     Parameters
     ----------
     choice:
-        One of ``"BL19"``, ``"Blain24"``, ``"Gibson22"``.
+        One of ``"BL19"``, ``"Blain24"``, ``"Blain24_beta"``, ``"Gibson22"``.
     data_matrix:
         Residual data, shape ``(n_in_transit, n_good_pixels)``.
     model_matrix:
         Template model, same shape.
     Uncertainties:
-        Per-pixel σ.  Required for ``"Blain24"`` and ``"Gibson22"``. ignored for ``"BL19"``.
+        Per-pixel σ.  Required for ``"Blain24"``, ``"Blain24_beta"`` and ``"Gibson22"``.
     beta:
-        Noise scaling.  Used only for ``"Gibson22"``.
+        Noise scaling.  Used for ``"Blain24_beta"`` and ``"Gibson22"``.
 
     Returns
     -------
@@ -254,7 +275,7 @@ def compute_log_likelihood(
         if uncertainties is None:
             raise ValueError("uncertainties must be provided for Blain24.")
         return log_likelihood_blain24(data_matrix, model_matrix, uncertainties)
-    if choice == "Gibson22":
+    if choice in ("Blain24_beta", "Gibson22"):
         if uncertainties is None:
             raise ValueError(f"uncertainties must be provided for {choice}.")
         fn = LIKELIHOOD_REGISTRY[choice]

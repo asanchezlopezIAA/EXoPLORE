@@ -180,7 +180,7 @@ target. We summarise below what each does and where it was developed, and name
 the EXoPLORE routines that implement it.
 
 This section concerns the **data preparation** only. The log-likelihood
-formulations used in the retrievals (BL19, Blain24, Gibson22) are described
+choices used in the retrievals (BL19, Blain24, Blain24_beta, Gibson22) are described
 separately in [Section 5](#5-from-cross-correlation-to-a-likelihood).
 
 - **BL19** (Brogi & Line [2019](https://doi.org/10.3847/1538-3881/aaffd3), AJ,
@@ -335,12 +335,12 @@ Two features of the map help interpret the signal:
 
 Cross-correlation indicates **whether** a species is present and roughly where
 in velocity space. To measure **how much** of it is present, with formal
-uncertainties, requires a likelihood and a sampler. EXoPLORE offers three
-log-likelihood formulations (`retrieval.log_likelihood`). The choice affects the
+uncertainties, requires a likelihood and a sampler. EXoPLORE offers four
+likelihood choices (`retrieval.log_likelihood`). The choice affects the
 resulting constraints, for reasons that are worth setting out explicitly.
 
-All three assume Gaussian noise and differ in how they treat the **noise
-scale**.
+These choices start from Gaussian noise and specify how the **noise scale**
+is supplied or fitted.
 
 **Brogi & Line (2019, AJ, 157, 114), `BL19`.** Starting from a Gaussian
 likelihood with a single unknown noise level `σ` common to all pixels of a
@@ -376,12 +376,36 @@ framework are also implemented natively in petitRADTRANS, where they are handled
 directly. We encourage readers to consult the [petitRADTRANS retrieval
 documentation](https://petitradtrans.readthedocs.io/en/latest/content/notebooks/retrieval_spectral_model.html).
 
+**Blain24 with fitted β, `Blain24_beta`.** Appendix G of Blain et al.
+(2024) also explores a global uncertainty scale in setup P-19. EXoPLORE exposes
+this variant with the same prepared data and model, multiplying uncertainties
+by β and retaining the Gaussian normalization term `−N ln β`. At β = 1 it
+reduces to the expression above. The comparison in
+[Tutorial 7](tutorial.md#tutorial-7-assessing-retrieval-pipeline-bias) uses the
+same β prior as its corresponding Gibson run.
+
 **Gibson et al. (2022, MNRAS, 512, 4618), `Gibson22`.** The same chi-square with a
 global scale factor `β` multiplying the uncertainties, plus a `-N ln β` penalty.
-`β` absorbs a uniform under- or over-estimate of the noise. It is identifiable
-on noisy data but diverges on noiseless data (the residuals vanish, so the
-likelihood is maximised by `β → 0`). For noiseless bias tests `β` is pinned near
-1 with an informative prior (Tutorial 7).
+`β` scales the supplied uncertainties globally. Values above 1 enlarge them,
+and values below 1 reduce them inside the likelihood. On noiseless data,
+small residuals can drive β towards its lower prior bound. Tutorial 7 uses
+the same narrow β prior for the two beta-enabled noiseless examples.
+
+For identical prepared data, models, uncertainties and β, `Blain24_beta` and
+`Gibson22` share the same Gaussian expression. `pipeline.name` selects the
+preparation and model filtering. `retrieval.log_likelihood` selects the
+statistical comparison. In Tutorial 7, the Blain24 variants use Blain24
+preparation and the Gibson22 case uses its SYSREM preparation.
+
+| Likelihood choice | Noise-scale treatment | Standard 1D parameter space |
+|---|---|---|
+| `BL19` | Estimate a variance per spectrum from the residuals. | `1D` |
+| `Blain24` | Propagated pixel uncertainties, β = 1. | `1D` |
+| `Blain24_beta` | Propagated uncertainties multiplied by a fitted β. | `1D_Blain24_beta` |
+| `Gibson22` | Gaussian likelihood with fitted β. | `1D_Gibson22` |
+
+The [configuration reference](config_reference.md#10-retrieval) lists the
+other supported parameter spaces and their priors.
 
 ---
 

@@ -721,6 +721,8 @@ class RetrievalConfig:
     log_likelihood:
         Log-likelihood formulation: ``"BL19"`` (matched filter, noise-free),
         ``"Blain24"`` (chi-squared with propagated uncertainties),
+        ``"Blain24_beta"`` (Blain24 with fitted noise scale β, requires
+        ``dimensionality="1D_Blain24_beta"``),
         ``"Gibson22"`` (chi-squared with noise hyperparameter β, requires
         ``dimensionality="1D_Gibson22"``).
     dimensionality:
@@ -728,6 +730,7 @@ class RetrievalConfig:
 
         ``"1D"``, log10(X_H2O), Kp, T_eq, v_wind  [use with BL19/Blain24]
         ``"1D_Gibson22"``, same + β noise scaling           [use with Gibson22 only]
+        ``"1D_Blain24_beta"``, same five coordinates       [use with Blain24_beta]
         ``"1D_alpha"``, Kp, V_rest, α on a FIXED nominal model
             (amplitude scaling, no pRT in the sampler)  [use with Blain24/BL19]
         ``"1D_alpha_Gibson22"``, Kp, V_rest, α, β on a FIXED nominal model
@@ -822,6 +825,8 @@ class RetrievalConfig:
         "1D":               [[-8.0, 0.0], [85.0, 200.0],
                              [400.0, 1500.0], [-25.0, 25.0]],
         "1D_Gibson22":           [[-8.0, 0.0], [85.0, 200.0],
+                             [400.0, 1500.0], [-25.0, 25.0], [0.01, 100.0]],
+        "1D_Blain24_beta": [[-8.0, 0.0], [85.0, 200.0],
                              [400.0, 1500.0], [-25.0, 25.0], [0.01, 100.0]],
         "1D_CtoO_met":      [[0.0, 2.0], [-2.5, 2.5]],
         "1D_extended":      [[-8.0, 0.0], [-8.0, 0.0], [-8.0, 0.0],

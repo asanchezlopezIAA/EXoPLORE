@@ -8,7 +8,7 @@ time series.
 Modules
 -------
 likelihood
-    Log-likelihood functions: BL19, Blain24, Gibson22.
+    Log-likelihood functions: BL19, Blain24, Blain24_beta, Gibson22.
 priors
     Prior transform functions and the PriorSet container.
 samplers
@@ -25,6 +25,7 @@ samplers
 from exoplore.retrieval.likelihood import (
     log_likelihood_bl19,
     log_likelihood_blain24,
+    log_likelihood_blain24_beta,
     log_likelihood_gibson22,
     compute_log_likelihood,
     LIKELIHOOD_REGISTRY,
@@ -46,6 +47,7 @@ __all__ = [
     # likelihood
     "log_likelihood_bl19",
     "log_likelihood_blain24",
+    "log_likelihood_blain24_beta",
     "log_likelihood_gibson22",
     "compute_log_likelihood",
     "LIKELIHOOD_REGISTRY",

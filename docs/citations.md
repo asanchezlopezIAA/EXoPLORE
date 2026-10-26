@@ -44,6 +44,11 @@ log-likelihoods. Please cite the ones you use.
 > AJ, 167, 179.
 > [doi:10.3847/1538-3881/ad2c8b](https://doi.org/10.3847/1538-3881/ad2c8b)
 
+`Blain24` and `Blain24_beta` both use the Blain et al. (2024) reference
+above. The fitted-β extension is discussed in Appendix G, setup P-19.
+[Tutorial 7](tutorial.md#tutorial-7-assessing-retrieval-pipeline-bias)
+compares it with the fixed-β variant and Gibson22.
+
 ---
 
 ## WASP-127 b equatorial jet

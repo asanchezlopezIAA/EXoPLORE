@@ -541,8 +541,8 @@ C/O–metallicity route (`retrieval_choice: 4`) is currently incomplete.
 |---|---|---|
 | `enabled` | `true`, `false` | Master switch. Set to `false` to skip retrieval entirely (default for exploration runs). When `true`, the retrieval runs at the **end of the same simulation** using the spectral matrices held in memory. Repeating this retrieval starts with a new simulation run. |
 | `sampler` | `"nested_sampling"`, `"mcmc"` | Bayesian sampler. `"nested_sampling"`: [MultiNest](https://github.com/JohannesBuchner/PyMultiNest) via [PyMultiNest](https://github.com/JohannesBuchner/PyMultiNest) (faster, better for multimodal posteriors). `"mcmc"`: [emcee](https://emcee.readthedocs.io) ensemble sampler. |
-| `log_likelihood` | `"Blain24"`, `"BL19"`, `"Gibson22"` | Log-likelihood function. **Coupled to `dimensionality`, see below.** `"Blain24"`: Blain, Sánchez-López & Mollière (2024, AJ, 167, 179), per-order noise scaling. Use with `"1D"`, `"1D_CtoO_met"`, or `"2D"`. `"BL19"`: Brogi & Line (2019), analytic marginalisation over signal scaling. Use with `"1D"`, `"1D_CtoO_met"`, or `"2D"`. `"Gibson22"`: Gibson et al. (2022), chi-squared with free β noise-scaling. **must be used exclusively with `"1D_Gibson22"`**. Any invalid combination raises a `ValueError` at runtime. |
-| `dimensionality` | `"1D"`, `"1D_Gibson22"`, `"1D_CtoO_met"`, `"2D"`, `"1D_alpha"`, `"1D_alpha_Gibson22"` | Retrieval parameter space. **Coupled to `log_likelihood`, see above.** `"1D"`: single VMR (H₂O), Kp, T_eq, wind velocity (4 params), use with BL19 or Blain24. `"1D_Gibson22"`: same plus β noise-scaling parameter (5 params), **use only with Gibson22 likelihood**. `"1D_CtoO_met"`: C/O ratio and metallicity via EasyChem (2 params, Kp and V_wind fixed to planet values), use with BL19 or Blain24. `"1D_alpha"`: Kp, Vrest and amplitude of a fixed template (3 parameters), with BL19 or Blain24. `"1D_alpha_Gibson22"`: those parameters plus β (4 parameters), with Gibson22. `"2D"`: two limb abundances, Kp and two temperature coordinates (5 parameters), with BL19 or Blain24. The current likelihood retains the configured regional temperature profiles. Its sampled temperature coordinates are not propagated into those profiles. |
+| `log_likelihood` | `"Blain24"`, `"Blain24_beta"`, `"BL19"`, `"Gibson22"` | Log-likelihood function. **Coupled to `dimensionality`, see below.** `"Blain24"`: Blain, Sánchez-López & Mollière (2024, AJ, 167, 179), chi-squared using propagated uncertainties with β fixed to 1. Use with `"1D"`, `"1D_CtoO_met"`, or `"2D"`. `"BL19"`: Brogi & Line (2019), analytic marginalisation over signal scaling. Use with `"1D"`, `"1D_CtoO_met"`, or `"2D"`. `"Blain24_beta"`: Blain24 with one global fitted uncertainty scale, as in Appendix G setup P-19, using `"1D_Blain24_beta"`. `"Gibson22"`: Gibson et al. (2022), chi-squared with free β noise-scaling. Use with `"1D_Gibson22"` or the fixed-template amplitude mode `"1D_alpha_Gibson22"`. Any invalid combination raises a `ValueError` at runtime. |
+| `dimensionality` | `"1D"`, `"1D_Gibson22"`, `"1D_Blain24_beta"`, `"1D_CtoO_met"`, `"2D"`, `"1D_alpha"`, `"1D_alpha_Gibson22"` | Retrieval parameter space. **Coupled to `log_likelihood`, see above.** `"1D"`: single VMR (H₂O), Kp, T_eq, wind velocity (4 params), use with BL19 or Blain24. `"1D_Gibson22"`: same plus β noise-scaling parameter (5 params), **use only with Gibson22 likelihood**. `"1D_Blain24_beta"`: the same five coordinates as `"1D_Gibson22"`, paired with `"Blain24_beta"`. `"1D_CtoO_met"`: C/O ratio and metallicity via EasyChem (2 params, Kp and V_wind fixed to planet values), use with BL19 or Blain24. `"1D_alpha"`: Kp, Vrest and amplitude of a fixed template (3 parameters), with BL19 or Blain24. `"1D_alpha_Gibson22"`: those parameters plus β (4 parameters), with Gibson22. `"2D"`: two limb abundances, Kp and two temperature coordinates (5 parameters), with BL19 or Blain24. The current likelihood retains the configured regional temperature profiles. Its sampled temperature coordinates are not propagated into those profiles. |
 | `retrieval_choice` | int | Selects the specific retrieval configuration within a dimensionality class. See the retrieval module documentation. |
 | `time_resolution` | `true`, `false` | Reserved control for future time-bin selection. The current time-resolved route is selected with `retrieval_choice: 6`. |
 | `time_resolution_step` | int | Reserved control for future per-exposure binning. The current time-resolved route uses four transit intervals. |
@@ -561,6 +561,39 @@ C/O–metallicity route (`retrieval_choice: 4`) is currently incomplete.
 | `likelihood_emulator_n_samples` | int (default 3000) | Number of true pRT loglike evaluations used to train the likelihood surrogate. Only used when `use_likelihood_emulator: true`. |
 
 ---
+
+### Blain24 with a fitted uncertainty scale
+
+Select the likelihood and its five-parameter space together:
+
+```json
+"retrieval": {
+  "enabled": true,
+  "log_likelihood": "Blain24_beta",
+  "dimensionality": "1D_Blain24_beta"
+}
+```
+
+The parameters are log10 abundance, Kp, temperature, Vrest and β. Model
+preparation remains selected by `pipeline.name`. The likelihood is
+
+```{math}
+\ln L=-\frac{1}{2}\sum_i\left(\frac{d_i-m_i}{\beta\sigma_i}\right)^2
+       -N\ln\beta.
+```
+
+up to terms independent of these fitted parameters. The β-dependent Gaussian
+normalization is retained. At β = 1 this gives the fixed-uncertainty Blain24
+likelihood. The scalar β multiplies all selected uncertainties.
+
+Set its prior as the last pair in
+`retrieval.prior_bounds.1D_Blain24_beta`. The default is `[0.01, 100]`, matching
+`1D_Gibson22`. Tutorial 7's noiseless example instead uses `[0.999, 1.001]`,
+matching its restricted Gibson comparison. These are comparison choices. The
+paper's P-19 example used `[0.5, 100]`.
+
+Runs using this likelihood include `Blain24_beta` in their output-directory
+name so their posterior files remain separate from the fixed-β experiment.
 
 Additional retrieval controls:
 

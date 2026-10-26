@@ -181,6 +181,23 @@ The main configuration sections are:
 | `plotting` | Diagnostic figure settings (e.g., wavelength window for the pipeline-steps plot) |
 | `paths` | Output root, planet parameter directory, petitRADTRANS data path |
 
+The retrieval likelihood choices are:
+
+| `retrieval.log_likelihood` | Treatment of uncertainties |
+|---|---|
+| `BL19` | Estimate a noise level per spectrum from its residuals. |
+| `Blain24` | Use the propagated pixel uncertainties, with β fixed to 1. |
+| `Blain24_beta` | Fit one global uncertainty multiplier β, following Blain et al. (2024), Appendix G setup P-19. |
+| `Gibson22` | Fit β in the Gaussian likelihood used by the Gibson comparison. |
+
+For the five-parameter `Blain24_beta` retrieval, set
+`retrieval.dimensionality: "1D_Blain24_beta"`. Its default β prior is
+`[0.01, 100]`, matching `1D_Gibson22`. The
+[configuration reference](docs/config_reference.md#blain24-with-a-fitted-uncertainty-scale)
+explains the parameter pairing and prior override.
+[Tutorial 7](docs/tutorial.md#tutorial-7-assessing-retrieval-pipeline-bias)
+compares Blain24, Blain24_beta and Gibson22 on noiseless and noisy simulations.
+
 Runtime for the reference HD 189733 b ANDES simulation (76 orders, 1 night) is approximately 20 to 60 minutes on a modern desktop, dominated by petitRADTRANS opacity loading and the CCF computation. To test with a small subset of orders first, set `instrument.order_indices: [0, 5, 10]`.
 
 ---

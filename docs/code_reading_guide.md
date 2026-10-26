@@ -240,5 +240,12 @@ selected likelihood determine which operations are applied to each trial.
 Several model and likelihood functions are defined inside `core/simulator.py`,
 where Block 9 also sets up MultiNest or emcee. The functions in
 `retrieval/samplers.py` provide callable interfaces for those samplers.
+`retrieval.log_likelihood` selects `BL19`, `Blain24`, `Blain24_beta` or
+`Gibson22`. Follow `Blain24_beta` in Block 9 to see the fifth sampled
+coordinate β, its configured prior, and the `−N ln β` normalization term.
+The prepared model uses the method selected by `pipeline.name`.
+The [configuration reference](config_reference.md#blain24-with-a-fitted-uncertainty-scale)
+gives the corresponding JSON fields.
+
 MultiNest receives a likelihood and a separate prior transform. Emcee receives
 a log-posterior that includes the prior and likelihood.

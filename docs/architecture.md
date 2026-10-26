@@ -113,6 +113,14 @@ Configuration objects describe the experiment. Arrays carry calculated spectra,
 uncertainties, masks and CCFs. Dictionaries remain useful for species-indexed
 abundances, registries and collections of saved products.
 
+The retrieval likelihood choices are `BL19`, `Blain24`, `Blain24_beta` and
+`Gibson22`. `retrieval/likelihood.py` exposes the array-based functions.
+Block 9 of `core/simulator.py` connects the selected likelihood to atmospheric
+models, prepared observations and sampler coordinates. `Blain24_beta` samples
+one global uncertainty scale alongside the four ordinary 1D parameters.
+Its configuration is described in the
+[retrieval reference](config_reference.md#blain24-with-a-fitted-uncertainty-scale).
+
 ## Read completed results
 
 After a successful molecular run:
