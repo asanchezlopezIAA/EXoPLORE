@@ -8,11 +8,11 @@ Supported instruments
     +----------------+------------------+---------+------+------+
     | Config name    | Coverage (µm)    | Orders  | R    | Mode |
     +================+==================+=========+======+======+
-    | ANDES_YJHK     | 0.4 to 1.8        |  76     | 100k | A    |
-    | ANDES_YJH      | 0.4 to 1.4        |  55     | 100k | A    |
-    | ANDES_K        | 1.4 to 1.8        |  21     | 100k | A    |
-    | ANDES_RIZ      | 0.5 to 0.9        |  34     | 100k | A    |
-    | ANDES_UBV      | 0.3 to 0.5        |  62     | 100k | A    |
+    | ANDES_YJHK     | 0.95 to 2.46        |  76     | 100k | A    |
+    | ANDES_YJH      | 0.95 to 1.80        |  55     | 100k | A    |
+    | ANDES_K        | 1.95 to 2.47        |  21     | 100k | A    |
+    | ANDES_RIZ      | 0.62 to 0.95        |  34     | 100k | A    |
+    | ANDES_UBV      | 0.35 to 0.63        |  62     | 100k | A    |
     | CARMENES_NIR   | 0.96 to 1.71      |  28     |  80k | A/B/C|
     | CARMENES_VIS   | 0.514 to 0.822    |  44     |  95k | A/B/C|
     | IGRINS         | 1.43 to 2.52      |  53     |  45k | B/C  |
@@ -26,7 +26,9 @@ Adding a new instrument
 -----------------------
 1. Create ``src/exoplore/instruments/my_instrument.py`` implementing
    ``get_instrument_info(request) -> InstrumentInfo``.
-2. Add one entry to ``_REGISTRY`` below, that is the only file you touch.
+2. Import the reader and add its entry to ``_REGISTRY`` below.
+   ``wavegrid.py:get_WaveGrid()`` and the runner must also support the input
+   layout. Add the corresponding reader branch when introducing a new format.
 3. Add a test in ``tests/test_instruments.py``.
 4. Document required input files in ``docs/input_files.md``.
 """

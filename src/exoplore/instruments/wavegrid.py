@@ -11,11 +11,11 @@ ANDES covers five photometric bands at R ≈ 100,000:
     +--------------+----------+---------+-------------------------------+
     | Config name  | Coverage | Orders  | ETC file extension            |
     +==============+==========+=========+===============================+
-    | ANDES_YJHK   | 0.4 to 1.8  |  76     | ANDES_ETC_WAVE_SNR_YJHK_*.fits|
-    | ANDES_YJH    | 0.4 to 1.4  |  55     | ANDES_ETC_WAVE_SNR_YJH_*.fits |
-    | ANDES_K      | 1.4 to 1.8  |  21     | ANDES_ETC_WAVE_SNR_K_*.fits   |
-    | ANDES_RIZ    | 0.5 to 0.9  |  34     | ANDES_ETC_WAVE_SNR_RIZ_*.fits |
-    | ANDES_UBV    | 0.3 to 0.5  |  62     | ANDES_ETC_WAVE_SNR_UBV_*.fits |
+    | ANDES_YJHK   | 0.95 to 2.46  |  76     | ANDES_ETC_WAVE_SNR_YJHK_*.fits|
+    | ANDES_YJH    | 0.95 to 1.80  |  55     | ANDES_ETC_WAVE_SNR_YJH_*.fits |
+    | ANDES_K      | 1.95 to 2.47  |  21     | ANDES_ETC_WAVE_SNR_K_*.fits   |
+    | ANDES_RIZ    | 0.62 to 0.95  |  34     | ANDES_ETC_WAVE_SNR_RIZ_*.fits |
+    | ANDES_UBV    | 0.35 to 0.63  |  62     | ANDES_ETC_WAVE_SNR_UBV_*.fits |
     +--------------+----------+---------+-------------------------------+
 
 All ANDES bands use **Mode A (ETC-based)**: the SNR per exposure and
@@ -29,9 +29,10 @@ Mode A (ETC-based, recommended for ANDES):
     Required: ETC FITS matrix in ``inputs_dir``.
 
 Mode A with fixed SNR:
-    ``fixed_snr = <value>``, bypasses the ETC file entirely.
+    ``fixed_snr = <value>``, supplies a constant pixel SNR. The ANDES
+    wavelength reader still needs the ETC order boundaries.
     every pixel in every exposure receives the same constant SNR.
-    Useful for quick sensitivity studies without an ETC file.
+    This selects the noise level independently of the ETC SNR columns.
 
 Mode C (real-data analysis, any ANDES band):
     ``use_real_data = True``, loads real ANDES spectra from disk and
@@ -100,7 +101,7 @@ def _andes_jd_airmass(request: InstrumentInputs):
 # ---------------------------------------------------------------------------
 
 def get_instrument_info_YJHK(request: InstrumentInputs) -> InstrumentInfo:
-    """Return instrument metadata for ANDES YJHK (0.4 to 1.8 µm, 76 orders).
+    """Return instrument metadata for ANDES YJHK (0.95 to 2.46 µm, 76 orders).
 
     This is the full ANDES coverage combining the YJH and K arms.  The ETC
     FITS file must contain extensions ``YJH_WAVE_STARTS``, ``YJH_WAVE_MIDS``,
@@ -122,7 +123,7 @@ def get_instrument_info_YJHK(request: InstrumentInputs) -> InstrumentInfo:
 
 
 def get_instrument_info_YJH(request: InstrumentInputs) -> InstrumentInfo:
-    """Return instrument metadata for ANDES YJH (0.4 to 1.4 µm, 55 orders).
+    """Return instrument metadata for ANDES YJH (0.95 to 1.80 µm, 55 orders).
 
     The ETC FITS file must contain extensions ``WAVE_STARTS``, ``WAVE_MIDS``,
     ``WAVE_ENDS``, ``SNR_MID``.
@@ -142,7 +143,7 @@ def get_instrument_info_YJH(request: InstrumentInputs) -> InstrumentInfo:
 
 
 def get_instrument_info_K(request: InstrumentInputs) -> InstrumentInfo:
-    """Return instrument metadata for ANDES K (1.4 to 1.8 µm, 21 orders).
+    """Return instrument metadata for ANDES K (1.95 to 2.47 µm, 21 orders).
 
     The ETC FITS file must contain extensions ``WAVE_STARTS``, ``WAVE_MIDS``,
     ``WAVE_ENDS``, ``SNR_MID``.
@@ -162,7 +163,7 @@ def get_instrument_info_K(request: InstrumentInputs) -> InstrumentInfo:
 
 
 def get_instrument_info_RIZ(request: InstrumentInputs) -> InstrumentInfo:
-    """Return instrument metadata for ANDES RIZ (0.5 to 0.9 µm, 34 orders).
+    """Return instrument metadata for ANDES RIZ (0.62 to 0.95 µm, 34 orders).
 
     The ETC FITS file must contain extensions ``WAVE_STARTS``, ``WAVE_MIDS``,
     ``WAVE_ENDS``, ``SNR_MID``.
@@ -182,7 +183,7 @@ def get_instrument_info_RIZ(request: InstrumentInputs) -> InstrumentInfo:
 
 
 def get_instrument_info_UBV(request: InstrumentInputs) -> InstrumentInfo:
-    """Return instrument metadata for ANDES UBV (0.3 to 0.5 µm, 62 orders).
+    """Return instrument metadata for ANDES UBV (0.35 to 0.63 µm, 62 orders).
 
     The ETC FITS file must contain extensions ``WAVE_STARTS``, ``WAVE_MIDS``,
     ``WAVE_ENDS``, ``SNR_MID``.

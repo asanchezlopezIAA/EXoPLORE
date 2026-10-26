@@ -54,8 +54,7 @@ engine's standard CCF machinery. The map convention is
   R = 100000 × 3.5 px / FWHM px. When the PSF **overfills** the slit (poor
   seeing) the resolution is slit-limited and clamped to the nominal value, rather
   than extrapolated below it. The measured per-segment R is stored in
-  `resolution_0.fits` and the engine convolves all templates to the measured
-  measured median R.
+  `resolution_0.fits` and the engine convolves all templates to the measured median R.
 - **Telluric alignment check** (Nortmann et al. 2024, App. A.2): every
   exposure is cross-correlated, in continuum-normalised absorption, against a
   reference exposure over the telluric lines. The A/B offset and night drift
@@ -66,12 +65,11 @@ engine's standard CCF machinery. The map convention is
 
 Read before publishing results based on this pipeline:
 
-- The theoretical telluric model is currently used in the preparation stage
-  (masks, wavelength anchoring) but is **not yet forwarded into the engine's
-  normalisation step**, so the 96%-continuum telluric mask of the
-  normalisation fits (Nortmann 2026, Sec. 3.1) is not applied there. The
-  deep (<20% of continuum) mask uses the observed flux, which matches the
-  paper's wording for that mask.
+- The runner passes the selected order's theoretical telluric transmission
+  through `PreparationInputs.telluric_transmission`. `nortmann_normalise()`
+  uses it for continuum-fit masking, and preparation excludes channels below
+  20% transmission. When that array is unavailable, the deep mask is estimated
+  from the out-of-transit master spectrum.
 - Detrending currently runs in the observer frame. The stellar rest frame
   variant preferred by Nortmann 2026 (`nortmann_shift_to_stellar_frame`) is
   available in `exoplore.pipelines.nortmann26` but not yet wired into the

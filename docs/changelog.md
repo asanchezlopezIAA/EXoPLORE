@@ -1,8 +1,8 @@
 # Changelog
 
-## v1.0 - First public release (2026)
+## v0.2.0
 
-First public release of EXoPLORE, a framework for simulating and retrieving
+EXoPLORE is a framework for simulating and retrieving
 high-resolution transmission and emission spectra of exoplanet atmospheres.
 
 **Simulation**
@@ -34,7 +34,7 @@ high-resolution transmission and emission spectra of exoplanet atmospheres.
 - Cross-correlation with Kp-Vsys mapping and three detection metrics
   (S/N, Welch t-test, and the cross-correlation-to-log-likelihood value).
   The S/N noise std can be measured in the peak's own K<sub>P</sub> row
-  (legacy default) or in signal-free rows away from the detected peak
+  (default) or in signal-free rows away from the detected peak
   (``snr_noise_source``), which avoids counting the signal's own
   correlation structure as noise for strong detections.
 
@@ -47,5 +47,5 @@ high-resolution transmission and emission spectra of exoplanet atmospheres.
   realisations.
 
 **Documentation**
-- Installation and quick-start guides, a concepts primer, eight tutorials,
+- Installation and quick-start guides, a concepts primer, the worked tutorials,
   and full configuration and output references.

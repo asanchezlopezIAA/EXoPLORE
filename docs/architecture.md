@@ -195,10 +195,32 @@ initialization. Cheverall26 assigns separate seeded draws. Throughput streams
 use physical order IDs, while Cheverall26 Gaussian streams use positions in
 the selected-order list.
 
-With both the Gaussian-noise and throughput seeds fixed, the stochastic
-realisation is reproducible. End-to-end floating-point results may still differ
-at machine-precision level, so bitwise-identical output is not guaranteed.
+For the single-night Tutorial 1 configuration, fixing both the Gaussian-noise
+and throughput seeds makes the stochastic realisation reproducible. End-to-end
+floating-point results may still differ at machine-precision level, so
+bitwise-identical output is not guaranteed. The multi-night seed policies
+described above determine repeatability for those runs.
 
 Velocity functions document their argument units individually.
 `planet_radial_velocity_eccentric()` takes its periastron argument in radians.
 `get_V_eccentric()` takes degrees and uses its documented phase convention.
+
+
+## Read and build the documentation
+
+`docs/index.rst` defines the RTD navigation. The linked Markdown pages contain
+installation, tutorials and reference material. `docs/conf.py` selects Sphinx,
+MyST and the theme, and reads the package version from `src/exoplore/__init__.py`.
+ReadTheDocs installs its build dependencies from `docs/requirements.txt` using
+`.readthedocs.yaml`.
+
+To inspect a local documentation build with those dependencies installed:
+
+```bash
+python -m sphinx -E -a -b html docs docs/_build/html
+```
+
+Tutorial 1 offers the canonical notebook as a direct download. Sphinx checks
+its saved outputs and copies the file into `_downloads/`. It does not execute
+notebook cells. The notebook runs locally from a source checkout with the
+project environment and `notebooks/_tutorial_support.py` available.

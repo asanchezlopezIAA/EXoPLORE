@@ -1,115 +1,94 @@
 # EXoPLORE Outputs Reference
 
-In the following we describe every file EXoPLORE writes, where to find it, and how to read and interpret it.
-
----
+This page describes the molecular simulation products written by
+`core/simulator.py`. The [CRIRES+](crires_reduction.md),
+[IGRINS](igrins_pipeline.md) and [helium tutorials](tutorial.md#tutorial-12-he-i-transmission-spectroscopy-with-crires-wasp-121-b)
+describe their additional reduction and direct-transmission products.
 
 ## Output directory structure
 
-All outputs are written under `paths.output_root` in the simulation config. Everything for a single simulation run lives inside one folder named after that run:
+`paths.output_root` selects the output location. A molecular run creates:
 
-```
-<output_root>/
-  <PlanetName>/
-    <InstrumentName>/
-      <event_type>/
-        <run_name>/
-          matrices/          ← spectral matrices, masks, CCF grids, detection maps
-          plots/             ← PDF diagnostic figures
-          correlations/      ← CCF combined products, Kp-Vsys maps
-          warnings/          ← masked-order reports and flagged spectra
-          inputs/            ← parameter snapshots for reproducibility
+```text
+<output_root>/<planet>/<instrument>/<event>/<run_name>/
+  matrices/          spectral arrays, masks, velocity grids and detection maps
+  plots/             diagnostic figures and retrieval corner plots
+  correlations/      directory available for correlation products
+  warnings/          fully masked order reports
+  inputs/            directory available for input metadata
 ```
 
-The `run_name` (also called `Simulation_name`) is derived from the simulation settings. For the default HD 189733 b config it is:
+The runner writes its molecular CCF and map archives into `matrices/`.
+The presence of `inputs/` alone does not establish that configuration snapshots
+were saved. Keep the configuration used for your run. The notebook writes its
+own resolved configuration and provenance record.
 
-```
+The run name includes the pipeline, signal and noise choices, number of nights,
+statistic and stacking mode. For example:
+
+```text
 BL19_withsignal_1nights_SNR_comb1_simdata_noisy_stdnoisex1
 ```
 
-The pattern is: `{pipeline}_{signal_flag}_{n_nights}nights_{signif_flag}_{stack_flag}_{real_flag}_{noise_flag}_stdnoisex{noise_scaling}`.
-
-For the full example config the complete path would be:
-
-```
-<output_root>/HD189733b/ANDES_YJHK/transit/BL19_withsignal_1nights_SNR_comb1_simdata_noisy_stdnoisex1/
-```
-
----
+Several products use this name as their suffix. Per-night and combined maps can
+have additional suffixes. Inspect the files in your run directory before
+selecting an archive for comparison. Reusing a run directory can replace
+products, and existing timing files can be retained. Use a fresh output root
+for a changed experiment.
 
 ## Timing arrays
 
-Located in `<run_name>/matrices/`.
+These files are in `matrices/`:
 
-### `syn_jd.fits`
+| File | Contents |
+|---|---|
+| `syn_jd.fits` | Exposure BJD timestamps written for generated observing sequences. |
+| `phase.fits` | Orbital phases for a common observing sequence. |
+| `phase.npz` | Separate arrays named `phase_0`, `phase_1`, etc., for different observing sequences. |
 
-Shape: `(n_spectra,)`, synthetic BJD timestamps for each exposure, computed from the reference T₀ and the observing cadence.
+For the common sequence, phase is `(BJD - T0) / Period`, with zero at
+mid-transit. `with_signal` and `without_signal` are exposure selections used
+by the runner. Their construction depends on the event and observing geometry.
+The public CCF result includes the selected signal exposures.
 
-### `phase.fits` (or `phase.npz`)
-
-Shape: `(n_spectra,)`, orbital phase for each exposure.
-
-Phase = (BJD - T₀) / Period. Values near 0 are at transit centre, with ingress and egress at ±T₁₄ / (2 × Period). The exposures that carry the planet signal are what EXoPLORE calls the `with_signal` set: for a transit these are the in-transit exposures (`|phase| < T₁₄ / (2 × Period)`). For an emission or phase-curve event they are instead the out-of-eclipse exposures. EXoPLORE builds this set from the transit duration and `observation.event_type`, not from a fixed phase cut. The example below reconstructs it for a transit using the same transit duration the simulator computes:
-
-```python
-from astropy.io import fits
-from exoplore.planets import load_planet
-import numpy as np
-
-run    = 'BL19_withsignal_1nights_SNR_comb1_simdata_noisy_stdnoisex1'
-base   = f'/your/output_root/HD189733b/ANDES_YJHK/transit/{run}/matrices/'
-
-phase  = fits.open(base + 'phase.fits')[0].data
-
-# In-transit ("with_signal") exposures: |phase| < T14 / (2 * Period).
-planet      = load_planet('planet_params/HD189733b.json')
-half_window = (planet.transit_duration_hours / 24.0) / planet.orbital_period_days / 2.0
-with_signal = np.where(np.abs(phase) < half_window)[0]
-```
-
-### `airmass.fits`
-
-Shape: `(n_spectra,)`, airmass at each exposure.
-
----
+Airmass is calculated or read during observation setup. Reference-night
+`airmass_0.fits` files and per-night SkyCalc `airmass.fits` files are
+[input products](input_files.md). The molecular output writer does not
+unconditionally save an `airmass.fits` file in each run.
 
 ## Spectral matrix files
 
-Located in `<run_name>/matrices/`. All files are NumPy compressed `.npz` archives. Every file stores its single array under the key `'a'`:
+The per-order files below are compressed NumPy archives in `matrices/`.
+Each stores its array under key `a`:
 
 ```python
 import numpy as np
-data = np.load('path/to/file.npz')['a']
+
+# Replace this path with a per-order file from your completed run.
+with np.load("path/to/mat_res_order_0_RUN_NAME.npz") as archive:
+    residuals = archive["a"].copy()
+print(residuals.shape)
 ```
 
-### Per-order matrices (one file per spectral order)
+`K` in the filenames is the instrument order ID, selected by
+`instrument.order_indices`. Residuals and propagated uncertainties ordinarily have axes
+`(night, exposure, wavelength pixel)`. The shifted `mat_back` template has
+axes `(exposure, wavelength pixel)` for the common observing sequence.
+Extra injection or iteration axes can appear in optimization modes. Different-night runs can include padding for
+unequal exposure counts.
 
-For each order with absolute index `K` (from the instrument's `order_selection` array):
-
-| File | Shape | Description |
+| File | Contents | Save flag |
 |---|---|---|
-| `mat_res_order_{K}_{run_name}.npz` | `(n_spectra, n_pixels)` | Residual spectral matrix after pipeline processing. This is the primary input to the CCF. |
-| `propag_noise_order_{K}_{run_name}.npz` | `(n_spectra, n_pixels)` | Propagated noise (uncertainty) per pixel per exposure. Used as weights in the inverse-variance weighted CCF. |
-| `std_noise_order_{K}_{run_name}.npz` | `(n_spectra, n_pixels)` | Standard noise estimate (σ). |
-| `mat_back_order_{K}_{run_name}.npz` | `(n_spectra, n_pixels)` | Background stellar matrix (the modelled stellar spectrum after pipeline processing, without planet signal). |
-| `mat_noise_order_{K}_{run_name}.npz` | `(n_spectra, n_pixels)` | Noise-only matrix (random noise component). |
-| `mat_cc_order_{K}_{run_name}.npz` | `(n_spectra, n_pixels)` | CCF-ready matrix (BL19/Blain24 pipelines only). The matrix as passed to the CCF kernel. |
-| `ccf_store_order_{K}_{run_name}.npz` | `(n_nights, n_vel, n_spectra)` | Per-order CCF: CCF value at each velocity lag and each exposure, for all nights. |
+| `mat_res_order_{K}_{run}.npz` | Prepared residual spectra. | `save_mat_res` |
+| `propag_noise_order_{K}_{run}.npz` | Propagated uncertainties used by the analysis. | `save_propag_noise` |
+| `mat_back_order_{K}_{run}.npz` | Velocity-shifted CCF template retained for model processing. | `save_mat_back` |
+| `mat_noise_order_{K}_{run}.npz` | Noise-control matrix. | `save_mat_noise` |
+| `std_noise_order_{K}_{run}.npz` | Noise estimates. | `save_std_noise` |
+| `mat_cc_order_{K}_{run}.npz` | Prepared template matrix, when supplied by the method. | `save_mat_cc` |
+| `ccf_store_order_{K}_{run}.npz` | Per-order CCF, ordinarily `(night, velocity, exposure)`. | `save_ccf_store` |
 
-**Controlling which matrices are written.** Almost all of a run's disk footprint is these per-order matrices, so the `output` block in the config selects which ones to write. The global masks, velocity grids, Kp-Vsys map, phase, and Julian dates are always written. The calculation uses the matrices in memory. These flags select the arrays saved for later analysis.
-
-| `output` flag | Default | Needed for | Size (76-order run) |
-|---|---|---|---|
-| `save_mat_res` | `true` | re-running CCFs with other templates, retrievals | ~334 MB |
-| `save_mat_back` | `true` | re-running CCFs, retrievals | ~298 MB |
-| `save_ccf_store` | `true` | rebuilding Kp-Vsys maps without re-running the CCF | ~141 MB |
-| `save_propag_noise` | `true` | inverse-variance CCF weighting, retrieval log-likelihood | ~416 MB |
-| `save_U_sysrem` | `true` | filtering the model for the Gibson22 log-likelihood | ~4 KB |
-| `save_mat_cc` | `false` | diagnostic only | ~181 MB |
-| `save_mat_noise` | `false` | diagnostic only | ~411 MB |
-| `save_std_noise` | `false` | diagnostic only | ~419 MB |
-
-With the defaults a 76-order run writes ~1.2 GB (down from ~2.2 GB with every matrix on) and still supports re-running CCFs, retrievals, and the Gibson22 likelihood. Set every flag to `false` for a minimal result (the Kp-Vsys map plus metadata, a few MB). If the `output` block is omitted, these defaults apply.
+The `output` block controls these optional files. It leaves the in-memory
+calculation and diagnostic plotting active:
 
 ```json
 "output": {
@@ -124,324 +103,239 @@ With the defaults a 76-order run writes ~1.2 GB (down from ~2.2 GB with every ma
 }
 ```
 
+These are the defaults. The previously measured full 76-order example used
+approximately 334 MB for residuals, 298 MB for background spectra, 141 MB for
+per-order CCFs and 416 MB for propagated uncertainties. These are estimates
+for that experiment. Exposure counts, masks and compression change the sizes.
+Enabling every optional matrix used approximately 2.2 GB in that measurement.
+
+Setting all flags to `false` reduces saved products. Timing arrays, masks,
+velocity grids, selected detection products and figures are written separately.
+Retrieval reads saved residuals, background spectra and propagated uncertainties,
+and its model filtering can require SYSREM information. Keep those products
+when enabling retrieval.
+
 ### Global mask arrays
 
-| File | Shape | Description |
-|---|---|---|
-| `mask_{run_name}.npz` | `(n_nights, n_orders, n_pixels)` | Combined telluric + SNR mask. `True` = masked (bad pixel), `False` = good. |
-| `useful_spectral_points_{run_name}.npz` | `(n_nights, n_orders, n_pixels)` | Boolean array of usable pixels after the main mask. Complement of `mask`. |
-| `mask_snr_{run_name}.npz` | `(n_nights, n_orders, n_pixels)` | SNR-only mask (pixels below `pipeline.snr_mask_threshold`). |
-| `useful_spectral_points_snr_{run_name}.npz` | `(n_nights, n_orders, n_pixels)` | Usable pixels after SNR masking only. |
-| `mask_inter_{run_name}.npz` | `(n_nights, n_orders, n_pixels)` | Combined mask used for retrieval. |
-| `useful_spectral_points_inter_{run_name}.npz` | `(n_nights, n_orders, n_pixels)` | Usable pixels for retrieval mask. |
+The following archives use key `a`, ordinarily with shape
+`(night, selected order, wavelength pixel)`:
 
-```python
-run  = 'BL19_withsignal_1nights_SNR_comb1_simdata_noisy_stdnoisex1'
-base = f'/your/output_root/HD189733b/ANDES_YJHK/transit/{run}/matrices/'
+| File | Meaning of `True` |
+|---|---|
+| `mask_{run}.npz` | Excluded channel in the main preparation mask. |
+| `useful_spectral_points_{run}.npz` | Retained channel. |
+| `mask_snr_{run}.npz` | Channel excluded by the S/N selection. |
+| `useful_spectral_points_snr_{run}.npz` | Channel retained by the S/N selection. |
+| `mask_inter_{run}.npz` | Channel excluded by the intersection mask used for model processing. |
+| `useful_spectral_points_inter_{run}.npz` | Channel retained by that intersection mask. |
 
-mask = np.load(base + f'mask_{run}.npz')['a']
-# shape: (n_nights, n_orders, n_pixels)
-# True = masked (bad), False = good
-masked_fraction = mask.mean()
-print(f"Masked fraction: {masked_fraction*100:.1f}%")
-```
+The order axis follows the selected-order list. Use the saved mask to identify
+excluded channels numerically. Display colours depend on the plotting function.
 
-### Supporting matrices
+### Supporting arrays and grids
 
-| File | Shape | Description |
-|---|---|---|
-| `U_sysrem_{run_name}.npz` | `(n_nights, n_spectra, sysrem_its)` | SYSREM basis vectors. Only written when pipeline is `ASL19` or `Gibson22`. |
-
----
-
-## CCF grids
-
-| File | Shape | Description |
-|---|---|---|
-| `v_ccf_{run_name}.npz` | `(n_vel,)` | CCF velocity grid in km/s, from -`velocity_max_kms` to +`velocity_max_kms` in steps of `velocity_step_kms`. |
-| `kp_range_{run_name}.npz` | `(n_kp,)` | Kp grid for the Kp-Vsys map, from 0 to `kp_max_kms` km/s. |
-
-```python
-run  = 'BL19_withsignal_1nights_SNR_comb1_simdata_noisy_stdnoisex1'
-base = f'/your/output_root/HD189733b/ANDES_YJHK/transit/{run}/matrices/'
-
-v_ccf    = np.load(base + f'v_ccf_{run}.npz')['a']
-kp_range = np.load(base + f'kp_range_{run}.npz')['a']
-# e.g. v_ccf shape (651,) for v_max=325 km/s, step=1 km/s
-```
-
----
+| File | Contents |
+|---|---|
+| `U_sysrem_{run}.npz` | Fitted temporal components, saved when allocated and `save_U_sysrem` is enabled. |
+| `mat_star_forfile_{run}.npz` | Stellar matrix retained by the runner, when available. |
+| `v_ccf_{run}.npz` | Earth-frame CCF velocity grid, in km/s. |
+| `kp_range_{run}.npz` | Trial orbital velocity amplitudes, in km/s. Read the array for its bounds and spacing. |
 
 ## Diagnostic plots (`plots/`)
 
-Every run saves PDF figures to `<run_name>/plots/`. The key files are:
-
-| File | Description |
+| File pattern | Contents |
 |---|---|
-| `pipeline_steps_<run_name>.pdf` | **Pipeline-steps figure** (see below, four-panel for BL19/Blain24, a SYSREM iteration waterfall for ASL19/Gibson22). Generated for the first processed order on every run. |
-| `sn_map_<run_name>_SNR.pdf` | Kp-Vsys S/N map in colour with contours. |
-| `1D_CCF_<run_name>.pdf` | 1-D CCF at the best-fit Kp vs rest-frame velocity. |
-| `CC_ERF_<run_name>.pdf` | CCF trail as a function of orbital phase (the "butterfly" plot). |
-| `retrieval_night_0_corner.pdf` | Posterior [corner](https://corner.readthedocs.io) plot from the Bayesian retrieval (if `retrieval.enabled: true`). |
+| `pipeline_steps_{run}.pdf` | Simulation and preparation diagnostic for the selected illustrative order. |
+| `sn_map_*.pdf` | Detection map with the configured reference motion. |
+| `1D_CCF_*.pdf` | Velocity profile through the selected Kp row. |
+| `CC_ERF_*.pdf` | Time–velocity CCF in the Earth rest frame. |
+| `retrieval*_corner.pdf` | Retrieval posterior figure when produced by the selected sampler route. |
 
 ### Pipeline-steps figure
 
-`pipeline_steps_<run_name>.pdf` shows the data-simulation and preparation steps for the displayed order (`plotting.pipeline_steps_order`, default first order), mirroring Fig. 5 of Sánchez-López et al. (2022). It is a stacked grey-scale figure: the top panel is the 1-D in-silico flux at mid-transit, noiseless (black) and noisy (red), in the window `plotting.pipeline_steps_xlim_um` (default ~1.487 µm water band). Below it are time-series matrices (wavelength horizontal, spectrum number vertical), with masked channels as uniform grey and ingress/egress as red dashed lines. The number of matrix panels depends on the pipeline:
+`plotting.pipeline_steps_order` selects the displayed instrument order. An unset
+value selects the first processed order. `plotting.pipeline_steps_xlim_um`
+selects a wavelength window in the top spectrum panel.
 
-- **Polynomial pipelines (BL19, Blain24)**, no iterations, so two matrix panels: the **raw** matrix (throughput + tellurics) and the **corrected (residual)** matrix after `preparing_pipeline`. Raw → corrected.
-- **SYSREM pipelines (ASL19, Gibson22)**, a waterfall: the **raw** matrix, then one panel for each iteration in `plotting.pipeline_steps_sysrem_iterations` (default `[1, 5]`), so the common-mode systematics are seen peeling away from one panel to the next.
+The standard molecular figure has four panels: representative noiseless and
+noisy spectra, a noiseless time series, a noisy time series and prepared
+residuals. SYSREM methods can show a sequence of intermediate iterations,
+selected by `plotting.pipeline_steps_sysrem_iterations`. The notebook's helper
+also provides its own preparation preview.
 
----
+Rows in the image panels are exposures and columns are wavelength channels.
+Excluded channels are displayed as white gaps. Red timing markers identify
+the selected event exposures. Image panels use separate display scales.
+The actual noisy spectrum keeps its simulated amplitude. If
+`plotting.pipeline_steps_noise_illustration_factor` is set, an additional
+labelled curve magnifies the deviation for illustration only.
 
 ## CCF detection products
 
-These are produced by Block 7 (statistical analysis) and saved into `<run_name>/matrices/`.
+For the ordinary two-dimensional S/N analysis, use
+`ccf_tot_sn_map_*.npz`. This archive contains named arrays:
 
-| File | Shape | Description |
-|---|---|---|
-| `stats_{run_name}.npz` | `(n_kp, n_vel)` | The Kp-Vsys cross-correlation map (raw CCF values after co-adding the CCF trail at each Kp). This is the primary detection map. |
-| `ccf_tot_sn_stat_{run_name}.npz` | `(n_kp, n_vel)` | S/N version of the Kp-Vsys map: `stats / out-of-trail RMS`. The peak value is the detection significance. |
-| `v_rest_{run_name}.npz` | `(n_vel,)` | 1D collapsed CCF at the best Kp (CCF_SNR mode). |
-| `stats_planet_pos_{run_name}.npz` | scalar | Planet position statistic (single-number detection metric). |
-| `stats_planet_area_{run_name}.npz` | scalar | Planet area statistic (integral of the CCF peak). |
-| `kp_range_{run_name}.npz` | `(n_kp,)` | Kp grid (also written by Block 8, both copies are identical). |
-
-For the Welch t-test mode (`cross_correlation.welch_ttest: true`):
-
-| File | Description |
+| Key | Shape or meaning |
 |---|---|
-| `v_rest_ttest_{run_name}.npz` | 1D collapsed t-test CCF |
-| `stats_tvalue_{run_name}.npz` | Welch t-values |
-| `stats_pvalue_{run_name}.npz` | Welch p-values |
+| `ccf_tot_sn` | Normalised map, axes `(Vrest, Kp)`. |
+| `v_rest` | Residual velocity offsets in km/s. |
+| `kp_range` | Trial Kp values in km/s. |
+| `order_indices` | Selected instrument order IDs. |
+| `v_rest_convention` | Convention recorded by the writer. |
+| `sysrem_opt` | Whether extra optimization axes are present. |
+| `n_components_per_order` | Detrending component counts when available. |
 
----
+Welch analysis uses `ccf_tot_welch_map_*.npz` with map key
+`ccf_tot_welch`. The reader requires selecting the corresponding metric.
+Map archives for optimization modes can have additional axes.
 
-## How to make a Kp-Vsys plot
+Repeated-night statistical studies also write `stats_*.npz`,
+`stats_planet_pos_*.npz`, `stats_planet_area_*.npz` and
+`ccf_tot_sn_stat_*.npz`. These hold study distributions and per-night statistics.
+Their arrays depend on the study mode. Use the named map archive above for
+plotting an ordinary two-dimensional detection map.
+
+### Read a map and its strongest pixel
 
 ```python
-import numpy as np
+from pathlib import Path
+from exoplore.io.results import load_detection_map
+
+# Point to one specific map from your run's matrices directory.
+map_path = Path("path/to/ccf_tot_sn_map_RUN_NAME.npz")
+detection = load_detection_map(map_path)
+print(f"Peak map S/N = {detection.peak_value:.2f}")
+print(f"Kp = {detection.peak_kp_kms:.1f} km/s")
+print(f"Vrest = {detection.peak_v_rest_kms:.1f} km/s")
+```
+
+The map already contains its axes. Its Vrest grid differs from the Earth-frame
+velocity grid used to calculate exposure CCFs.
+
+### Plot the map and a velocity slice
+
+```python
 import matplotlib.pyplot as plt
 
-# Adjust these to your output_root and run_name
-run  = 'BL19_withsignal_1nights_SNR_comb1_simdata_noisy_stdnoisex1'
-base = f'/your/output_root/HD189733b/ANDES_YJHK/transit/{run}/matrices/'
-
-v_ccf    = np.load(base + f'v_ccf_{run}.npz')['a']
-kp_range = np.load(base + f'kp_range_{run}.npz')['a']
-snr_map  = np.load(base + f'ccf_tot_sn_stat_{run}.npz')['a']
-
-fig, ax = plt.subplots(figsize=(8, 6))
-img = ax.pcolormesh(v_ccf, kp_range, snr_map, cmap='RdBu_r',
-                    vmin=-5, vmax=snr_map.max())
-plt.colorbar(img, ax=ax, label='S/N')
-ax.set_xlabel('$v_{rest}$ (km/s)')
-ax.set_ylabel('$K_p$ (km/s)')
-ax.set_title('HD 189733 b, ANDES 1 transit')
-
-# Mark the expected position (no wind injected → peak at v_rest = 0, literature Kp = 152.5 km/s)
-ax.axvline(0, color='white', ls='--', lw=1, label='Expected $v_{rest}$ (no wind)')
-ax.axhline(152.5, color='white', ls=':',  lw=1, label='Literature $K_p$')
-ax.legend()
-plt.tight_layout()
-plt.savefig('kpvsys.png', dpi=150)
-```
-
----
-
-## How to read the peak S/N
-
-```python
-run  = 'BL19_withsignal_1nights_SNR_comb1_simdata_noisy_stdnoisex1'
-base = f'/your/output_root/HD189733b/ANDES_YJHK/transit/{run}/matrices/'
-
-snr_map  = np.load(base + f'ccf_tot_sn_stat_{run}.npz')['a']
-kp_range = np.load(base + f'kp_range_{run}.npz')['a']
-v_ccf    = np.load(base + f'v_ccf_{run}.npz')['a']
-
-peak_snr = snr_map.max()
-peak_kp_idx, peak_vsys_idx = np.unravel_index(snr_map.argmax(), snr_map.shape)
-peak_kp   = kp_range[peak_kp_idx]
-peak_vsys = v_ccf[peak_vsys_idx]
-print(f"Peak S/N = {peak_snr:.1f} at Kp = {peak_kp:.0f} km/s, Vsys = {peak_vsys:.1f} km/s")
-```
-
----
-
-## How to read a 1D CCF at the best Kp
-
-```python
-kp_best = 152.5   # km/s, Kp for HD 189733 b
-kp_idx  = np.argmin(np.abs(kp_range - kp_best))
-
-ccf_1d = snr_map[kp_idx, :]
-
+# Transpose (Vrest, Kp) to put velocity on the horizontal plot axis.
 fig, ax = plt.subplots()
-ax.plot(v_ccf, ccf_1d)
-ax.axvline(0, color='r', ls='--', label='Expected $v_{rest}$ (no wind)')
-ax.set_xlabel('Velocity (km/s)')
-ax.set_ylabel('S/N')
-ax.set_title(f'1D CCF at Kp = {kp_best:.0f} km/s')
-ax.legend()
-plt.tight_layout()
+image = ax.pcolormesh(detection.v_rest_kms, detection.kp_kms,
+                      detection.values.T, shading="auto", cmap="RdBu_r")
+fig.colorbar(image, ax=ax, label="Map S/N")
+ax.set_xlabel("Vrest (km/s)")
+ax.set_ylabel("Kp (km/s)")
+plt.show()
+
+# Select the Kp column containing the strongest map pixel.
+velocity_index, kp_index = detection.peak_indices
+fig, ax = plt.subplots()
+ax.plot(detection.v_rest_kms, detection.values[:, kp_index])
+ax.set_xlabel("Vrest (km/s)")
+ax.set_ylabel("Map S/N")
+plt.show()
 ```
 
----
+### Read and plot the combined CCF
 
-## How to plot the CCF trail (time-series)
-
-The per-order CCF trail shows the CCF as a function of time (exposure) and velocity. The planet signal appears as a diagonal streak, Doppler-shifted by `Kp × sin(2π × phase)` at each exposure.
+After a successful molecular run, `simulator.get_combined_ccf()` exposes the
+combined CCF and its velocity, phase and event selections. Save it if you want
+to inspect it later:
 
 ```python
-from astropy.io import fits
+from exoplore.io.results import save_ccf_result
 
-run  = 'BL19_withsignal_1nights_SNR_comb1_simdata_noisy_stdnoisex1'
-base = f'/your/output_root/HD189733b/ANDES_YJHK/transit/{run}/matrices/'
-
-# Load per-order CCF for order K
-K         = 10    # absolute order index
-ccf_trail = np.load(base + f'ccf_store_order_{K}_{run}.npz')['a']
-# shape: (n_nights, n_vel, n_spectra)
-# transpose to (n_spectra, n_vel) for a single night:
-trail_2d = ccf_trail[0].T   # shape: (n_spectra, n_vel)
-
-phase = fits.open(base + 'phase.fits')[0].data
-
-fig, ax = plt.subplots(figsize=(8, 5))
-ax.pcolormesh(v_ccf, phase, trail_2d, cmap='RdBu_r')
-ax.set_xlabel('Velocity (km/s)')
-ax.set_ylabel('Orbital phase')
-ax.set_title(f'CCF trail, order {K}')
-plt.tight_layout()
+# Use the simulator that has just completed your experiment.
+ccf = simulator.get_combined_ccf()
+save_ccf_result(ccf, "combined_ccf.npz")
 ```
 
----
+The save function protects an existing file unless `overwrite=True` is passed.
+For different observing sequences, select `night_index` as explained in the
+[architecture guide](architecture.md#read-completed-results).
 
-## Understanding the Kp-Vsys map
+```python
+from exoplore.io.results import load_ccf_result
 
-The Kp-Vsys map is built by shifting the time-series CCF trail at each orbital phase by the expected planet velocity `Kp × sin(2π × phase)`, then co-adding. At the true `(Kp, Vsys)`, the planet signal adds coherently. Everywhere else it averages to zero. This allows us to simultaneously constrain the orbital velocity semi-amplitude and the systemic rest-frame velocity of the planet.
-
-**What to look for:**
-
-- A clear peak at the expected Kp and Vsys, this constitutes a detection.
-- The expected Kp for a circular orbit is `Kp = (2π/P) × a × sin(i)` (listed in the planet parameter file as `kp_kms`).
-- The expected position on the v_rest axis is 0 km/s for a planet with no atmospheric wind. The barycentric and systemic velocity corrections are already removed from the data before the CCF is computed, so v_rest encodes only residual atmospheric motion (winds). Do not confuse this axis with the stellar systemic velocity (`systemic_velocity_kms`), which is a separate parameter already accounted for.
-- If `atmosphere.planet_model.wind_velocity_kms ≠ 0`, the detected peak will be offset from v_rest = 0 by the injected wind velocity.
-
-**S/N definition:**
-
-```
-S/N = CCF_peak / std(CCF_noise_region)
+# Read the compact export, including its velocity conventions.
+ccf = load_ccf_result("combined_ccf.npz")
+fig, ax = plt.subplots()
+ax.pcolormesh(ccf.velocity_kms, ccf.phase, ccf.ccf.T,
+              shading="auto", cmap="RdBu_r")
+ax.set_xlabel("Earth-frame velocity (km/s)")
+ax.set_ylabel("Orbital phase")
+plt.show()
 ```
 
-The noise region is the part of the Kp-Vsys map more than `cross_correlation.noise_velocity_max_kms` km/s from Vsys = 0 and more than `cross_correlation.snr_exclude_kms` km/s from the identified peak.
+## Understanding the Kp–Vrest map
 
-**Interpretation guide:**
+The alignment calculation samples exposure CCFs along each trial orbital track
+and sums the selected exposures. A compatible moving line pattern adds
+coherently near its orbital solution. Noise, other spectral structure and
+processing effects also contribute to the map.
 
-| S/N | Interpretation |
-|---|---|
-| < 3 | No detection |
-| 3 to 5 | Marginal, requires confirmation |
-| 5 to 8 | Tentative detection |
-| > 8 | Firm detection |
-| > 15 | High-confidence detection (typical for ANDES 1-night simulations of bright targets) |
+`Vrest` is an offset relative to the expected planetary track, after accounting
+for the systemic and barycentric velocities with the analysis convention.
+Regional atmospheric velocities and their changing contributions can shift or
+broaden a peak. In observations, model and ephemeris uncertainties also matter.
 
----
+For the default peak-centred S/N normalisation, each Kp column in the stored
+array is centred by subtracting the off-peak mean and divided by the off-peak
+standard deviation. The excluded velocity interval is set by
+`cross_correlation.snr_exclude_kms`. `snr_noise_source` can select signal-free
+Kp rows for the noise estimate. Cheverall26 uses point-centred exclusions.
+See the [configuration reference](config_reference.md#9-cross_correlation)
+for these choices.
+
+Report the maximum as a **peak map S/N under the adopted normalisation**.
+A false-alarm significance requires calibration against a suitable null
+distribution. The [validation tutorial](tutorial.md#tutorial-8-detection-significance-and-statistical-validation)
+explains the significance tests. Atmospheric abundances require inference with
+an atmospheric model and likelihood.
 
 ## Warnings
 
-### `<run_name>/warnings/fully_masked_orders_<run_name>.txt`
-
-Written when one or more spectral orders are entirely masked (all pixels fail SNR + negative-value masking across all nights). This occurs in particular in deep telluric bands (e.g., around 1.4 µm and 1.9 µm for ANDES YJHK). Content:
-
-```
-EXoPLORE, fully masked orders report
-Simulation: BL19_withsignal_1nights_SNR_comb1_simdata_noisy_stdnoisex1
-N_fully_masked: 3
-order_h   order_K   night_b   wave_centre_um
-   5       7         0          1.3943
-  ...
-```
-
-These orders are automatically excluded from CCF co-adding and retrieval. Their NaN-filled rows in `mat_res_order_{K}` confirm they were skipped.
-
----
+`warnings/fully_masked_orders_{run}.txt` lists fully excluded orders when found.
+Read the order ID, night and wavelength information alongside the saved masks
+and run log. Entirely excluded spectra contribute no usable CCF information.
 
 ## Retrieval outputs
 
-When retrieval is enabled, posterior files are written into `<run_name>/matrices/matrices_<run_name>/` (a sub-directory created by the retrieval block at runtime, named after the simulation to avoid overwriting forward-model matrices).
-
-The file naming follows: `<retrieval_name>_night_<N>_<suffix>`, where `retrieval_name` defaults to `"retrieval"`.
-
-**[MultiNest](https://github.com/JohannesBuchner/PyMultiNest) raw files** are written to the same directory with the prefix `<retrieval_name>_night_<N>_`:
+Molecular retrieval products are written directly in the run's `matrices/`
+directory. A single-night MultiNest run normally uses the prefix
+`{retrieval_name}_night_0_`, where `retrieval_name` defaults to `retrieval`.
+Other dimensions and time intervals can add suffixes.
 
 | File pattern | Contents |
 |---|---|
-| `*_.txt` | Full posterior chain (MultiNest format: log-evidence, parameters, weights) |
-| `*_summary.txt` | Log-evidence Z, parameter means and standard deviations |
-| `*_stats.dat` | Nested sampling statistics |
+| `*_post_equal_weights.dat` | Equal-weight parameter samples followed by log-likelihood. |
+| `*_.txt` | Weighted posterior, with sample weight, minus twice the log-likelihood, then parameter columns. |
+| `*_stats.dat` / `*_stats.json` | Sampler summaries when written by that route. |
+| `*_summary.txt` | MultiNest summary. |
 
-**Reading posteriors:**
+Parameter columns follow the selected retrieval dimensionality. Read their
+order in the [retrieval configuration reference](config_reference.md#10-retrieval)
+and the chosen run. For example, the first parameter of a standard molecular
+VMR retrieval is log abundance. A C/O retrieval uses different parameters.
 
 ```python
 import numpy as np
 
-run  = 'BL19_withsignal_1nights_SNR_comb1_simdata_noisy_stdnoisex1'
-base = f'/your/output_root/HD189733b/ANDES_YJHK/transit/{run}/matrices/matrices_{run}/'
-
-# Load MultiNest posterior chain (columns: log-evidence, parameters..., weight)
-chain = np.loadtxt(base + 'retrieval_night_0_.txt')
-weights   = chain[:, 0]         # sample weights (from nested sampling)
-co_samples = chain[:, 2]        # C/O posterior (column depends on dimensionality)
-met_samples = chain[:, 3]       # metallicity posterior
-
-# Weighted mean and std
-co_mean  = np.average(co_samples,  weights=weights)
-co_std   = np.sqrt(np.average((co_samples - co_mean)**2, weights=weights))
-print(f"C/O = {co_mean:.2f} ± {co_std:.2f}")
+# Select the equal-weight samples for the retrieval you ran.
+samples = np.loadtxt("path/to/retrieval_night_0_post_equal_weights.dat", ndmin=2)
+parameters = samples[:, :-1]
+log_likelihood = samples[:, -1]
+print(parameters.shape, log_likelihood.shape)
 ```
 
-**Corner plot** (auto-generated when `corner` is installed):
-```
-<run_name>/plots/retrieval_night_0_corner.pdf
-```
-
----
-
-## Quick reference: all output files
-
-All paths below are relative to `<output_root>/<planet>/<instrument>/<event>/`.
-
-| Location | File | Shape | Key | Contents |
-|---|---|---|---|---|
-| `{run}/matrices/` | `syn_jd.fits` | `(n_spec,)` | FITS | BJD timestamps |
-| `{run}/matrices/` | `phase.fits` | `(n_spec,)` | FITS | Orbital phase |
-| `{run}/matrices/` | `airmass.fits` | `(n_spec,)` | FITS | Airmass per exposure |
-| `{run}/matrices/` | `mat_res_order_{K}_{run}.npz` | `(n_spec, n_pix)` | `'a'` | Residual spectrum, order K |
-| `{run}/matrices/` | `propag_noise_order_{K}_{run}.npz` | `(n_spec, n_pix)` | `'a'` | Propagated noise |
-| `{run}/matrices/` | `std_noise_order_{K}_{run}.npz` | `(n_spec, n_pix)` | `'a'` | Standard noise |
-| `{run}/matrices/` | `mat_back_order_{K}_{run}.npz` | `(n_spec, n_pix)` | `'a'` | Background stellar matrix |
-| `{run}/matrices/` | `mat_noise_order_{K}_{run}.npz` | `(n_spec, n_pix)` | `'a'` | Noise matrix |
-| `{run}/matrices/` | `mat_cc_order_{K}_{run}.npz` | `(n_spec, n_pix)` | `'a'` | CCF-ready matrix |
-| `{run}/matrices/` | `ccf_store_order_{K}_{run}.npz` | `(n_nights, n_vel, n_spec)` | `'a'` | Per-order CCF trail |
-| `{run}/matrices/` | `mask_{run}.npz` | `(n_nights, n_orders, n_pix)` | `'a'` | Combined mask |
-| `{run}/matrices/` | `mask_snr_{run}.npz` | `(n_nights, n_orders, n_pix)` | `'a'` | SNR mask |
-| `{run}/matrices/` | `mask_inter_{run}.npz` | `(n_nights, n_orders, n_pix)` | `'a'` | Retrieval mask |
-| `{run}/matrices/` | `v_ccf_{run}.npz` | `(n_vel,)` | `'a'` | CCF velocity axis (km/s) |
-| `{run}/matrices/` | `kp_range_{run}.npz` | `(n_kp,)` | `'a'` | Kp axis (km/s) |
-| `{run}/matrices/` | `stats_{run}.npz` | `(n_kp, n_vel)` | `'a'` | Kp-Vsys CCF map |
-| `{run}/matrices/` | `ccf_tot_sn_stat_{run}.npz` | `(n_kp, n_vel)` | `'a'` | Kp-Vsys S/N map |
-| `{run}/matrices/` | `v_rest_{run}.npz` | `(n_vel,)` | `'a'` | 1D collapsed CCF |
-| `{run}/warnings/` | `fully_masked_orders_{run}.txt` | text |, | Masked-order report |
-| `{run}/plots/` | `*.pdf` | PDF |, | Diagnostic figures |
-
----
+The sampler adapters and the runner's retrieval block determine which files are
+written. Emcee products have their own chains and summary outputs.
 
 ## Log file
 
-The simulator prints progress to stdout. In order to capture a persistent log file without losing real-time terminal output:
+Capture the command-line output while retaining progress in the terminal:
 
 ```bash
-python -u scripts/run_exoplore.py configs/my_sim.json --run 2>&1 | tee run.log
+python -u scripts/run_exoplore.py configs/hd189733b_andes_transit_clean.json --run 2>&1 | tee run.log
 ```
 
-The `-u` flag unbuffers Python's stdout so output appears immediately in the terminal.
+The `-u` option makes progress available without Python's normal stdout buffering.

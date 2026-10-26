@@ -9,37 +9,25 @@ CRIRES+ is a cross-dispersed echelle spectrograph covering the near-infrared
 simulations are set up one wavelength setting at a time. Each setting covers
 a small number of spectral orders (typically 6 to 10).
 
-Observing mode
---------------
-CRIRES+ uses **Mode A (ETC-based)** exclusively in EXoPLORE.  The user must
-provide an ETC FITS file containing the wavelength grid and SNR per order.
+Observing modes
+---------------
+For a reference-night or observed-data run (``specific_event`` or
+``use_real_data``), read the files written by
+``scripts/prepare_crires_night.py`` in ``inputs_dir/reference_night/``:
+``wave.fits``, ``sig_0.fits``, ``snr_0.fits``, ``julian_date_0.fits`` and
+``airmass_0.fits``. ``resolution_0.fits`` supplies a measured resolving power
+when available. Its absence selects the nominal R = 100,000.
 
-To obtain this file:
+The ETC simulation branch reads ``CRIRES_ETC_WAVE_<planet>.fits`` and
+``CRIRES_ETC_SNR_<planet>.fits`` under ``inputs_dir``. These are separate FITS
+arrays with the order/pixel layout used by ``wavegrid.get_WaveGrid()``.
+``InstrumentInputs`` allows direct Python callers to supply the filenames.
+The JSON loader uses the reader's default names.
 
-1. Run the ESO CRIRES+ ETC at https://etc.eso.org/observing/etc/ for your
-   target star, integration time, and wavelength setting.
-2. Export the result as a FITS file with two extensions (or columns):
-       Extension 0 or column "WAVE": wavelength in µm, shape (n_orders, n_pixels)
-       Extension 1 or column "SNR":  SNR per resolution element, shape (n_orders, n_pixels)
-3. Place the file in ``inputs_dir`` and set the path in your config.
-
-**Single-order note:** if your ETC file contains only one spectral order (e.g.
-A single CRIRES+ detector), set ``"order_indices": [0]`` in your config.  The
-wavelength grid will have shape ``(1, n_pixels)`` and the tensor throughout the
-simulator will be ``(n_spectra, 1, n_pixels)``.
-
-The total number of orders is determined automatically from the shape of the
-ETC FITS file and returned as ``n_orders_total``.  An empty
-``order_indices`` list is then expanded to ``np.arange(n_orders_total)``.
-
-Required input files
---------------------
-``inputs_dir/<wave_file>``, ETC wavelength grid FITS, shape (n_orders, n_pixels), µm
-``inputs_dir/<snr_file>``, ETC SNR FITS, shape (n_orders, n_pixels)
-
-Both file paths are set in the config under ``instrument.wave_file`` and
-``instrument.snr_file``.  There is no bundled wavelength file for CRIRES+
-because the order layout depends on the chosen wavelength setting.
+The wavelength file determines ``n_orders_total``. An empty
+``instrument.order_indices`` selects all its orders. Select ``[0]`` for a
+single segment. Observed spectral matrices use exposure and wavelength-pixel
+axes within each order, with nights stored separately by the runner.
 
 References
 ----------
@@ -65,7 +53,7 @@ _OBS = "paranal"   # VLT, Paranal
 def get_instrument_info(request: InstrumentInputs) -> InstrumentInfo:
     """Return instrument metadata for CRIRES+.
 
-    The number of spectral orders is read from the ETC wavelength FITS file
+    The number of spectral orders is read from the selected wavelength FITS file
     at runtime.  If the file is not available at config-load time, a sentinel
     value of -1 is returned for ``n_orders_total``. The simulator will then
     determine the true order count after loading the wavelength grid.

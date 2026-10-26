@@ -183,7 +183,7 @@ Generate the reference with `scripts/generate_skycalc_inputs.py`
 for full script documentation):
 
 ```bash
-pip install skycalc_ipy
+python -m pip install -e ".[skycalc]"
 python scripts/generate_skycalc_inputs.py configs/my_config.json --ref-only --mode synthetic
 ```
 
@@ -198,8 +198,8 @@ For a single reference, point `tellurics.reference_telluric_file` at that file.
 For per-exposure tellurics, use the directory convention below and set
 `use_full_skycalc: true`. EXoPLORE checks coverage of the selected orders and
 raises an error if the file is too narrow. Synthetic observations load these
-transmission files. Observed-data preparation uses the measured spectra.
-a telluric search template explicitly requests a transmission input.
+transmission files. Observed-data preparation uses the measured spectra. A telluric search
+template explicitly requests a transmission input.
 
 Alternatively use the
 [ESO SkyCalc web tool](https://www.eso.org/observing/etc/bin/gen/form?INS.MODE=swspectr+INS.NAME=SKYCALC)
@@ -242,7 +242,7 @@ JSON options. No separate SkyCalc JSON is required.
 
 **Install the dependency once:**
 ```bash
-pip install "exoplore[skycalc]"   # or: pip install skycalc_ipy astroplan
+python -m pip install -e ".[skycalc]"
 ```
 
 **Run the script:**

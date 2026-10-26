@@ -11,18 +11,18 @@ end-to-end example is [Tutorial 10](tutorial.md#tutorial-10-analyse-real-igrins-
 
 Per echelle order, on the real-data time series:
 
-1. **Continuum normalisation.** Each spectrum is divided by its own continuum
-   (a low-order fit / running estimate), bringing the time series to a common
-   blaze so that only the time-varying telluric and stellar structure remains.
+1. **Rescaling and continuum normalisation.** Divide each spectrum by its
+   median, clip outliers over time and divide by the estimated continuum.
+   `pipeline.continuum_method` selects `maxima` (default), `cm2024` or `polyfit`.
 2. **Bad-pixel and low-throughput masking.** Channels flagged as outliers, and
    the deepest telluric regions with insufficient continuum, are masked. Orders
    that are essentially fully masked in deep telluric bands are dropped from the
    co-add.
-3. **Detrending.** The dominant time-correlated systematics (tellurics, airmass,
-   instrument response) are removed with a small number of components. Following
-   Cheverall et al. (2026), the default is a single component
-   (`pipeline.sysrem_iterations: 1`). The erosion of a planetary signal by the
-   detrending is assessed by injection (see below).
+3. **Detrending.** Temporal components suppress correlated structure.
+   `pipeline.detrend_method` selects SYSREM or PCA, and
+   `pipeline.sysrem_iterations` sets the component count. The example JSON
+   records its chosen settings. Order-by-order optimization can select the
+   count using the configured criterion and an injected model.
 4. **Matched-filter cross-correlation.** The detrended residuals are
    cross-correlated with a petitRADTRANS template convolved to the IGRINS
    resolution, over a velocity grid, with a data-driven per-channel weighting.

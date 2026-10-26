@@ -15,8 +15,9 @@ Observing modes
 EXoPLORE supports three observing modes, selected by the observing configuration:
 
 Mode A, ETC-based (recommended for ANDES bands and CRIRES+)
-    The SNR per exposure, wavelength grid, and observing time-line are all
-    derived from an Exposure Time Calculator (ETC) file.  No real observed
+    The wavelength grid and SNR reference come from an Exposure Time
+    Calculator (ETC) file. The observation settings and orbital geometry
+    determine exposure times and event membership.  No real observed
     spectra are needed.  The simulator builds a fully synthetic time-series
     using the planet orbital geometry.  This mode is the most self-contained
     and is ideal for feasibility studies of future instruments or targets that
@@ -52,7 +53,7 @@ Mode C, Real-data analysis
 Spectral-order convention
 ────────────────────────────────────────────────────────────────
 
-EXoPLORE treats all data as 3-D tensors of shape::
+Reference-night input cubes use axes::
 
     (n_spectra, n_orders, n_pixels)
 
@@ -60,7 +61,7 @@ Every instrument module is responsible for returning the correct
 ``n_orders_total`` value for its configuration:
 
     ANDES YJHK    →  76 orders
-    ANDES YJH     →  64 orders
+    ANDES YJH     →  55 orders
     ANDES K       →  21 orders
     ANDES RIZ     →  (defined in wavegrid.py)
     ANDES UBV     →  (defined in wavegrid.py)
@@ -118,7 +119,7 @@ class InstrumentInfo(NamedTuple):
         Path to the wavelength grid FITS file, or ``None`` if the grid is
         constructed analytically inside the module.
     sig_file : str or None
-        Path to the instrumental line-spread function file, or ``None``.
+        Path to the reference uncertainty cube, or ``None``.
     snr_file : str or None
         Path to the SNR cube FITS file (Mode B/C), or ``None`` (Mode A).
     JD_file : str or None

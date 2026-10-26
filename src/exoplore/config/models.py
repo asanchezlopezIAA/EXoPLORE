@@ -6,13 +6,15 @@ Typed dataclasses that fully describe one EXoPLORE simulation.
 
 A user defines a simulation by editing a JSON file (e.g.
 ``configs/hd189733b_andes_transit_clean.json``) and loading it with
-:meth:`SimulationConfig.from_json`.  All scientific choices are explicit:
-units are part of the field names, and defaults are conservative.
+:meth:`SimulationConfig.from_json`.  The loader reads named fields and fills omitted configuration settings from
+the dataclass defaults. Planetary-system physical values are loaded separately
+from their parameter JSON.
 
 Design rules
 ------------
 - Field names carry units where relevant (e.g. ``velocity_max_kms``).
-- Every field has a default so partial configs are accepted gracefully.
+- Omitted configuration fields use their declared defaults.
+- The selected runner validates the settings required by its workflow.
 """
 
 from __future__ import annotations
@@ -657,7 +659,7 @@ class CrossCorrelationConfig:
     ssim_metric:
         Compute the SSIM structural similarity metric (experimental).
     study_velocity_ranges:
-        Study how significance changes with in/out-of-trail intervals.
+        Reserved control for a separate velocity-range study.
     plot_ccf_xstep:
         Step of the CCF horizontal axis in plots (km/s).
     """
@@ -743,10 +745,10 @@ class RetrievalConfig:
         5 = all nights one by one,
         6 = time-resolved (ingress / first-half / second-half / egress).
     time_resolution:
-        Divide the transit into equal time bins (requires
-        ``retrieval_choice=6``).
+        Reserved control. ``retrieval_choice=6`` currently selects four
+        transit intervals in the runner.
     time_resolution_step:
-        Number of exposures per time bin (``time_resolution=True``).
+        Reserved control for future configurable time-bin sampling.
     live_points:
         MultiNest live points.  200 is sufficient for quick tests. Use
         400 to 1000 for publication-quality results.
@@ -861,18 +863,18 @@ class StatisticsConfig:
     Parameters
     ----------
     enabled:
-        Run a statistical analysis of final signal significances across
-        multiple nights.
+        Reserved flag. Executed studies are selected by the CCF,
+        night-stacking and detectability controls.
     noise_study:
-        Study the distribution of noise-only CCF significances.
+        Reserved flag for a separate noise-only study.
     noise_correlations:
-        Compute noise correlations between nights.
+        Reserved flag for noise-correlation diagnostics.
     stack_group_size:
         Co-add nights in random groups of this size (e.g. 1000 groups of
         N nights).  ``None`` = no stacking.
     detectability_maps:
-        Run the code recursively to produce detectability maps as a
-        function of metallicity and C/O (requires cluster mode).
+        Save the local detection statistic used by the sweep driver in
+        scripts/run_detectability_maps.py.
     """
     enabled: bool = False
     noise_study: bool = False
@@ -998,17 +1000,16 @@ class PathConfig:
     prt_input_data:
         Path to the petitRADTRANS ``input_data/`` directory.
     phoenix_wave_file:
-        Path to the PHOENIX wavelength FITS file (dayside sims).
+        Path to the PHOENIX wavelength FITS file for the stellar spectrum.
     phoenix_flux_file:
-        Path to the PHOENIX flux FITS file (dayside sims).
+        Path to the PHOENIX stellar flux FITS file.
     skycalc_dir:
-        Directory containing Skycalc telluric input/output files.
-        Within this, subdirectories per ``flag_event`` are expected.
+        Reserved path field. Current molecular telluric readers and the
+        downloader use the directory convention under ``inputs_dir``.
     inputs_dir:
         Explicit path to the pre-computed instrument inputs directory
         (ETC FITS files, Skycalc telluric files, etc.).  If set, this
-        overrides the auto-constructed path
-        ``output_root/<planet>/<instrument>/<event>/inputs/``.
+        supplies the instrument reader with its existing data directory.
         Point this at an existing ``inputs/`` folder to reuse
         instrument files without regenerating them.
     """

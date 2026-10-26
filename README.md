@@ -82,7 +82,7 @@ Kp-Vsys detection maps  and/or  atmospheric retrieval  (MultiNest / emcee)
 - [PHOENIX stellar models](https://phoenix.astro.physik.uni-goettingen.de), Husser et al. (2013, [A&A 553, A6](https://doi.org/10.1051/0004-6361/201219058)). Download the wave grid and the flux file matching your target star
 - A Fortran compiler (gfortran) is required to build petitRADTRANS and EasyChem
 - petitRADTRANS opacity tables (several GB). See [docs/input_files.md](docs/input_files.md)
-- For [SkyCalc](https://skycalc-ipy.readthedocs.io) telluric generation (optional, Mode 2 only): [skycalc_ipy](https://skycalc-ipy.readthedocs.io), Noll et al. (2012, [A&A 543, A92](https://doi.org/10.1051/0004-6361/201219040)). [astroplan](https://astroplan.readthedocs.io), Morris et al. (2018, [AJ 155, 128](https://doi.org/10.3847/1538-3881/aaa47e))
+- For [SkyCalc](https://skycalc-ipy.readthedocs.io) telluric generation (optional): [skycalc_ipy](https://skycalc-ipy.readthedocs.io), Noll et al. (2012, [A&A 543, A92](https://doi.org/10.1051/0004-6361/201219040)). [astroplan](https://astroplan.readthedocs.io), Morris et al. (2018, [AJ 155, 128](https://doi.org/10.3847/1538-3881/aaa47e))
 - For Bayesian retrieval (optional): [PyMultiNest](https://github.com/JohannesBuchner/PyMultiNest), Feroz et al. (2009, [MNRAS 398, 1601](https://doi.org/10.1111/j.1365-2966.2009.14548.x)). [emcee](https://emcee.readthedocs.io), Foreman-Mackey et al. (2013, [PASP 125, 306](https://doi.org/10.1086/670067)). [corner](https://corner.readthedocs.io), Foreman-Mackey (2016, [JOSS 1, 24](https://doi.org/10.21105/joss.00024))
 
 ### Step-by-step
@@ -97,15 +97,19 @@ python -m venv .venv
 source .venv/bin/activate
 
 # 3. Install the package and Python dependencies
-pip install -e ".[dev]"
+python -m pip install -e ".[dev]"
 
-# 4. Install scientific dependencies (require a Fortran compiler)
-#    macOS: set the SDK path first
+# 4. On macOS, set the SDK path before building the scientific dependencies.
+# Run this line on macOS only.
 export SDKROOT="$(xcrun --show-sdk-path)"
-pip install petitRADTRANS easychem batman-package
+
+# Install the atmospheric and transit-model dependencies (Fortran compiler required).
+python -m pip install -e ".[prt,batman]"
 ```
 
-On macOS, the `export SDKROOT` line is required every terminal session before importing petitRADTRANS or EasyChem. We recommend adding it to `~/.zshrc` or `~/.bashrc`.
+On macOS, `SDKROOT` supplies the SDK location when the Fortran build needs it.
+The [installation guide](docs/installation.md) describes scientific data downloads
+and the optional retrieval and SkyCalc dependencies.
 
 ### Verify
 
@@ -133,24 +137,11 @@ python -u scripts/run_exoplore.py configs/hd189733b_andes_transit_clean.json --r
 
 The `--run` flag is required to actually simulate. Without it, the simulator prints a summary and exits (useful for catching configuration errors quickly).
 
-The summary printed on every run:
-
-```
-EXoPLORE Simulation Summary
-============================
-Planet              : HD189733b
-Instrument          : ANDES_YJHK
-Event               : transit
-Nights              : 1
-Pipeline            : BL19 (Brogi & Line 2019, AJ, 157, 114)
-Species             : ['H2O', 'CO', 'CH4', 'NH3', ...]
-EasyChem            : True
-C/O                 : 0.41
-Metallicity (log Z) : 0.53
-CCF v_max (km/s)    : 325.0
-Retrieval           : False
-Output root         : outputs
-```
+The summary lists the target, instrument, atmosphere, observation and analysis
+settings read from your JSON. The reference ANDES configuration uses Blain24,
+all 76 YJHK orders and separate regional atmosphere settings. Edit the
+machine-specific paths before running it, following
+[Tutorial 1](docs/tutorial.md#tutorial-1-run-the-reference-hd-189733-b-andes-simulation).
 
 ---
 
@@ -234,23 +225,22 @@ python scripts/make_planet_params.py
 Edit the `USER INPUT` block at the top of the script with the planet's parameters. The script computes `kp_kms` automatically from the orbital geometry and writes the JSON to `planet_params/`. Alternatively, copy `planet_params/HD189733b.json` and fill in the fields manually. To reference it in a simulation config:
 
 ```json
-"planet": { "name": "WASP-76b", "parameter_file": "planet_params/wasp76b.json" }
+"planet": { "name": "WASP76b", "parameter_file": "planet_params/WASP-76b.json" }
 ```
 
 ---
 
 ## Adding a new instrument
 
-i) Create `src/exoplore/instruments/my_instrument.py` implementing `get_instrument_info()`. Follow the pattern in `instruments/carmenes_nir.py` or `instruments/wavegrid.py`.
-
-ii) Add one entry to `_REGISTRY` in `src/exoplore/instruments/__init__.py`:
-```python
-"MY_INSTRUMENT": my_module.get_instrument_info,
-```
-
-iii) Set `"instrument": { "name": "MY_INSTRUMENT" }` in the config and provide the required input files.
-
-iv) Add a test in `tests/test_instruments.py` and document the input files in `docs/input_files.md`.
+1. Create a reader implementing `get_instrument_info(request: InstrumentInputs)`
+   and returning `InstrumentInfo`. See `instruments/carmenes_nir.py` for the
+   input selection and `instruments/wavegrid.py` for array loading.
+2. Import the reader in `src/exoplore/instruments/__init__.py` and add its name
+   and function to `_REGISTRY`.
+3. Add support for the wavelength and noise layout in `get_WaveGrid()` and
+   inspect the runner branches that select instrument-specific CCF kernels.
+4. Select the registered name in the JSON, prepare its inputs and test a small
+   complete run. Document the required files in `docs/input_files.md`.
 
 ---
 

@@ -269,7 +269,7 @@ python scripts/generate_skycalc_inputs.py \
     --mode synthetic
 ```
 
-This requires an internet connection and the `skycalc_ipy` package (`pip install skycalc_ipy`). The file is written to `inputs/ANDES/WASP76b/tellurics/tell_ref_airmass_1.0.fits`, matching `tellurics.reference_telluric_file`. If a file already exists, the script skips it. Changing the interval alone does not replace it. See the {ref}`input guide <skycalc-reference-download>` before deliberately using `--overwrite`.
+This requires an internet connection and the `skycalc_ipy` package (`python -m pip install -e ".[skycalc]"`). The file is written to `inputs/ANDES/WASP76b/tellurics/tell_ref_airmass_1.0.fits`, matching `tellurics.reference_telluric_file`. If a file already exists, the script skips it. Changing the interval alone does not replace it. See the {ref}`input guide <skycalc-reference-download>` before deliberately using `--overwrite`.
 
 A reference starting at 0.350 µm misses the blue edge of order 0
 (approximately 0.349393 µm). If an existing file does not cover the selected
@@ -448,7 +448,10 @@ The list order must exactly match the `species` list. H₂ and He dominate. Trac
 
 CARMENES covers the NIR 0.96 to 1.71 µm (Y+J+H, 28 orders) at R ≈ 80,400. In EXoPLORE, the CARMENES NIR wavelength grid is bundled with the repository and found automatically. A ready-to-run config is already provided at `configs/hd189733b_carmenes_transit.json`. In the following we explain every change relative to the ANDES reference config, so that these choices can be adapted to other instruments.
 
-> **Limb asymmetries are disabled in the CARMENES config** (`limb_asymmetries: false`). CARMENES's lower resolving power and 28-order coverage make it less sensitive to signal differences between morning and evening limbs, so using a single 1D model is both faster (~4×) and more appropriate for this instrument. Limb asymmetries can be enabled at any time by adding `"limb_asymmetries": true` and choosing a `limb_divisions` mode.
+> **The CARMENES example uses a 1D atmosphere** (`limb_asymmetries: false`),
+> reducing the number of atmospheric spectra calculated per order. To explore
+> limb structure, enable `atmosphere.limb_asymmetries` and configure the regions
+> for the selected `limb_divisions` mode as described in Tutorial 3.
 
 ### Step 1: Create the config (if not using the bundled one)
 
@@ -776,7 +779,7 @@ The `live_points` field sets the number of active points that MultiNest maintain
 The retrieval requires three additional dependencies:
 
 ```bash
-pip install pymultinest emcee corner
+python -m pip install -e ".[retrieval]"
 ```
 
 Here `pymultinest` provides the nested sampler, `emcee` the MCMC sampler, and `corner` the posterior [corner](https://corner.readthedocs.io) plots. [PyMultiNest](https://github.com/JohannesBuchner/PyMultiNest) further requires the compiled MultiNest Fortran library (see its [installation guide](https://github.com/JohannesBuchner/PyMultiNest)).
@@ -917,13 +920,13 @@ Posterior probability distributions for the retrieved atmospheric parameters of 
 Once you have run the two retrievals, the overlay corner plot can be generated with:
 
 ```bash
-python scripts/plot_corner_overlay.py \\
-  --output-root /path/to/EXoPLORE_clean_run/HD189733b/CARMENES_NIR/transit \\
-  --runs  Blain24_withsignal_1nights_SNR_comb1_simdata_noiseless_stdnoisex1 \\
-          Gibson22_withsignal_N4_1nights_SNR_comb1_simdata_noiseless_stdnoisex1 \\
-  --labels "Blain et al. (2024)" "Gibson et al. (2022)" \\
-  --truths -3.0 149.4 1170.0 0.0 \\
-  --colors "#c44e52" "#55a868" \\
+python scripts/plot_corner_overlay.py \
+  --output-root /path/to/EXoPLORE_clean_run/HD189733b/CARMENES_NIR/transit \
+  --runs  Blain24_withsignal_1nights_SNR_comb1_simdata_noiseless_stdnoisex1 \
+          Gibson22_withsignal_N4_1nights_SNR_comb1_simdata_noiseless_stdnoisex1 \
+  --labels "Blain et al. (2024)" "Gibson et al. (2022)" \
+  --truths -3.0 149.4 1170.0 0.0 \
+  --colors "#c44e52" "#55a868" \
   --output docs/figures/tutorial_retrieval_bias_corner.png
 ```
 
@@ -960,13 +963,13 @@ Posterior probability distributions for the retrieved atmospheric parameters of 
 The overlay corner plot is generated with:
 
 ```bash
-python scripts/plot_corner_overlay.py \\
-  --output-root /path/to/EXoPLORE_clean_run/HD189733b/ANDES_YJHK/transit \\
-  --runs  Blain24_withsignal_1nights_SNR_comb1_simdata_noisy_stdnoisex1 \\
-          Gibson22_withsignal_N4_1nights_SNR_comb1_simdata_noisy_stdnoisex1 \\
-  --labels "Blain et al. (2024)" "Gibson et al. (2022)" \\
-  --truths -3.0 149.4 1170.0 0.0 \\
-  --colors "#c44e52" "#55a868" \\
+python scripts/plot_corner_overlay.py \
+  --output-root /path/to/EXoPLORE_clean_run/HD189733b/ANDES_YJHK/transit \
+  --runs  Blain24_withsignal_1nights_SNR_comb1_simdata_noisy_stdnoisex1 \
+          Gibson22_withsignal_N4_1nights_SNR_comb1_simdata_noisy_stdnoisex1 \
+  --labels "Blain et al. (2024)" "Gibson et al. (2022)" \
+  --truths -3.0 149.4 1170.0 0.0 \
+  --colors "#c44e52" "#55a868" \
   --output docs/figures/tutorial_retrieval_bias_corner_noisy.png
 ```
 
@@ -1666,11 +1669,23 @@ Both runs retain the per-exposure corrected spectra in `observations.npz`, the t
 
 **Fully masked order warnings**, If spectral orders in deep telluric bands are fully masked (all pixels fail SNR or negative-value checks), the simulator continues gracefully and writes a report to `<run_name>/warnings/fully_masked_orders_{run_name}.txt`. These orders are automatically excluded from CCF co-adding. The analysis continues with the remaining usable orders.
 
-**Simulation running all orders when you only want one**, `cross_correlation.order_selection` is a CCF-only filter. To restrict the entire simulation (Blocks 3 to 9) to a specific set of orders, use `instrument.order_indices`. For a single-order retrieval test: `"instrument": { "order_indices": [23] }`. We caution that forgetting this will run all orders through the forward model and make the retrieval far slower than necessary.
+**Simulation running all orders when you only want one**, Set
+`instrument.order_indices` to the desired instrument order IDs. For a single-order
+retrieval test, use `"instrument": { "order_indices": [23] }`. An empty list
+selects every order. Unknown configuration keys are ignored by the loader,
+so check the preview after editing a setting.
 
-**Retrieval posterior is completely flat / log Z ≈ 0**, This means the log-likelihood function is returning the same value for every parameter combination. The run log should be checked for Python `Traceback` or `KeyError` lines printed before the MultiNest output, these are exceptions silently swallowed inside the Fortran/Python interface that cause [pymultinest](https://github.com/JohannesBuchner/PyMultiNest) to return a default constant value. Common causes are: i) a missing key in the configuration dict passed to `preparing_pipeline` or `call_pRT` (check that `instrument.order_indices` is set and the config is otherwise valid). Ii) using a SYSREM-based pipeline with `noiseless: true` without a pinned β prior (over-subtraction may render data identically zero for all models, use BL19 or Blain24, or Gibson22 with `prior_bounds` pinning β near 1).
+**Retrieval posterior is broad or nearly flat**, Inspect the run log for model
+or likelihood errors, verify the selected orders and parameter priors, and
+check whether likelihood values vary across proposals. A broad posterior can
+also reflect weak information about a parameter. The current C/O–metallicity
+example should be inspected with that limitation in mind. For noiseless
+Gibson22 tests, use the explicit β prior described in Tutorial 7.
 
-**Retrieval corner plot shows `Too few points to create valid contours`**, The posterior is effectively flat (all 200 equal-weight samples uniformly cover the prior). See the point above. We caution that when using the Gibson22 likelihood with `noiseless: true`, the β hyperparameter diverges and the posterior cannot be constrained, switching to BL19 or Blain24 resolves this.
+**Corner plot reports `Too few points to create valid contours`**, Inspect the
+saved samples and sampler diagnostics. A sparse or broad posterior can leave
+too few populated bins for the requested contours. Increasing plot smoothing
+alone does not establish that the model constrains the parameter.
 
 ### petitRADTRANS
 

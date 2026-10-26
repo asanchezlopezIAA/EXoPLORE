@@ -20,34 +20,39 @@ source .venv/bin/activate
 
 ## 3. Install EXoPLORE and its dependencies
 
-```bash
-pip install -e .
-```
-
-This installs the `exoplore` package in editable mode together with all core dependencies (NumPy, SciPy, Astropy, [matplotlib](https://matplotlib.org), and others) declared in `pyproject.toml`.
-
-## 4. Install petitRADTRANS
-
-EXoPLORE uses [petitRADTRANS](https://petitradtrans.readthedocs.io) to compute the planetary transmission and emission spectra that serve as the forward model. To install it:
-
-```bash
-pip install petitRADTRANS
-```
-
-On macOS, it is often necessary to set the Fortran compiler SDK path before installation:
+petitRADTRANS and EasyChem builds require a Fortran compiler. On macOS, set the
+SDK path before installation if your compiler needs it:
 
 ```bash
 export SDKROOT="$(xcrun --show-sdk-path)"
 ```
 
-We recommend adding this line to `~/.zshrc` or `~/.bashrc` to avoid repeating it in future sessions. After installing, download the opacity tables following the [petitRADTRANS documentation](https://petitradtrans.readthedocs.io/en/latest/content/installation.html). In particular, the line-by-line opacity tables required for high-resolution retrieval amount to several GB. Note the absolute path to the resulting `input_data/` directory, as it must be set in the simulation config under `paths.prt_input_data`.
+Install the package and the molecular-tutorial dependencies:
+
+```bash
+python -m pip install -e ".[prt,batman]"
+```
+
+This installs EXoPLORE in editable mode, its core numerical dependencies, and the
+`prt` and `batman` extras declared in `pyproject.toml`. These extras supply
+petitRADTRANS, EasyChem and the transit light-curve package used by the molecular
+tutorials. Run the tutorial commands from the repository root so that relative
+configuration and input paths resolve.
+
+## 4. Set up petitRADTRANS opacity data
+
+EXoPLORE uses [petitRADTRANS](https://petitradtrans.readthedocs.io) to compute the planetary transmission and emission spectra that serve as the forward model. The `prt` extra above installs petitRADTRANS and EasyChem. The current
+radiative-transfer interface uses petitRADTRANS 3. Scientific opacity tables
+are downloaded separately.
+
+Download the opacity tables following the [petitRADTRANS documentation](https://petitradtrans.readthedocs.io/en/latest/content/installation.html). In particular, the line-by-line opacity tables required for high-resolution retrieval amount to several GB. Note the absolute path to the resulting `input_data/` directory, as it must be set in the simulation config under `paths.prt_input_data`.
 
 ## 5. Install retrieval dependencies (optional)
 
 These packages are only required when `retrieval.enabled: true`:
 
 ```bash
-pip install pymultinest emcee corner
+python -m pip install -e ".[retrieval]"
 ```
 
 `pymultinest` wraps the [MultiNest](https://github.com/JohannesBuchner/PyMultiNest) nested sampling algorithm and requires the compiled MultiNest Fortran library to be installed separately. We refer to the [PyMultiNest installation guide](https://github.com/JohannesBuchner/PyMultiNest) for platform-specific instructions.
@@ -89,15 +94,34 @@ mv ~/Downloads/snr_0.fits \
 All paths above are relative to the repository root (`EXoPLORE/`). Run these
 commands from inside the cloned repository directory.
 
-The ANDES tutorials do not require any additional downloads.
+The reference ANDES wavelength, ETC and telluric files are included in the
+checkout. Its atmospheric opacity tables and PHOENIX spectra are still required.
 
 ## 8. Set up instrument input files
 
-Each instrument requires pre-computed signal-to-noise tables and a telluric reference spectrum. For CARMENES NIR these are provided via the Zenodo deposit above. For other instruments see [Input files](input_files.md) for the expected directory layout and file formats.
+The instrument and observing mode select the required wavelength, S/N and
+telluric inputs. The CARMENES reference-night S/N and uncertainty arrays come
+from the Zenodo deposit above. See [Input files](input_files.md) for the bundled
+ANDES inputs and the files needed for another instrument or observing night.
+
+To generate new SkyCalc spectra, install the downloader dependencies:
+
+```bash
+python -m pip install -e ".[skycalc]"
+```
+
+Set `tellurics.skycalc_wavelength_limits_um` in the simulation JSON before
+running the {ref}`SkyCalc downloader <skycalc-reference-download>`.
+The real-data tutorials also describe their external reduction and telluric-fit
+tools. The [interactive notebook](tutorial.md#tutorial-1-run-the-reference-hd-189733-b-andes-simulation)
+requires a Jupyter environment with this project environment selected as its kernel.
 
 ## 9. Verify the installation
 
+Install the test dependencies and run the tests:
+
 ```bash
+python -m pip install -e ".[dev]"
 python -m pytest
 ```
 

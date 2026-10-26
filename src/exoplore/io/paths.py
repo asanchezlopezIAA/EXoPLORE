@@ -4,9 +4,8 @@ exoplore.io.paths
 
 Output directory construction.
 
-All output paths for one simulation are derived from the
-:class:`~exoplore.config.SimulationConfig` in a single place, so there
-is never path logic scattered across the codebase.
+Construct the directory tree from :class:`~exoplore.config.SimulationConfig`.
+The runner and individual writers choose filenames within these directories.
 
 Directory layout
 ----------------
@@ -73,12 +72,13 @@ def matrices_dir(cfg: SimulationConfig, simulation_name: str) -> Path:
 
     The subdirectory is ``<simulation_output_dir>/matrices/``.  It stores
     NPZ files produced by the simulator's Block 8 output routines, with
-    typical keys ``'mat_res'``, ``'propag_noise'``, and ``'mat_star'``,
-    each of shape ``(n_spectra, n_pixels)``.
+    per-order archives storing their array under key ``'a'``. Residuals
+    and propagated uncertainties have axes ``(night, exposure, wavelength pixel)``
+    in the ordinary mode. Template products can have different axes.
+    Named detection-map archives also live here.
 
-    This function only constructs and returns the :class:`pathlib.Path`
-    object. It does **not** create the directory on disk.  To create all
-    output directories call :func:`build_output_tree` with ``create=True``.
+    Return a Path object. Call :func:`build_output_tree` with
+    ``create=True`` to create the output directories.
 
     Parameters
     ----------
@@ -121,9 +121,8 @@ def correlations_dir(cfg: SimulationConfig, simulation_name: str) -> Path:
     """Return the path to the CCF correlation products subdirectory.
 
     The subdirectory is ``<simulation_output_dir>/correlations/``.  It stores
-    NPZ files containing the CCF matrices and Kp-Vsys significance maps
-    (e.g., ``ccf_tot``, ``ccf_tot_sn``) produced during Block 7 of the
-    simulator.
+    a location available for correlation products. The molecular runner
+    currently writes its CCF and detection-map archives in ``matrices/``.
 
     Return a Path object. build_output_tree(create=True) creates directories.
 
@@ -167,10 +166,8 @@ def warnings_dir(cfg: SimulationConfig, simulation_name: str) -> Path:
     """Return the path to the flagged-spectra warnings subdirectory.
 
     The subdirectory is ``<simulation_output_dir>/warnings/``.  It stores
-    log files listing spectra that were automatically flagged during the
-    pipeline (e.g., anomalous noise levels, saturated pixels, or failed
-    telluric corrections) so they can be reviewed and optionally excluded
-    in post-processing.
+    the molecular runner's fully masked order report when exclusions occur.
+    Individual pipelines can write further diagnostics in their own outputs.
 
     Return a Path object. build_output_tree(create=True) creates directories.
 

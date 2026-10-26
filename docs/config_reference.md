@@ -1,6 +1,8 @@
 # EXoPLORE Configuration Reference
 
-A simulation is fully defined by two files: a **simulation config** (JSON) and a **planet parameter file** (JSON). In the following we describe every field in both files, with units, valid values, and scientific meaning.
+A simulation is fully defined by two files: a **simulation config** (JSON) and a **planet parameter file** (JSON). The sections below describe the molecular configuration, with links to the
+helium recipes and the detectability sweep. Field definitions and defaults live
+in `src/exoplore/config/`. The selected runner determines which controls apply.
 
 The working example for everything described here is:
 
@@ -36,6 +38,7 @@ planet_params/HD189733b.json
 15. [Simulation config, `output`](#15-output)
 16. [Supported instruments](#16-supported-instruments)
 17. [Adding a new planet](#17-adding-a-new-planet)
+18. [Detectability sweeps and helium configurations](#18-detectability-sweeps-and-helium-configurations)
 
 ---
 
@@ -111,7 +114,7 @@ and are required by the observing calculations that use them.
 
 | Field | Valid values | Description |
 |---|---|---|
-| `name` | See table below | Instrument name. Controls the wavelength grid, resolving power, and number of spectral orders. See [Supported instruments](#14-supported-instruments). |
+| `name` | See table below | Instrument name. Controls the wavelength grid, resolving power, and number of spectral orders. See [Supported instruments](#16-supported-instruments). |
 | `observatory` | `"paranal"`, `"lasilla"` | Observatory site for BERV computation and sky models. Set automatically by the instrument module. Override only if you need to force a different site. |
 | `pixels_per_resolution_element` | typically 2 to 4 | Number of detector pixels per resolution element, denoted m. Used when convolving model spectra to instrument resolution, and to convert the ETC SNR (given per resolution element) to a per-pixel SNR via SNR<sub>pixel</sub> = SNR<sub>resel</sub> / √m. ANDES: 2.5. CARMENES NIR: 3.3. CARMENES VIS: 3.3. |
 | `order_indices` | `[]` or list of ints | Spectral order indices to simulate. Empty list `[]` means all orders for the selected instrument band. Use `[0]` for single-order instruments. Example: `[0, 1, 5, 10]` simulates only those four orders (useful for fast testing). |
@@ -183,6 +186,13 @@ and are required by the observing calculations that use them.
 | `mask_v_rotsini` | `true`, `false` | If `true`, mask the CCF velocity range within ±v_rot_sini of Vsys=0 to avoid the stellar line broadening region. |
 
 ---
+
+Additional observation controls:
+
+| Field | Meaning |
+|---|---|
+| `use_accurate_berv` | Calculate barycentric corrections from exposure times, observatory and the planet file's sky coordinates. Check the run messages for any fallback to `berv_kms`. |
+| `helium_transmission_spectroscopy` | Select the direct-helium workflow. The corresponding atmosphere and preparation blocks are described in Tutorials 12 and 12b. |
 
 ## 5. `noise`
 
@@ -373,6 +383,10 @@ where `T_ref` is the reference transmission at airmass `X_ref` and `X` is the ai
 
 ---
 
+`tellurics.airmass_limits_per_night` supplies a separate airmass interval for
+each night when the selected synthetic observing setup uses those limits.
+The [input guide](input_files.md) describes the per-exposure and per-night files.
+
 ## 8. `pipeline`
 
 ```json
@@ -403,11 +417,22 @@ Four pipeline recipes are available. They fall into two groups depending on whet
 | `snr_mask_threshold` | float > 0 | SNR threshold below which columns (wavelength channels) are masked before SYSREM. Pixels with SNR < threshold are excluded. Typical: 10. |
 | `prepare_template` | `true`, `false` | If `true`, apply the same filtering to the CCF template as was applied to the data, so that the template correctly represents the distorted planetary signal seen in the residuals. **Always set `true` for rigorous CCF computation and retrievals.** How the template is filtered depends on the pipeline, see the note below. |
 | `optimize_sysrem_order_by_order` | `true`, `false` | If `true`, choose the optimal number of SYSREM iterations independently for each spectral order based on `optimize_criterion`. Slower but can improve sensitivity. |
-| `optimize_criterion` | `"DeltaSigma"`, `"Maximum"`, `"Max_Diff"` | Criterion for selecting the optimal SYSREM iteration count per order when `optimize_sysrem_order_by_order: true`. `"DeltaSigma"` (**default, recommended**): stop when the fractional improvement in CCF S/N falls below `sysrem_delta_sigma_threshold`, model-independent and avoids over-subtraction ([Parker et al. 2025](https://doi.org/10.1093/mnras/staf469)). `"Maximum"`: choose the iteration that maximises the CCF S/N. `"Max_Diff"`: choose the iteration that maximises the S/N difference between consecutive iterations. |
-| `sysrem_delta_sigma_threshold` | float (default 0.01) | Fractional σ-drop threshold for the `"DeltaSigma"` halting criterion. SYSREM stops when (S/N[k] - S/N[k-1]) / S/N[k-1] < threshold. Only used when `optimize_criterion: "DeltaSigma"`. |
+| `optimize_criterion` | `"DeltaSigma"`, `"Maximum"`, `"Max_Diff"` | Criterion for selecting the optimal SYSREM iteration count per order when `optimize_sysrem_order_by_order: true`. `"DeltaSigma"` (**default, recommended**): stop when the fractional decrease in residual standard deviation falls below `sysrem_delta_sigma_threshold`, model-independent and avoids over-subtraction ([Parker et al. 2025](https://doi.org/10.1093/mnras/staf469)). `"Maximum"`: choose the iteration that maximises the CCF S/N. `"Max_Diff"`: choose the iteration that maximises the S/N difference between consecutive iterations. |
+| `sysrem_delta_sigma_threshold` | float (default 0.01) | Fractional σ-drop threshold for the `"DeltaSigma"` halting criterion. SYSREM stops when (σ[k-1] - σ[k]) / σ[k-1] < threshold. Only used when `optimize_criterion: "DeltaSigma"`. |
 | `kp_vrest_injection` | `[Kp, Vrest]` km/s | Location in Kp-Vsys space at which to inject an additional test signal for cross-injection tests. `[0.0, 0.0]` = no injection. |
 | `inject_scale_factor` | float | Scale factor for the additional cross-injection signal. |
 | `sysrem_robust_halt` | `true`, `false` | If `true`, stop SYSREM early if the residual variance increases (robust halt criterion). Prevents over-subtraction. |
+
+Additional preparation controls:
+
+| Field | Meaning |
+|---|---|
+| `continuum_method` | Cheverall26 continuum estimator: `maxima` (default), `cm2024` or `polyfit`. |
+| `detrend_method` | `sysrem` (default) or `pca` in the preparation branches that support this switch. Component count is set by `sysrem_iterations`. |
+| `czesla2024` | Direct CRIRES+ helium settings, defined in `config/czesla2024.py`. See Tutorial 12. |
+| `carmenes_helium` | Direct CARMENES helium normalization and averaging settings, defined in `config/carmenes_helium.py`. See Tutorial 12b. |
+| `palle2020` | Observed CARMENES input and correction settings used by Tutorial 12b. |
+| `oh_treatment` | Explicit OH treatment for the direct-helium routes. Valid choices and required inputs are checked in `config/helium_oh.py`. |
 
 ### Template preparation and SYSREM distortions
 
@@ -467,6 +492,17 @@ SYSREM removes dominant telluric and stellar structure and also changes the unde
 
 ---
 
+Additional CCF controls:
+
+| Field | Meaning |
+|---|---|
+| `snr_noise_source` | `peak_row` (default) estimates off-peak scatter within each Kp row. `signal_free_rows` uses a region outside the selected Kp and velocity exclusions. |
+| `snr_noise_kp_exclude_kms` | Kp half-width excluded from that signal-free region, default 120 km/s. |
+| `plot_velocity_zoom_kms` | Optional symmetric velocity crop for the Earth-frame trail figure. |
+| `ccf_kernel` | `normalized` (default) or `matched_filter` for the weighted large-instrument path. |
+| `ccf_error_estimate` | `propagated` (default) uses the prepared uncertainties. `mad_residual` estimates each channel's scatter over time from its residuals. |
+| `ccf_template_source` | `planet` (default), `telluric` or `stellar`. The latter choices use atmospheric transmission or the PHOENIX stellar spectrum to inspect compatible residual line patterns. |
+
 ## 10. `retrieval`
 
 Molecular retrievals require `observation.different_nights: false`. Multiple
@@ -506,7 +542,7 @@ C/O–metallicity route (`retrieval_choice: 4`) is currently incomplete.
 | `enabled` | `true`, `false` | Master switch. Set to `false` to skip retrieval entirely (default for exploration runs). When `true`, the retrieval runs at the **end of the same simulation** using the spectral matrices held in memory. Repeating this retrieval starts with a new simulation run. |
 | `sampler` | `"nested_sampling"`, `"mcmc"` | Bayesian sampler. `"nested_sampling"`: [MultiNest](https://github.com/JohannesBuchner/PyMultiNest) via [PyMultiNest](https://github.com/JohannesBuchner/PyMultiNest) (faster, better for multimodal posteriors). `"mcmc"`: [emcee](https://emcee.readthedocs.io) ensemble sampler. |
 | `log_likelihood` | `"Blain24"`, `"BL19"`, `"Gibson22"` | Log-likelihood function. **Coupled to `dimensionality`, see below.** `"Blain24"`: Blain, Sánchez-López & Mollière (2024, AJ, 167, 179), per-order noise scaling. Use with `"1D"`, `"1D_CtoO_met"`, or `"2D"`. `"BL19"`: Brogi & Line (2019), analytic marginalisation over signal scaling. Use with `"1D"`, `"1D_CtoO_met"`, or `"2D"`. `"Gibson22"`: Gibson et al. (2022), chi-squared with free β noise-scaling. **must be used exclusively with `"1D_Gibson22"`**. Any invalid combination raises a `ValueError` at runtime. |
-| `dimensionality` | `"1D"`, `"1D_Gibson22"`, `"1D_CtoO_met"`, `"1D_extended"`, `"1D_extended_fast"`, `"2D"` | Retrieval parameter space. **Coupled to `log_likelihood`, see above.** `"1D"`: single VMR (H₂O), Kp, T_eq, wind velocity (4 params), use with BL19 or Blain24. `"1D_Gibson22"`: same plus β noise-scaling parameter (5 params), **use only with Gibson22 likelihood**. `"1D_CtoO_met"`: C/O ratio and metallicity via EasyChem (2 params, Kp and V_wind fixed to planet values), use with BL19 or Blain24. `"1D_extended"`: log₁₀(VMR) for H₂O, CH₄, NH₃, CO, CO₂, HCN plus Kp, T_eq, and wind velocity (9 params), multi-species retrieval. Use with BL19 or Blain24. `"1D_extended_fast"`: same species plus T_eq only (Kp and wind velocity fixed, 7 params). `"2D"`: separate morning and evening limb VMRs, use with BL19 or Blain24. The current likelihood retains the configured regional temperature profiles. Its sampled temperature coordinates are not propagated into those profiles. |
+| `dimensionality` | `"1D"`, `"1D_Gibson22"`, `"1D_CtoO_met"`, `"2D"`, `"1D_alpha"`, `"1D_alpha_Gibson22"` | Retrieval parameter space. **Coupled to `log_likelihood`, see above.** `"1D"`: single VMR (H₂O), Kp, T_eq, wind velocity (4 params), use with BL19 or Blain24. `"1D_Gibson22"`: same plus β noise-scaling parameter (5 params), **use only with Gibson22 likelihood**. `"1D_CtoO_met"`: C/O ratio and metallicity via EasyChem (2 params, Kp and V_wind fixed to planet values), use with BL19 or Blain24. `"1D_alpha"`: Kp, Vrest and amplitude of a fixed template (3 parameters), with BL19 or Blain24. `"1D_alpha_Gibson22"`: those parameters plus β (4 parameters), with Gibson22. `"2D"`: two limb abundances, Kp and two temperature coordinates (5 parameters), with BL19 or Blain24. The current likelihood retains the configured regional temperature profiles. Its sampled temperature coordinates are not propagated into those profiles. |
 | `retrieval_choice` | int | Selects the specific retrieval configuration within a dimensionality class. See the retrieval module documentation. |
 | `time_resolution` | `true`, `false` | Reserved control for future time-bin selection. The current time-resolved route is selected with `retrieval_choice: 6`. |
 | `time_resolution_step` | int | Reserved control for future per-exposure binning. The current time-resolved route uses four transit intervals. |
@@ -526,6 +562,17 @@ C/O–metallicity route (`retrieval_choice: 4`) is currently incomplete.
 
 ---
 
+Additional retrieval controls:
+
+| Field | Meaning |
+|---|---|
+| `error_model` | Cheverall26 likelihood uncertainty choice: `propagated` (default) or `mad_residual`. |
+| `model_reprocessing` | `bare` (default) processes the model alone, `embedded` processes it with the retained background, and `projector` removes the data-derived temporal components. The latter two require the corresponding retained arrays. These alternatives are currently restricted to the supported single-night route. |
+
+`1D_extended` and `1D_extended_fast` have schema prior entries, but the current
+runner does not define their parameter labels and likelihood selection as
+complete retrieval modes.
+
 ## 11. `statistics`
 
 ```json
@@ -540,11 +587,11 @@ C/O–metallicity route (`retrieval_choice: 4`) is currently incomplete.
 
 | Field | Description |
 |---|---|
-| `enabled` | Master switch for the statistics module. |
-| `noise_study` | If `true`, run repeated simulations to characterise the noise properties. |
-| `noise_correlations` | If `true`, compute and save the noise correlation matrix. |
-| `stack_group_size` | Number of exposures to group when stacking for detectability analysis. `null` = no grouping. |
-| `detectability_maps` | If `true`, compute detectability maps (S/N as a function of planet parameters). |
+| `enabled` | Reserved statistics flag. The molecular runner selects its executed studies from the CCF, night-stacking and detectability controls. |
+| `noise_study` | Reserved flag. The molecular runner does not currently execute a separate noise-only study from this setting. |
+| `noise_correlations` | Reserved flag. The molecular runner does not currently generate a noise-correlation matrix from this setting. |
+| `stack_group_size` | Number of nights per group in repeated-night stacking studies. `null` selects the ordinary combined analysis. |
+| `detectability_maps` | Save the local detection statistic used by the atmospheric sweep. Run `scripts/run_detectability_maps.py` to execute the grid. |
 
 ---
 
@@ -569,7 +616,7 @@ C/O–metallicity route (`retrieval_choice: 4`) is currently incomplete.
 | `prt_input_data` | Absolute path to the petitRADTRANS `input_data/` directory. This is where opacity tables, CIA files, and molecular line lists live. Typically `<pRT_install_dir>/petitRADTRANS/input_data/`. |
 | `phoenix_wave_file` | Absolute path to the PHOENIX wavelength grid FITS file. Filename: `WAVE_PHOENIX-ACES-AGSS-COND-2011.fits`. Download from the PHOENIX library at https://phoenix.astro.physik.uni-goettingen.de. |
 | `phoenix_flux_file` | Absolute path to the PHOENIX model spectrum FITS file for the target star. Filename format: `lte{Teff:05d}-{logg:.2f}-{met:.1f}.PHOENIX-ACES-AGSS-COND-2011-HiRes.fits`. Select the file matching `stellar_teff_K`, `stellar_logg`, and `stellar_metallicity` from the planet parameter file. |
-| `skycalc_dir` | Directory for SkyCalc telluric files. Only needed when `tellurics.use_full_skycalc: true`. Leave empty `""` when using pre-computed reference files. |
+| `skycalc_dir` | Reserved path field. The current molecular reader and downloader locate per-exposure tellurics under `paths.inputs_dir` using the directory convention in the input guide. |
 | `inputs_dir` | Directory containing instrument-specific input files: pre-computed SNR tables, telluric reference spectra, wavelength grids (for instruments like CARMENES where the wavelength grid comes from a calibration file). |
 
 ---
@@ -618,14 +665,18 @@ Controls diagnostic plots automatically generated at the end of every run.
 
 ### Pipeline-steps diagnostic plot
 
-Every run automatically saves `<run_dir>/plots/pipeline_steps_<sim_name>.pdf`, a stacked grey-scale figure illustrating the data-simulation and preparation steps for the displayed order (set by `pipeline_steps_order`). The top panel is the 1-D in-silico flux at mid-transit, noiseless (black) and noisy (red), zoomed to `pipeline_steps_xlim_um` if set. Below it are time-series matrices (wavelength on the horizontal axis, spectrum number on the vertical), with masked channels in the prepared panels shown as white and ingress/egress marked by red dashed lines. The number of matrix panels depends on the pipeline:
+Every run automatically saves `<run_dir>/plots/pipeline_steps_<sim_name>.pdf`, a stacked diagnostic figure illustrating the data-simulation and preparation steps for the displayed order (set by `pipeline_steps_order`). The top panel is the 1-D in-silico flux at mid-transit, noiseless (black) and noisy (red), zoomed to `pipeline_steps_xlim_um` if set. Below it are time-series matrices (wavelength on the horizontal axis, spectrum number on the vertical), with masked channels in the prepared panels shown as white and ingress/egress marked by red dashed lines. The number of matrix panels depends on the pipeline:
 
-- **Polynomial pipelines (BL19, Blain24)** have no iterations, so two matrix panels: the **raw** matrix (throughput + tellurics) and the **corrected (residual)** matrix after `preparing_pipeline`. Raw → corrected.
+- **Polynomial pipelines (BL19, Blain24)** show three time-series panels below the representative spectrum: noiseless, noisy and prepared residuals. The notebook helper supplies a separate compact preview.
 - **SYSREM pipelines (ASL19, Gibson22)** show the systematics peeling away iteration by iteration: the **raw** matrix, then one panel per iteration listed in `pipeline_steps_sysrem_iterations` (for example after iteration 1 and after iteration 5). The intermediate residuals are reconstructed with `apply_sysrem` on the displayed order, using the components saved by the preparation calculation.
 
-This plot follows the style of the ANDES paper and is the standard way to verify that the pipeline correctly removes systematics while preserving the planetary signal trail.
+Use this plot to inspect dominant structures and residuals. Injection tests and cross-correlation diagnostics help assess how preparation affects the planetary signal.
 
 ---
+
+`plotting.pipeline_steps_noise_illustration_factor` optionally adds a labelled
+noise-amplified curve to the spectrum panel. `null` keeps only the original
+noiseless and noisy spectra. This controls the displayed curve.
 
 ## 15. `output`
 
@@ -670,7 +721,8 @@ The default saving flags write ~1.2 GB for a 76-order run, including spectral in
 | `ANDES_UBV` | ELT/ANDES, U+B+V arm | 0.35 to 0.63 | 62 | 100,000 | A (ETC) |
 | `CARMENES_NIR` | CAHA/CARMENES NIR | 0.96 to 1.71 | 28 | 80,400 | B (ref-night) |
 | `CARMENES_VIS` | CAHA/CARMENES VIS | 0.514 to 0.822 | 44 | 94,600 | B (ref-night) |
-| `CRIRES+` | VLT/CRIRES+ | user-defined | varies | 100,000 | A (ETC) |
+| `CRIRES+` | VLT/CRIRES+ | setting-dependent | varies | 100,000 nominal | ETC or reference-night/observed inputs |
+| `IGRINS` | IGRINS H+K | 1.43 to 2.52 | input-dependent | 45,000 | Reference-night/observed inputs |
 
 **Modes:**
 - **Mode A (ETC-based):** SNR and wavelength grid come from an Exposure Time Calculator file. No real observed data needed. Ideal for future instruments and targets not yet observed. Set `specific_event: false`, `use_real_data: false`.
@@ -692,10 +744,12 @@ Use `"name": "CARMENES_NIR"`. Coverage 0.96 to 1.71 µm, 28 orders, 4080 pixels/
 
 The wavelength grid is bundled with EXoPLORE (`src/exoplore/instruments/data/wave_CARMENES_NIR.fits`, shape 28 × 4080 µm) and is found automatically by the instrument reader.
 
-**Recommended order selection:** the bundled config `configs/hd189733b_carmenes_transit.json` excludes orders 9, 10, 18, 19, and 20, following the selection of [Alonso-Floriano et al. (2019)](https://doi.org/10.1051/0004-6361/201834339) for this specific dataset. Orders 18 to 20 lie in the ~1.9 µm water band and are consistently opaque from Calar Alto under typical conditions. Orders 9 and 10 (~1.4 µm water band) are more variable: under low-PWV conditions they can retain usable signal, and users working on real observations should inspect their own telluric transmission before discarding them. In general, the optimal order selection is target- and night-dependent and should be determined from the actual data. The 23-order list used here is a conservative starting point.
-```json
-"order_indices": [0,1,2,3,4,5,6,7,8,11,12,13,14,15,16,17,21,22,23,24,25,26,27]
-```
+**Example order selection:** `configs/hd189733b_carmenes_transit.json`
+excludes orders 9, 10, 18, 19 and 20, leaving 23 orders. In the bundled
+wavelength grid, orders 9–10 span approximately 1.1204–1.1628 µm and orders
+18–20 span 1.3445–1.4332 µm. Inspect the telluric transmission, uncertainties
+and residuals for your own observations before adopting that selection.
+The grid covers 0.9604–1.7119 µm.
 
 **Mode B (recommended):** Place reference-night files in `inputs_dir/reference_night/`: `julian_date.fits`, `airmass.fits`, `snr.fits`. Set `specific_event: true`.
 
@@ -734,3 +788,25 @@ If your setting covers only one detector order, set `"order_indices": [0]` in th
 7. Run: `python -u scripts/run_exoplore.py configs/yourplanet_instrument_event.json --run 2>&1 | tee run.log`
 
 > **Common mistake:** forgetting `--run`. Without it the simulator prints the summary and exits without computing anything.
+
+
+## 18. Detectability sweeps and helium configurations
+
+The top-level `detectability` block is read by `scripts/run_detectability_maps.py`.
+[Tutorial 11](tutorial.md#tutorial-11-detectability-maps) supplies a worked sweep.
+
+| Field | Meaning |
+|---|---|
+| `x_variable`, `y_variable` | Atmospheric parameters varied along the two grid axes. |
+| `x_values`, `y_values` | Grid values, with empty lists selecting the built-in grids. |
+| `molecules` | Species used for the individual search templates. |
+| `significance` | `cell_box` selects a local maximum around the injected position. `injected_point` selects its sampled cell. |
+| `box_half_vrest_kms`, `box_half_kp_kms` | Half-widths of the local selection box, in km/s. |
+
+`atmosphere.helium` configures the optional helium forward model. Its validated
+fields are defined in `config/helium.py`, with Sunbather settings in
+`config/sunbather.py`. The top-level `helium_grid` block is defined in
+`config/helium_grid.py` and selects a fit to prepared helium spectra.
+The direct observed-data recipes are demonstrated in
+[Tutorial 12](tutorial.md#tutorial-12-he-i-transmission-spectroscopy-with-crires-wasp-121-b)
+and [Tutorial 12b](tutorial.md#tutorial-12b-he-i-transmission-spectroscopy-with-carmenes-gj-3470-b).

@@ -8,7 +8,13 @@ autodoc_use_legacy_class_based = True
 project = "EXoPLORE"
 author = "Alejandro Sánchez-López"
 copyright = "2026, Alejandro Sánchez-López"
-release = "1.0"
+# Read the declared version without importing the scientific dependencies.
+from pathlib import Path
+import re
+
+_package_init = Path(__file__).resolve().parent.parent / "src/exoplore/__init__.py"
+release = re.search(r'^__version__\s*=\s*[\"\']([^\"\']+)[\"\']',
+                    _package_init.read_text(encoding="utf-8"), re.MULTILINE).group(1)
 
 extensions = [
     "myst_parser",

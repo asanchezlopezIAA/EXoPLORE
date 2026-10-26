@@ -86,7 +86,7 @@ Follow the selected calling function to see how its arguments are constructed.
 | File | Function | Used by |
 |---|---|---|
 | `instruments/__init__.py` | Resolve instrument names through the registry and expose metadata/grid interfaces. Registration and complete end-to-end support are separate checks. | `core/carmenes_helium_simulation.py`, `core/helium_simulation.py` |
-| `instruments/base.py` | Define InstrumentInfo, which passes an instrument's resolution and input locations to the runner. wavegrid.py reads the corresponding arrays. | `instruments/carmenes_nir.py`, `instruments/carmenes_vis.py` |
+| `instruments/base.py` | Define InstrumentInputs for the reader settings and InstrumentInfo for the resolution and resolved input locations. wavegrid.py reads the corresponding arrays. | `instruments/carmenes_nir.py`, `instruments/carmenes_vis.py` |
 | `instruments/carmenes_helium_molecfit.py` | Fit telluric transmission separately in the synthetic CARMENES detector sections. The configured acceptance checks determine which fitted corrections can be used. | `core/carmenes_helium_simulation.py` |
 | `instruments/carmenes_nir.py` | Resolve CARMENES NIR wavelength and S/N inputs for the selected observing mode. get_WaveGrid reads the selected files. A supplied grid or fixed S/N takes precedence over the corresponding reference file. | `instruments/__init__.py` |
 | `instruments/carmenes_oh.py` | Fit the sky spectrum in fibre B and calibrate its contribution to the science spectrum in fibre A. The fitted sky amplitude and inter-fibre flux factor determine the subtraction. | `config/helium_oh.py`, `instruments/carmenes_oh_oot.py`, `pipelines/palle2020.py` |
@@ -150,7 +150,7 @@ Follow the selected calling function to see how its arguments are constructed.
 |---|---|---|
 | `planets/__init__.py` | Use load_planet to obtain the system-parameter object consumed by the runner. Configuration selects the observation/analysis separately. The planet object records the physical system and derived quantities used across stages. | `core/carmenes_helium_simulation.py`, `core/helium_simulation.py` |
 | `planets/catalog.py` | Read planetary-system JSON files into PlanetParameters. Format-specific branches convert input names and units to the fields used by the atmosphere and observing code. | `planets/__init__.py` |
-| `planets/models.py` | Store planetary-system parameters and calculate derived orbital quantities. Unit-labelled fields supply the atmosphere and timing code. Compatibility properties convert them to the conventions used by their callers. | `planets/__init__.py`, `planets/catalog.py` |
+| `planets/models.py` | Store planetary-system parameters and calculate derived orbital quantities. Unit-labelled fields supply the atmosphere and timing code. Properties convert the stored astronomical units to the units used by each calculation. | `planets/__init__.py`, `planets/catalog.py` |
 
 ## plotting
 
