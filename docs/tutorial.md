@@ -1770,9 +1770,105 @@ np.savez_compressed(sequence_file, bjd=sequence[:, 0], airmass=sequence[:, 1])
 
 The sequence uses a visible transit window with Paranal geometry and airmasses 1.48–1.95. We fix `observation.berv_kms: 0` as an idealized velocity convention. This choice sets the synthetic observer-frame velocity zero point. The input {download}`README <../inputs/ANDES/HD189733b/sodium/README.md>` records the reference settings. For another target, supply its own sequence and adjust the coordinates, ephemeris and velocity convention.
 
-### Step 3: Include RM+CLV in the observation
+### Step 3: Follow the stellar spectrum through transit
 
-The JSON selects:
+A stellar line in an unresolved observation combines light from the whole visible disk. The approaching hemisphere contributes blueshifted profiles and the receding hemisphere contributes redshifted profiles. During transit, the planet removes a different part of that sum at each exposure.
+
+There are two changes to follow. **RM** comes from blocking different rotation velocities. **CLV** comes from the changing local line shape and brightness between disk centre and limb. Both contribute to the transmission spectrum around a strong stellar line such as sodium. [Casasayas-Barris et al. (2020)](https://doi.org/10.1051/0004-6361/201937221) demonstrate these effects in transit spectra and their light curves.
+
+#### The local stellar spectrum
+
+The intensity bundle supplies {math}`I(\lambda,\mu)`, with
+
+```{math}
+\mu=\sqrt{1-x^2-y^2}.
+```
+
+Here {math}`x,y` are sky coordinates in stellar-radius units. Near disk centre, we see the atmosphere along a nearly vertical path. Near the limb, we see a more oblique path through different line-forming layers. The synthesis supplies the resulting angular dependence of the spectrum and continuum.
+
+The projected rotation velocity assigned to each surface sample is
+
+```{math}
+v_{\rm rot}(x,y)=(v\sin i_\star)
+\left[x\cos\lambda_{\rm sky}-y\sin\lambda_{\rm sky}\right],
+```
+
+where {math}`\lambda_{\rm sky}` is `rm_clv.projected_obliquity_deg`. The stellar `v_rotsini_kms` sets the velocity scale. Orbital inclination sets the transit chord, while projected obliquity sets how that chord crosses the approaching and receding parts of the star. In this example, an aligned planet crosses below disk centre.
+
+EXoPLORE interpolates the local intensity at each sample's {math}`\mu`, Doppler-shifts it by its local rotation velocity and sums it with its projected area. The unocculted star and the opaque-body transit are
+
+```{math}
+F_{\rm out}(\lambda)=\int_{\rm disk}I(\lambda,x,y)\,dA,
+\qquad
+F_{\rm opaque}(\lambda,t)=F_{\rm out}(\lambda)
+-\int_{\rm blocked(t)}I(\lambda,x,y)\,dA.
+```
+
+The corresponding continuum intensities give {math}`C_{\rm out}` and {math}`C_{\rm opaque}`. Removing the continuum transit leaves the stellar line-distortion factor
+
+```{math}
+D_\star(\lambda,t)=
+\frac{F_{\rm opaque}(\lambda,t)/C_{\rm opaque}(\lambda,t)}
+{F_{\rm out}(\lambda)/C_{\rm out}(\lambda)}.
+```
+
+Exposure averaging and instrumental convolution are applied to the flux components before this ratio is formed.
+
+```{figure} figures/tutorial13_stellar_rm_clv.gif
+:width: 100%
+:align: center
+
+The opaque-planet stellar calculation at 32 phases of the Tutorial 13 sequence. Left: the transit chord across the rotating disk, with blue for approaching rotation, red for receding rotation and brightness set by the supplied local continuum. The black circle marks the catalog planet radius. Top right: the unocculted stellar line, the occulted line after continuum normalization and the local profile at the planet centre. The local curve illustrates the viewing angle and velocity being sampled. The disk-integrated curves include the entire blocked area and the configured exposure averaging. Bottom right: 100(D⋆−1), which makes the changing line distortion easier to inspect. The local-profile illustration is convolved to the same resolving power.
+```
+
+Watch the lower panel as the planet crosses the star. Removing a blueshifted local absorption profile changes the blue side of the disk-integrated line. Later, the blocked light comes from the receding hemisphere. The local orange profile also changes shape with viewing angle. Dividing a transit observation by a single out-of-transit spectrum retains these time-dependent stellar residuals.
+
+#### Factorized star and planet
+
+With `rm_clv.coupling: "factorized"`, the standard CCF simulator calculates the stellar factor above and the planetary spectral time series separately, then multiplies them:
+
+```{math}
+F_{\rm fac}(\lambda,t)=S_{\rm out}(\lambda,t)
+\,D_\star(\lambda,t)\,P_{\rm 1D}(\lambda,t).
+```
+
+{math}`S_{\rm out}` is the normalized stellar reference. {math}`P_{\rm 1D}` is the Doppler-shifted planetary factor constructed by `spec_to_mat_fraction()`. For a homogeneous transit model it has the form {math}`1-s\,w(t)\,\delta_{\rm pRT}(\lambda,t)`, where {math}`s` is the injection scale, {math}`\delta_{\rm pRT}` is the pRT transit depth and {math}`w(t)` is the selected event weight. With `signal_uses_light_curve: true`, BATMAN supplies the blocking weight, normalized to unity at maximum blocking.
+
+This combines a disk-integrated stellar spectrum with a planetary transmission model. It is useful when that separation describes the experiment at the required precision. Around strong stellar lines, the atmosphere can instead receive a local line profile appreciably different from the disk average. [Dethier & Bourrier (2023)](https://arxiv.org/abs/2304.13759) examine how this local illumination changes atmospheric signatures.
+
+#### Spatial star–atmosphere coupling
+
+With `rm_clv.coupling: "spatial"`, each atmospheric ray absorbs the stellar spectrum directly behind it. pRT supplies a transmission {math}`\mathcal{T}_{\rm p}(\lambda,b)=\exp[-\tau(\lambda,b)]` for each wavelength and impact parameter {math}`b`, the distance from the planet centre.
+
+For one instant during transit, the calculation is
+
+```{math}
+F_{\rm spatial}(\lambda,t)=F_{\rm out}(\lambda,t)
+-\int_{\rm opaque(t)} I_t(\lambda,x,y)\,dA
+-\int_{\rm illuminated\ annulus(t)}
+ I_t(\lambda,x,y)\left[1-\mathcal{T}_{\rm p}(\lambda_{\rm p},b)\right]dA.
+```
+
+{math}`I_t` includes the local stellar rotation and the observed stellar motion. {math}`\lambda_{\rm p}` is the wavelength in the planet frame. Each atmospheric ray therefore combines a stellar profile at its own local velocity with planetary absorption at the planet's velocity. Only the part of the annulus illuminated by the star contributes, which matters particularly at ingress and egress.
+
+EXoPLORE follows the native pRT atmospheric radii and integrates the illuminated arcs around each radius. The deepest atmospheric radius sets the opaque bottom. The radius specified at `reference_pressure_bar` locates the chosen reference pressure within that atmosphere. Three temporal samples per exposure follow the moving geometry and velocities in this run. The Na ray table in this integral comes from the same pRT atmosphere used to generate the observation. The integral supplies the complete stellar-plus-planetary flux. The next operations apply telluric transmission, instrumental convolution and pixel integration.
+
+The spatial calculation supplies the transit, stellar limb brightness and atmospheric absorption together. Applying an additional BATMAN transit to that flux would count the occultation twice.
+
+```{figure} figures/tutorial13_spatial_coupling.gif
+:width: 100%
+:align: center
+
+The spatial calculation from the saved full ANDES execution, at the same phases as the stellar animation. Top right: the saved noiseless, telluric-free opaque-body and complete star–atmosphere components after instrumental sampling, on a unit-throughput scale. Bottom right: 100(1−Fspatial/Fopaque), the fraction absorbed by the atmosphere relative to the opaque-body observation. The dashed line follows the planet's velocity relative to the star. The absorbed fraction includes broadband annular absorption, whose level is treated during subsequent continuum normalization. The disk circle uses the catalog reference radius as a position marker. The orange annulus is drawn wider for visibility. The spectral curves use the actual simulated atmospheric structure.
+```
+
+The stellar line remains near zero velocity in this frame, while planetary absorption crosses it. The illuminating spectrum changes as the annulus passes over different parts of the star, so the atmospheric signature depends on both the pRT transmission and the local stellar intensity. The bottom panel shows this contribution directly from the saved flux components. The later transmission analysis introduces continuum normalization, the stellar reference and the correction model.
+
+The first animation evaluates the factorized stellar model on its square surface grid and catalog opaque radius. The second reads the spatial run, whose opaque bottom comes from pRT and whose surface integration uses polar quadrature. For a numerical comparison between methods, match the radius convention and check spatial convergence. These animations follow the calculations used by each method.
+
+#### Choose the calculation and correction
+
+The sodium example selects:
 
 ```json
 "rm_clv": {
@@ -1791,13 +1887,25 @@ The JSON selects:
 }
 ```
 
-At each exposure, EXoPLORE locates the planet on the rotating stellar surface. The opaque disk removes the light behind it, while the atmospheric annulus absorbs the local stellar spectrum using the pRT sodium model. Integrating over the disk gives the changing stellar and planetary observation. The stellar rotation comes from `v_rotsini_kms` in `planet_params/HD189733b.json`. `projected_obliquity_deg` sets the orientation of the transit chord relative to that rotation.
+| Choice | Calculation |
+|---|---|
+| `effects: "rm_clv"` | Local line-profile variation and stellar rotation |
+| `effects: "rm"` | Disk-centre normalized line shape at every angle, retaining continuum limb darkening and rotation |
+| `effects: "clv"` | Angular intensity variation with rotation set to zero |
+| `simulate: true` | Include the selected stellar contribution in the synthetic observation |
+| `correct: true` | Apply its atmosphere-free stellar correction during preparation |
+| `correction_method: "matched"` | Use the injected opaque-body stellar model |
 
-This spatial integration already includes the transit, limb darkening and ingress/egress. An additional BATMAN transit multiplication would count the occultation twice. The [stellar-model guide](stellar_intensities.md) explains the integration and its input requirements.
+The standard CCF runner supports both factorized and spatial injection. It can also prepare a separate factorized correction for a spatial observation through Seidel22. The integrated direct-sodium runner used here supports spatial injection with the matched correction, or a simulation with RM+CLV disabled. The [configuration reference](config_reference.md#19-stellar-rm-and-clv) lists the supported combinations.
 
-EXoPLORE then multiplies the intrinsic observation by the exposure's terrestrial transmission, applies the instrumental response and integrates onto native pixels. Throughput variations and Gaussian noise complete the synthetic time series. The ETC gives an order-centre S/N of approximately 872 per resolution element at the reference conditions. With 2.5 pixels per resolution element, this corresponds to approximately 552 per pixel at that anchor. Stellar absorption, the blaze and tellurics reduce the local S/N, particularly in the sodium cores.
+Once a direct sodium run has finished, generate these animations with:
 
-With both the Gaussian-noise and throughput seeds fixed, the stochastic realisation is reproducible. End-to-end floating-point results may still differ at machine-precision level, so bitwise-identical output is not guaranteed.
+```bash
+python scripts/animate_rm_clv.py outputs/hd189733b_andes_sodium docs/figures
+```
+
+This reads the completed observation and evaluates the short stellar-only illustration. The script protects existing GIFs, so choose a fresh output directory when making another set.
+
 
 ### Step 4: Correct tellurics and prepare the transmission spectra
 
