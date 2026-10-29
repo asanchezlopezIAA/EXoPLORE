@@ -24,7 +24,7 @@ def policy_config():
     profile = oh_profile()
     return SimpleNamespace(instrument=SimpleNamespace(name='CARMENES_NIR'),
         observation=SimpleNamespace(use_real_data=True,helium_transmission_spectroscopy=True),
-        atmosphere=SimpleNamespace(helium=None),helium_grid=None,
+        atmosphere=SimpleNamespace(helium=None),helium_grid=None,atomic_transmission=None,
         pipeline=SimpleNamespace(name='Palle2020',oh_treatment='fiber_a_oot_profile',
             palle2020={'oh_fit':{'profile':dict(profile.__dict__),
                 'oot_profile':dict(fit_window_nm=[1083.39,1083.48],relative_svd_cutoff=1e-10,

@@ -2,6 +2,17 @@
 """
 Convert CARMENES ETC table output to an EXoPLORE SNR FITS file.
 
+For the maximum-anchor prescription selected by noise.carmenes_etc_file,
+package saved ETC HTML responses with their observing conditions::
+
+    python scripts/carmenes_etc_to_fits.py --planet HD189733b --channel VIS \\
+        --exposure_seconds 198 --etc_html 1.0=etc_X1.html \\
+        --etc_html 1.35=etc_X1p35.html --output_dir inputs/CARMENES_VIS/HD189733b
+
+This writes a compressed numerical bundle with all response curves. The
+simulation uses each curve's maximum, its wavelength and the airmass grid.
+Use matching target, exposure duration, seeing and extinction for every response.
+
 The CARMENES ETC (https://carmenes-etc.lsw.uni-heidelberg.de/) produces a
 per-order S/N table for both the NIR and VIS channels.  This script reads
 that table, selects the desired SNR column (max or median per order), and
@@ -162,7 +173,31 @@ def main():
                         help="Output directory (default: current directory).")
     parser.add_argument("--snr_column",  choices=["max", "median"], default="median",
                         help="Which ETC SNR column to use (default: median).")
+    parser.add_argument('--etc_html', action='append', default=[], metavar='AIRMASS=PATH',
+                        help='Saved ETC response for the maximum-anchor noise model. Repeat for multiple airmasses.')
+    parser.add_argument('--channel', choices=['VIS', 'NIR'],
+                        help='Channel to extract from --etc_html responses.')
+    parser.add_argument('--exposure_seconds', type=float,
+                        help='Exposure duration used in every --etc_html request.')
     args = parser.parse_args()
+
+    if args.etc_html:
+        if args.channel is None or args.exposure_seconds is None or args.input_nir or args.input_vis:
+            parser.error('--etc_html requires --channel and --exposure_seconds')
+        from exoplore.io.carmenes_etc import write_etc_bundle
+        responses = []
+        for item in args.etc_html:
+            try:
+                x, path = item.split('=', 1)
+                responses.append((float(x), path))
+            except ValueError:
+                parser.error('--etc_html expects AIRMASS=PATH')
+        os.makedirs(args.output_dir, exist_ok=True)
+        output = os.path.join(args.output_dir,
+                             f'CARMENES_{args.channel}_ETC_{args.planet}.npz')
+        write_etc_bundle(responses, args.channel, args.exposure_seconds, output)
+        print(f'Written ETC anchor bundle: {output}')
+        return
 
     if args.input_nir is None and args.input_vis is None:
         sys.exit("Provide at least one of --input_nir or --input_vis.")

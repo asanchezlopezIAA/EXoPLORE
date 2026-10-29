@@ -20,6 +20,9 @@ from exoplore.config.models import (
     PathConfig,
     SimulationConfig,
 )
+from exoplore.config.rm_clv import RMCLVConfig
+from exoplore.config.seidel22 import Seidel22Config
+from exoplore.config.atomic_transmission import AtomicTransmissionConfig
 
 # Convenience alias, load_simulation_config(path) == SimulationConfig.from_json(path)
 def load_simulation_config(path):
@@ -41,5 +44,8 @@ __all__ = [
     "StatisticsConfig",
     "PathConfig",
     "SimulationConfig",
+    "RMCLVConfig",
+    "Seidel22Config",
+    "AtomicTransmissionConfig",
     "load_simulation_config",
 ]

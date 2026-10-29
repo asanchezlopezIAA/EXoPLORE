@@ -25,6 +25,7 @@ from exoplore.core.helium_synthetic_observation import utc_midpoints
 from exoplore.instruments import load_instrument, get_WaveGrid
 from exoplore.instruments.carmenes_helium_molecfit import fit_carmenes_night
 from exoplore.observation.noise import photon_noise
+from exoplore.observation.carmenes_noise import configured_carmenes_etc
 from exoplore.pipelines.carmenes_helium import prepare_carmenes_transmission
 from exoplore.pipelines.czesla2024 import timed_exposure_selection
 from exoplore.pipelines.helium_math import window_mask
@@ -35,6 +36,7 @@ def validate_carmenes_helium(config):
     """Reject conflicting selections before physical calculations or outputs."""
     from exoplore.config.helium_oh import validate_oh_treatment
     validate_oh_treatment(config)
+    configured_carmenes_etc(config)
     if config.instrument.name != 'CARMENES_NIR' or config.pipeline.carmenes_helium is None:
         raise ValueError('carmenes_helium requires CARMENES_NIR and explicit preparation settings')
     h = config.atmosphere.helium
@@ -57,7 +59,10 @@ def validate_carmenes_helium(config):
 def load_carmenes_order(config):
     """Use the existing instrument loader, then select from the full ETC arrays."""
     instrument = load_instrument(config)
-    wave, pixels, _, snr, *_ = get_WaveGrid(config.instrument, config.observation, instrument, instrument.n_orders_total)
+    etc = configured_carmenes_etc(config)
+    wave, pixels, _, snr, *_ = get_WaveGrid(
+        config.instrument, config.observation, instrument,
+        instrument.n_orders_total, **({'use_etc': True} if etc is not None else {}))
     wave = np.asarray(wave, float).T*1000  # Existing CARMENES wave_star convention.
     snr = np.asarray(snr, float)
     science = config.pipeline.carmenes_helium
@@ -65,6 +70,16 @@ def load_carmenes_order(config):
     require_helium_orders(wave, selected, science.helium_vacuum_lines_nm)
     if len(selected) != 1:
         raise ValueError('Select one helium order for the current spherical simulation')
+    if etc is not None:
+        index = selected[0]
+        if pixels != config.atmosphere.helium.observing_pixels:
+            raise ValueError('Helium observing_pixels differs from the native grid')
+        if config.atmosphere.helium.airmass is None:
+            raise ValueError('Supply the exposure airmasses for CARMENES ETC noise')
+        etc.check_airmass(config.atmosphere.helium.airmass)
+        return dict(wave_nm=wave[index], etc=etc, order_index=index,
+                    resolving_power=instrument.res,
+                    source_files=[instrument.wave_file, config.noise.carmenes_etc_file])
     if snr.shape != wave.shape:
         raise ValueError('Full-channel ETC S/N must match the native orders-by-pixels grid')
     with fits.open(instrument.snr_file) as hdul:
@@ -81,6 +96,19 @@ def load_carmenes_order(config):
         raise ValueError('Helium observing_pixels differs from the native grid')
     print(f'  Full CARMENES grid: {wave.shape}; selected order {index}; native R={instrument.res:.0f}',flush=True)
     return dict(wave_nm=wave[index],snr=snr[index],source_files=[instrument.wave_file,instrument.snr_file])
+
+
+def carmenes_observation_error(config, order, arrays):
+    """Build uncertainties from the selected ETC convention for this exposure grid."""
+    if config.noise.carmenes_etc_file is None:
+        return np.broadcast_to(1/order['snr'][None, :], arrays['expected_flux'].shape).copy()
+    snr = order['etc'].pixel_snr(
+        order['order_index'], order['wave_nm']/1000,
+        arrays['telluric_transmission'], config.atmosphere.helium.airmass,
+        config.observation.exposure_time_seconds, order['resolving_power'])
+    # Match the standard runner's lower S/N floor and uncertainty controls.
+    return (config.observation.noise_scaling_factor/np.maximum(snr, 1.)
+            + config.noise.snr_correction)
 
 
 def observing_carmenes_arrays(settings, science, planet, model, duration, wave):
@@ -129,6 +157,10 @@ def run_carmenes_helium(config, *, expectation_source: Path | None = None):
     output.mkdir(parents=True,exist_ok=False)
     with (output/'run_config.json').open('x') as f:json.dump(asdict(config),f,indent=2)
     noise_convention = CARMENES_NOISE_CONVENTION
+    if config.noise.carmenes_etc_file is not None:
+        noise_convention = ('ETC maximum per order and airmass, native resel-to-pixel '
+                            'conversion, ANDES sinc-squared blaze and relative tellurics, '
+                            'continuum-relative sigma=1/SNR')
     if h.resume_simulation_path:
         source = Path(h.resume_simulation_path)
         provenance_path = source/'provenance.json'
@@ -138,6 +170,8 @@ def run_carmenes_helium(config, *, expectation_source: Path | None = None):
         original = json.loads((source/'run_config.json').read_text())
         current = asdict(config)
         for item in (original,current):
+            if item['noise'].get('carmenes_etc_file') is None:
+                item['noise'].pop('carmenes_etc_file', None)
             if item.get('helium_grid') is None:
                 item.pop('helium_grid',None)
             if item['pipeline'].get('palle2020') is None:
@@ -171,7 +205,7 @@ def run_carmenes_helium(config, *, expectation_source: Path | None = None):
         arrays, profile, raw_error = read_saved_expectation(expectation_source, config)
         expected, control, tell = (arrays[k] for k in ('expected_flux', 'no_helium_flux', 'telluric_transmission'))
         # Reuse physical spectra, never a previous noise prescription.
-        raw_error = np.broadcast_to(1/order['snr'][None, :], expected.shape).copy()
+        raw_error = carmenes_observation_error(config, order, arrays)
         rng = np.random.default_rng(h.noise_seed)
         raw = expected + photon_noise(1/raw_error, rng=rng) if h.noise_mode == 'gaussian' else expected.copy()
         print(f'  New independent observation-noise realization, seed {h.noise_seed}; noiseless expectation reused.', flush=True)
@@ -193,7 +227,7 @@ def run_carmenes_helium(config, *, expectation_source: Path | None = None):
         expected,control,tell = (arrays[k] for k in ('expected_flux','no_helium_flux','telluric_transmission'))
         # Impose the ETC uncertainty in continuum-normalized flux units.
         # Apply the configured uncertainty prescription to the synthetic spectrum.
-        raw_error = np.broadcast_to(1/order['snr'][None, :], expected.shape).copy()
+        raw_error = carmenes_observation_error(config, order, arrays)
         rng = np.random.default_rng(h.noise_seed)
         raw = expected+photon_noise(1/raw_error,rng=rng) if h.noise_mode=='gaussian' else expected.copy()
     berv = np.asarray(h.berv_kms);rv=science.kp_kms*np.sin(2*np.pi*phases)

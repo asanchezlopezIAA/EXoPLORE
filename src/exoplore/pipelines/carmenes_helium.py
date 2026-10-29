@@ -14,19 +14,9 @@ from __future__ import annotations
 
 import numpy as np
 from exoplore.pipelines.czesla2024 import exposure_indices
-from exoplore.pipelines.helium_math import stellar_wavelength, planet_wavelength, window_mask, resample
-
-
-def gap_resample(wave, flux, variance, destination):
-    """Interpolate within detector sections, never across their physical gap."""
-    y, v = resample(wave, flux, variance, destination)
-    widths = np.diff(wave)
-    gaps = np.flatnonzero(widths > 5*np.median(widths))
-    for i in gaps:
-        missing = (destination > wave[i]) & (destination < wave[i+1])
-        y[missing] = np.nan
-        v[missing] = np.nan
-    return y, v
+from exoplore.pipelines.helium_math import (
+    stellar_wavelength, planet_wavelength, window_mask, resample, gap_resample,
+)
 
 
 def arithmetic_mean(flux, variance):

@@ -125,12 +125,9 @@ def observing_arrays(settings, science, planet, model, exposure_seconds: float,
     def sample(row):
         if native_wave_nm is None:
             return detector_sample(row, edges[1]-edges[0], h.instrumental_resolving_power, h.instrumental_oversampling)
-        from scipy.integrate import cumulative_trapezoid
-        sigma = 1/(h.instrumental_resolving_power*2*np.sqrt(2*np.log(2))*(edges[1]-edges[0]))
-        blurred = gaussian_filter1d(row, sigma, mode='nearest')
-        integral = cumulative_trapezoid(blurred, fine, initial=0)
-        pixel_edges = np.exp(native_edges)
-        return np.diff(np.interp(pixel_edges, fine, integral))/np.diff(pixel_edges)
+        from exoplore.observation.spectral_sampling import sample_native_pixels
+        return sample_native_pixels(row, fine, native_edges, edges[1]-edges[0],
+                                    h.instrumental_resolving_power)
     nodes, weights = np.polynomial.legendre.leggauss(h.exposure_quadrature_points)
     offsets = nodes*exposure_seconds/(2*science.period_days*86400)
     rows, controls, transmissions, opaque_means = [], [], [], []

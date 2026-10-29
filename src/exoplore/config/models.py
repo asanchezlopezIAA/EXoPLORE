@@ -26,9 +26,12 @@ from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from exoplore.config.czesla2024 import Czesla2024Config
+from exoplore.config.seidel22 import Seidel22Config
 from exoplore.config.carmenes_helium import CarmenesHeliumConfig
 from exoplore.config.helium import HeliumPwindsConfig
 from exoplore.config.helium_grid import HeliumGridConfig
+from exoplore.config.rm_clv import RMCLVConfig
+from exoplore.config.atomic_transmission import AtomicTransmissionConfig
 
 
 # ---------------------------------------------------------------------------
@@ -234,12 +237,19 @@ class NoiseConfig:
         Integer seed for the Gaussian noise RNG.  Use the same value to
         reproduce identical noise realisations. Set ``null`` for a random
         seed (different noise every run).  Default: 12345.
+    carmenes_etc_file:
+        Optional CARMENES ETC response bundle. Use each order's maximum as
+        the anchor for native pixel sampling, blaze and relative tellurics.
+        The bundle records the exposure duration and available airmasses.
     """
     noise_choice: str = "SNR"
     fixed_snr: Optional[float] = None
     use_mean_snr: bool = False
     snr_correction: float = 0.0
     noise_seed: Optional[int] = 12345
+    # CARMENES ETC maxima anchor the blaze and exposure-dependent telluric S/N.
+    # The input bundle records the channel, exposure duration and airmass grid.
+    carmenes_etc_file: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -564,12 +574,17 @@ class PipelineConfig:
 
     # Optional direct-transmission recipe. absent for every existing pipeline.
     czesla2024: Optional[Czesla2024Config] = None
+    seidel22: Optional[Seidel22Config] = None
     carmenes_helium: Optional[CarmenesHeliumConfig] = None
     palle2020: Optional[dict] = None
     # Explicit OH treatment for direct helium routes. None reads archived modes.
     oh_treatment: Optional[str] = None
 
     def __post_init__(self) -> None:
+        if isinstance(self.seidel22, dict):
+            self.seidel22 = Seidel22Config(**self.seidel22)
+        if self.name == 'Seidel22' and self.seidel22 is None:
+            raise ValueError("pipeline.name='Seidel22' requires pipeline.seidel22 settings")
         if self.name == 'Palle2020' and self.carmenes_helium is None and self.palle2020:
             self.carmenes_helium = self.palle2020.get('transmission')
         if isinstance(self.carmenes_helium, dict):
@@ -977,6 +992,9 @@ class OutputConfig:
         The noise realisation.  Diagnostic only.  (~411 MB)
     save_std_noise:
         Per-pixel noise standard deviation.  Diagnostic only.  (~419 MB)
+    save_rm_clv_model:
+        Stellar distortion and, in spatial mode, joint flux diagnostic arrays.
+        Size depends on the selected orders and exposure count.
     """
     save_mat_res: bool = True
     save_mat_back: bool = True
@@ -986,6 +1004,7 @@ class OutputConfig:
     save_mat_cc: bool = False
     save_mat_noise: bool = False
     save_std_noise: bool = False
+    save_rm_clv_model: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -1125,11 +1144,17 @@ class SimulationConfig:
     )
     timing: bool = False
     helium_grid: Optional[HeliumGridConfig] = None
+    rm_clv: RMCLVConfig = field(default_factory=RMCLVConfig)
+    atomic_transmission: Optional[AtomicTransmissionConfig] = None
 
     def __post_init__(self) -> None:
         """Construct the opt-in helium grid without changing existing routes."""
         if isinstance(self.helium_grid,dict):
             self.helium_grid=HeliumGridConfig(**self.helium_grid)
+        if isinstance(self.rm_clv, dict):
+            self.rm_clv = RMCLVConfig(**self.rm_clv)
+        if isinstance(self.atomic_transmission, dict):
+            self.atomic_transmission = AtomicTransmissionConfig(**self.atomic_transmission)
 
     # ------------------------------------------------------------------
     # Serialization
@@ -1227,6 +1252,10 @@ class SimulationConfig:
                 DetectabilityConfig, d.get("detectability", {})),
             timing=bool(d.get("timing", False)),
             helium_grid=d.get('helium_grid'),
+            atomic_transmission=d.get('atomic_transmission'),
+            # Validate every new RM/CLV key, so a misspelled activation or
+            # geometry field cannot silently disable a requested calculation.
+            rm_clv=RMCLVConfig(**d.get("rm_clv", {})),
         )
 
     @classmethod

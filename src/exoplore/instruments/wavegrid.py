@@ -508,6 +508,20 @@ def get_WaveGrid(instrument, observation, info, n_orders, *, use_etc=False):
         # simulator Block 2e transposes it back to (n_orders, n_pixels)
         wave_star_out = wvl_clean.T
 
+        if use_etc:
+            # ETC maxima are evaluated after each exposure's tellurics exist.
+            # Keep the reference cadence, while bypassing measured S/N files.
+            def reference(path):
+                return fits.getdata(path) if path else None
+            placeholder = np.ones_like(wvl_clean, dtype=float)
+            if observation.different_nights:
+                return (wave_star_out, n_pixels, None,
+                        [placeholder.copy() for _ in range(observation.n_nights)],
+                        [reference(p) for p in JD_file] if JD_file else None,
+                        [reference(p) for p in airmass_file] if airmass_file else None)
+            return (wave_star_out, n_pixels, None, placeholder,
+                    reference(JD_file), reference(airmass_file))
+
         if not observation.different_nights:
             sig_og = fits.open(sig_file)[0].data if sig_file != '' else None
             snr_og = fits.open(snr_file)[0].data if snr_file != '' else None

@@ -42,6 +42,7 @@ Follow the selected calling function to see how its arguments are constructed.
 | `atmosphere/prt.py` | Radiative-transfer wrappers, chemistry interfaces and convolution helpers. Calls can represent injected atmospheres, search templates or retrieval proposals. | `analysis/ccf_time.py`, `atmosphere/__init__.py`, `core/observation.py`, `core/simulator.py`, `io/stellar.py`, `pipelines/tellurics.py`, `retrieval/helium_grid.py`, `scripts/emulator/compare_emulator.py`, `scripts/emulator/generate_training_data.py`, `scripts/illustrate_model_spectrum.py` |
 | `atmosphere/temperature.py` | Calculate the configured temperature at each atmospheric pressure level. Chemistry and radiative transfer use the resulting profile. | `atmosphere/__init__.py`, `atmosphere/prt.py` |
 | `atmosphere/winds.py` | Calculate velocity broadening and the changing contributions of planetary limbs. The runner combines these profiles with the exposure-dependent orbital velocity. | `atmosphere/__init__.py`, `core/simulator.py`, `pipelines/sysrem.py` |
+| `atmosphere/transmission.py` | Export hydrostatic ray transmissions from pRT opacities and verify their integrated transit radius. | `core/simulator.py`, `stellar/coupled.py` |
 
 ## ccf
 
@@ -65,6 +66,7 @@ Follow the selected calling function to see how its arguments are constructed.
 | `config/helium_oh.py` | Validate the OH-emission treatment and its required sky-fibre data. The selected correction is applied later by the instrument preparation code. | `core/carmenes_helium_simulation.py`, `core/helium_simulation.py`, `core/spectroscopy_mode.py`, `pipelines/czesla2024.py`, `pipelines/palle2020.py` |
 | `config/models.py` | Define simulation settings, defaults, JSON loading and field validation. | `ccf/models.py`, `config/__init__.py`, `core/simulator.py`, `instruments/__init__.py`, `instruments/base.py`, `io/paths.py`, `pipelines/models.py`, `scripts/generate_skycalc_inputs.py`, `scripts/plot_carmenes_palle2020.py`, `scripts/prepare_carmenes_palle2020.py`, `scripts/run_detectability_maps.py` |
 | `config/sunbather.py` | Define the installation paths and physical settings consumed by the optional Sunbather atmosphere solver. | `atmosphere/helium_sunbather.py`, `atmosphere/helium_sunbather_metals.py`, `config/helium.py`, `config/helium_grid.py` |
+| `config/rm_clv.py` | Define the stellar-effect simulation and correction switches, angular model input and integration settings. | `config/models.py`, `stellar/observation.py` |
 
 ## core
 
@@ -74,6 +76,8 @@ Follow the selected calling function to see how its arguments are constructed.
 | `core/carmenes_helium_simulation.py` | Generate CARMENES helium observations from the selected atmosphere, detector inputs and direct-transmission preparation. Read full-channel ETC information before selecting the order so its noise arrays keep their detector indices. | `core/helium_multi_night.py`, `core/helium_simulation.py` |
 | `core/cli.py` | Shared command-line entry point. Read JSON, validate/preview the selected experiment, and execute the experiment with --run. | `scripts/run_exoplore.py` |
 | `core/helium_etc.py` | Read and convert detector noise inputs and select pixels covering the helium feature. S/N values carry their pixel and exposure conventions into the observation calculation. | `core/carmenes_helium_simulation.py`, `core/helium_simulation.py` |
+| `observation/carmenes_noise.py` | Read CARMENES ETC maximum anchors and construct pixel S/N using native sampling, the ANDES blaze and exposure-dependent telluric transmission. Validate the channel, exposure duration and airmass coverage. | `core/simulator.py`, `core/carmenes_helium_simulation.py` |
+| `observation/sodium_noise.py` | Use the ETC continuum anchor and expected sodium-observation flux to derive photon-dominated Gaussian uncertainties and local S/N. Keep the full native order for the blaze when inspecting a smaller wavelength interval. | Direct sodium transmission simulation |
 | `core/helium_multi_night.py` | Simulate and prepare separate helium nights, then combine their products. Each night supplies its noise, telluric correction and reference spectrum. Covariance propagation accounts for the shared-reference errors. | `core/carmenes_helium_simulation.py` |
 | `core/helium_simulation.py` | Run a helium experiment: validate inputs, calculate the atmosphere or control spectrum, generate detector exposures, prepare the transmission spectrum and save diagnostics. | `core/carmenes_helium_simulation.py`, `core/helium_multi_night.py`, `core/simulator.py` |
 | `core/helium_synthetic_observation.py` | Write synthetic extracted spectra for the observed-spectrum molecfit interface. Exposure times, wavelengths and flux arrays provide the inputs to the external telluric fit. | `core/carmenes_helium_simulation.py`, `core/helium_simulation.py` |
@@ -108,6 +112,8 @@ Follow the selected calling function to see how its arguments are constructed.
 | `io/results.py` | Read and write compact results. Construct CCF and detection-map objects from the arrays and metadata stored by the simulator. | `core/simulator.py` |
 | `io/stellar.py` | Read PHOENIX spectra and construct Doppler-shifted stellar matrices. | `core/simulator.py`, `io/__init__.py` |
 | `io/utils.py` | Read, save and format shared file and array products. Numerical helpers in this module also calculate summaries and sampling indices for analysis functions. | `analysis/stats.py`, `ccf/statistics.py`, `core/simulator.py`, `io/__init__.py` |
+| `io/stellar_surface.py` | Read specific intensities and validate angular coordinates, units, wavelength convention and synthesis metadata. | `stellar/observation.py` |
+| `io/turbospectrum.py` | Read angular Turbospectrum exports, recover the continuum, convert wavelength coordinates and prepare an intensity bundle. | `scripts/prepare_stellar_intensities.py` |
 
 ## observation
 
@@ -125,6 +131,7 @@ Follow the selected calling function to see how its arguments are constructed.
 
 | File | Function | Used by |
 |---|---|---|
+| `pipelines/seidel22.py` | Construct an S/N-weighted stellar reference, prepare transmission spectra and combine the planet-aligned exposures. Optional sinusoidal fitting treats continuum wiggles. Shared wavelength, mask and averaging functions live in `helium_math.py`. | `pipelines/prepare.py` and direct array callers |
 | `pipelines/__init__.py` | Export spectral masks, preparation operations and model-filtering functions. |  |
 | `pipelines/bl19.py` | Apply the BL19 normalization and telluric fits in the order selected by pipelines/prepare.py. Each step passes its corrected data, propagated uncertainties and wavelength selections to the next. | `pipelines/__init__.py`, `pipelines/cheverall26.py`, `pipelines/prepare.py`, `plotting/steps.py` |
 | `pipelines/blain24.py` | Apply wavelength-dependent throughput corrections followed by the configured airmass fit. Data and uncertainty arrays are propagated together. Model-processing flags select the operations used for templates. | `pipelines/__init__.py`, `pipelines/prepare.py` |
@@ -140,9 +147,10 @@ Follow the selected calling function to see how its arguments are constructed.
 | `pipelines/nortmann26.py` | Apply the Nortmann preparation and model-filtering operations selected by prepare.py. CRIRES+ preparation supplies the wavelength and telluric inputs for these calculations. | `pipelines/prepare.py` |
 | `pipelines/palle2020.py` | Prepare observed CARMENES helium spectra: select exposures, apply the configured OH and telluric corrections and construct the transmission spectrum with the shared CARMENES recipe. | `core/simulator.py`, `pipelines/prepare.py`, `scripts/prepare_carmenes_palle2020.py` |
 | `pipelines/pca.py` | Remove selected singular components from the exposure/pixel matrix with PCA. The call signature matches the preparation dispatcher. The decomposition uses the spectral matrix directly. | `pipelines/prepare.py` |
-| `pipelines/prepare.py` | Choose the preparation branch and return residuals, uncertainties, selections and filtering information. It is shared with configured model-reprocessing paths. | `core/simulator.py`, `pipelines/__init__.py` |
+| `pipelines/prepare.py` | Choose the preparation branch and return residuals, uncertainties, selections and filtering information. It is shared with configured model-reprocessing paths. | `pipelines/runner.py`, `pipelines/__init__.py` |
 | `pipelines/sysrem.py` | Fit and remove uncertainty-weighted time-wavelength components with SYSREM. Model-filtering functions use the fitted components or projector when evaluating a trial signal against the prepared data. | `analysis/stats.py`, `core/simulator.py`, `pipelines/__init__.py`, `pipelines/helium_sysrem.py`, `pipelines/nortmann26.py`, `pipelines/prepare.py`, `plotting/steps.py` |
 | `pipelines/tellurics.py` | Read telluric transmission for synthetic observations and apply the configured fixed-telluric preparation through pipeline_fixedTellurics. | `core/simulator.py`, `pipelines/__init__.py`, `pipelines/prepare.py` |
+| `pipelines/runner.py` | Supply the preparation result structure used by the observing runner, including masks and detrending bookkeeping for fixed-telluric normalization. | `core/simulator.py` |
 
 ## planets
 
@@ -181,6 +189,15 @@ Follow the selected calling function to see how its arguments are constructed.
 | `retrieval/models.py` | Retain regional abundances evaluated by the retrieval likelihood and read by its diagnostic plots. | `core/simulator.py` |
 | `retrieval/priors.py` | Define parameter distributions, prior transforms and prior-density calculations for the samplers. The ordered parameter names map sampling coordinates to the model arguments. | `retrieval/__init__.py` |
 | `retrieval/samplers.py` | Public sampler adapters. MultiNest receives a likelihood and prior transform. Emcee receives a log-posterior. Some runner setup remains inline. | `retrieval/__init__.py` |
+
+## stellar
+
+| File | Function | Used by |
+|---|---|---|
+| `stellar/__init__.py` | Export the local-intensity grid and disk-integrated transit types. | Stellar surface callers |
+| `stellar/surface.py` | Interpolate local intensities, apply projected rotation and integrate the disk with planetary occultation. | `stellar/observation.py`, `io/stellar_surface.py` |
+| `stellar/observation.py` | Average exposure samples, convolve to instrumental resolution and construct the observer-frame distortion and stellar reference. Divide flux and uncertainties by a requested fixed model. | `core/simulator.py`, `stellar/coupled.py` |
+| `stellar/coupled.py` | Integrate opaque-body occultation and atmospheric absorption against local stellar intensities, with exposure averaging and instrumental convolution of the joint flux. | `core/simulator.py` |
 
 ## Maintained command-line scripts
 

@@ -5,6 +5,12 @@ transmission-map layout follows Fig. 4 of Czesla et al. (2024),
 https://doi.org/10.1051/0004-6361/202451003, with residuals explicitly measured
 against the prepared injected model. Functions read the saved arrays and
 apply the display settings specified by their arguments.
+
+
+core/atomic_simulation.py also calls plot_helium_summary() for Na D2 and D1.
+The caller supplies the sodium wavelengths, labels and prepared model arrays.
+This shared layout puts the stellar-frame map, planet-frame mean spectrum
+and moving-band light curve together for either species.
 """
 from __future__ import annotations
 
@@ -21,6 +27,28 @@ import numpy as np
 
 from exoplore.pipelines.carmenes_helium import gap_resample
 from exoplore.pipelines.helium_math import C_KMS, stellar_wavelength
+
+
+def transmission_colour_limits(wave_nm, transmission, window_nm):
+    """Centre the displayed residual range on unity and clip its outer 2%.
+
+    Only finite pixels inside the displayed wavelength interval set the
+    contrast. This keeps extreme residuals and off-screen features from
+    setting the colour range for the whole image.
+    """
+    # Use the supplied wavelength coordinate to identify the visible map interval.
+    wave = np.asarray(wave_nm)
+    # Only pixels inside the plotted wavelength window set its display contrast.
+    visible = (wave >= window_nm[0]) & (wave <= window_nm[1])
+    values = np.asarray(transmission)[:, visible]
+    # Measure finite absolute deviations from unit transmission in that window.
+    deviations = np.abs(values[np.isfinite(values)] - 1.)
+    # The 98th percentile makes the scale robust to a small number of extreme residuals.
+    span = float(np.percentile(deviations, 98)) if deviations.size else 0.
+    # Flat or fully masked maps still need distinct colour limits.
+    span = max(span, 1e-6)
+    # Keep the colour scale centred on unit transmission.
+    return 1.-span, 1.+span
 
 
 def plot_transmission_maps(
@@ -119,6 +147,7 @@ the saved stellar or planetary arrays. Existing files are never overwritten.
     without = np.asarray(science._reference_indices, dtype=int)
     label = 'Corrected (stellar-reference division; Earth-frame display)'
     window = plotting.get('pipeline_steps_xlim_um')
+    # Keep fonts and tick settings local to this figure.
     with plt.rc_context():
         plot_pipeline_steps(run_name, str(directory)+'/', wave/1000, phase,
             with_signal, without, np.isfinite(residual).all(axis=0),
@@ -189,15 +218,16 @@ def plot_helium_summary(path: Path, result: dict, phase: np.ndarray,
                         *, night_spectra=None, night_lightcurves=None,
                         night_lightcurve_errors=None, significance=None,
                         synthetic: bool = False) -> None:
-    """Save the common three-panel result for real and simulated helium data.
+    """Save the common three-panel result for helium or sodium transmission.
 
     Show the stellar transmission map, planet-frame spectrum and planetary
     fixed-band light curve. Lower panels use absorption excess in percent,
     vacuum wavelengths in micrometres and shaded supplied uncertainties.
     Optional night arrays add individual curves to their combined result.
-    No selections, binning, fits or uncertainty estimates are made here.
+    The caller supplies the prepared spectra, band curves and uncertainties.
     """
     import matplotlib
+    # Use a file-rendering backend so the figure can be produced on a compute node.
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
     import matplotlib.patheffects as path_effects
@@ -205,16 +235,36 @@ def plot_helium_summary(path: Path, result: dict, phase: np.ndarray,
     if path.exists():
         raise FileExistsError(path)
     phase = np.asarray(phase)
+    # Convert orbital phase into hours from mid-transit for the spectral map.
     hours = phase*science.period_days*24
+    # Convert stellar-frame and planet-frame vacuum nm to micrometres for the plot axes.
     wave = np.asarray(result['stellar_wave_nm'])/1000
     planet_wave = np.asarray(result['planet_wave_nm'])/1000
+    # Apply the caller's displayed wavelength interval to the map and mean spectrum.
     map_limits = np.asarray(science.plot_stellar_window_nm)/1000
     band=(planet_wave>=map_limits[0])&(planet_wave<=map_limits[1])
+    # Read standard deviations already calculated by the preparation.
     coadd_error = np.asarray(result.get('planet_coadd_error', result.get('coadd_error')))
     curve_error = np.asarray(result.get('planet_lightcurve_error', result.get('lightcurve_error')))
+    # Use line labels from the caller, allowing the same renderer to display sodium or helium.
+    species = getattr(science, 'line_label', 'He I')
+    lines = getattr(science, 'line_wavelengths_nm', None)
+    if lines is None:
+        lines = science.helium_vacuum_lines_nm
+    transition = getattr(science, 'line_transition_label',
+                         r'He I: $2\,{}^3S_1\rightarrow 2\,{}^3P^{\rm o}_{0,1,2}$')
+    # Use explicit display limits when supplied. Otherwise estimate robust limits
+    # from the wavelengths currently shown.
+    transmission_limits = getattr(science, 'plot_transmission_limits', None)
+    if transmission_limits is None:
+        transmission_limits = transmission_colour_limits(
+            result['stellar_wave_nm'], result['stellar_transmission'],
+            science.plot_stellar_window_nm)
+    # Optional per-night inputs enable comparison with a multi-night combined result.
     combined = night_spectra is not None
     count = len(night_spectra) if combined else 1
     label = f'Combined ({count} nights)' if combined else ('Simulated night' if synthetic else 'Observed night')
+    # Show the independently supplied significance result only when the caller provides one.
     if significance is not None:
         measured = significance[-1] if combined else significance
         label += f" ({measured['significance_sigma']:.1f}σ)"
@@ -225,22 +275,30 @@ def plot_helium_summary(path: Path, result: dict, phase: np.ndarray,
                          'xtick.labelsize':14, 'ytick.labelsize':14,
                          'legend.fontsize':13, 'xtick.major.size':5.6,
                          'ytick.major.size':5.6}):
+        # Allocate the map, mean spectrum and light-curve panels.
         fig, axes = plt.subplots(3,1,figsize=(13,13),constrained_layout=True)
+        # Give the stellar map and planet-frame spectrum the same wavelength range.
         axes[1].sharex(axes[0])
+        # Draw the supplied stellar-frame ratios against time. In RdBu, lower
+        # transmission appears red and higher transmission appears blue.
         mesh = axes[0].pcolormesh(wave,hours,result['stellar_transmission'],
-                                  cmap='RdBu',shading='auto',vmin=.975,vmax=1.025)
+                                  cmap='RdBu',shading='auto',vmin=transmission_limits[0],vmax=transmission_limits[1])
+        # Outline the orbital guide in white so its black line remains visible over the map.
         marker_outline = [path_effects.Stroke(linewidth=5, foreground='white'),
                           path_effects.Normal()]
         helium_handles = []
-        for index,line in enumerate(science.helium_vacuum_lines_nm):
+        # Mark each supplied transition and its predicted velocity track.
+        for index,line in enumerate(lines):
+            # The track is in the stellar frame, using the planet velocity relative to the star.
             axes[0].plot(line*(1+rv_kms/C_KMS)/1000,hours,color='black',ls='--',lw=2.6,
                          path_effects=marker_outline,
                          label='Planet velocity track' if index==0 else None)
+            # Show the planet-frame rest wavelength in the middle panel.
             helium_handles.append(axes[1].axvline(
                 line/1000,color='.4',ls=(':','--','-.')[index%3],lw=2.4,
-                label=f'He I ({line/1000:.7f} μm)'))
+                label=f'{species} ({line/1000:.7f} μm)'))
         helium_legend = axes[1].legend(handles=helium_handles,loc='upper right',
-                                      title=r'He I: $2\,{}^3S_1\rightarrow 2\,{}^3P^{\rm o}_{0,1,2}$',
+                                      title=transition,
                                       fontsize=13,title_fontsize=14,framealpha=1)
         axes[1].add_artist(helium_legend)
         axes[0].set(xlim=map_limits,ylabel='Time from mid-transit (h)',
@@ -248,7 +306,15 @@ def plot_helium_summary(path: Path, result: dict, phase: np.ndarray,
         axes[0].tick_params(axis='x',labelbottom=False)
         axes[0].legend(loc='upper right',fontsize=17,framealpha=1,
                        facecolor='white',edgecolor='.4',handlelength=3)
-        fig.colorbar(mesh,ax=axes[0],label='Transmission')
+        # Colour-bar end markers show that values outside the robust display
+        # range are saturated. Their numerical values remain in the results.
+        visible = (wave >= map_limits[0]) & (wave <= map_limits[1])
+        shown = np.asarray(result['stellar_transmission'])[:, visible]
+        below = np.any(shown < transmission_limits[0])
+        above = np.any(shown > transmission_limits[1])
+        extension = 'both' if below and above else 'min' if below else 'max' if above else 'neither'
+        fig.colorbar(mesh,ax=axes[0],label='Transmission',extend=extension)
+        # Optional comparison curves show each night alongside the combined result.
         if combined:
             colors=plt.get_cmap('tab10')
             for index,(spectrum,curve) in enumerate(zip(night_spectra,night_lightcurves)):
@@ -260,20 +326,36 @@ def plot_helium_summary(path: Path, result: dict, phase: np.ndarray,
                              color=color,lw=1,markersize=3,alpha=.7,label=night_label)
                 axes[2].plot(phase,100*(curve-1),'o-',color=color,lw=1,
                              markersize=4,alpha=.7,label=night_label)
+        # Use the supplied final coadd and exposure band averages for the lower panels.
         spectrum=np.asarray(result['planet_coadd'])
         curve=np.asarray(result['planet_lightcurve'])
+        # Convert transmission to percent excess, so absorption lies below zero.
         axes[1].plot(planet_wave[band],100*(spectrum[band]-1),'ko-',lw=1.5,
                      markersize=3.5,label=label)
+        # Shade one supplied standard deviation above and below the coadded spectrum.
         axes[1].fill_between(planet_wave[band],100*(spectrum[band]-1-coadd_error[band]),
                              100*(spectrum[band]-1+coadd_error[band]),color='black',alpha=.15)
+        # For a simulation, overlay the noiseless injected observation processed through
+        # the same estimator. Its shape includes preparation and local stellar illumination.
+        if result.get('truth_planet_coadd') is not None:
+            axes[1].plot(planet_wave[band],100*(np.asarray(result['truth_planet_coadd'])[band]-1),
+                         color='tab:red', lw=1.5, label='Prepared injected model')
+        # Show the planet-following band average for every exposure against orbital phase.
         axes[2].plot(phase,100*(curve-1),'ko-',lw=2.2,markersize=5,label=label)
+        # Shade the supplied light-curve standard deviations.
         axes[2].fill_between(phase,100*(curve-1-curve_error),
                              100*(curve-1+curve_error),color='black',alpha=.15)
+        # Overlay the prepared noiseless band curve when available.
+        if result.get('truth_planet_lightcurve') is not None:
+            axes[2].plot(phase,100*(np.asarray(result['truth_planet_lightcurve'])-1),
+                         color='tab:red', lw=1.5, label='Prepared injected model')
         axes[1].set(xlim=map_limits,xlabel='Wavelength (μm)',ylabel='Absorption excess (%)',
-                    title='Individual nights and combined He I transmission' if combined else 'Planet-frame He I transmission')
+                    title=f'Individual nights and combined {species} transmission' if combined else f'Planet-frame {species} transmission')
+        # Print the actual planet-frame band limits in the light-curve title.
         lo,hi=np.asarray(science.planet_lightcurve_window_nm)/1000
         axes[2].set(xlabel='Orbital phase',ylabel='Band-averaged absorption excess (%)',
-                    title=f'Planet-frame He I light curve ({lo:.6f}–{hi:.6f} μm)')
+                    title=f'Planet-frame {species} light curve ({lo:.6f}–{hi:.6f} μm)')
+        # Mark the supplied optical contacts in hours on the map and phase on the light curve.
         for index,contact in enumerate(science.optical_contact_phases,1):
             hour=contact*science.period_days*24
             axes[0].axhline(hour,color='black',ls='--',lw=.9)
@@ -282,16 +364,22 @@ def plot_helium_summary(path: Path, result: dict, phase: np.ndarray,
             axes[2].text(contact,.98,f'T{index}',transform=axes[2].get_xaxis_transform(),
                          ha='right' if index in (1,3) else 'left',va='top',fontsize=12,
                          bbox=dict(facecolor='white',edgecolor='none',alpha=.8,pad=1))
+        # Draw zero-excess reference lines and arrange the lower-panel legends.
         for axis in axes[1:]:
             axis.axhline(0,color='.6',lw=.8)
             if combined:
                 handles, labels = axis.get_legend_handles_labels()
                 nights = [(handle, text) for handle, text in zip(handles, labels)
-                          if not text.startswith('He I (')]
+                          if not text.startswith(species+' (')]
                 axis.legend([item[0] for item in nights], [item[1] for item in nights],
                             title=legend_title,title_fontsize=13,loc='lower left')
+        if result.get('truth_planet_coadd') is not None:
+            axes[1].legend(loc='lower left', fontsize=11)
+            axes[2].legend(loc='lower left', fontsize=11)
         for axis in axes[:2]:
             axis.ticklabel_format(axis='x',style='plain',useOffset=False)
+        # Create the requested figure file while protecting any existing output.
         with path.open('xb') as stream:
             fig.savefig(stream,format=path.suffix.lstrip('.'),dpi=180,bbox_inches='tight')
+        # Release plotting resources after the file has been written.
         plt.close(fig)

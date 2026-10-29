@@ -61,9 +61,12 @@ def preparing_pipeline(
     - ``'Blain24'``, Blain, Sánchez-López & Mollière (2024)
     - ``'ASL19'``, ASL 2019 (BL19 normalisation + SYSREM)
     - ``'Gibson22'``, Gibson 2022 (normalisation + SYSREM)
+    - ``'Seidel22'``, stellar-frame alignment and S/N-weighted master-out division
 
-    When ``inputs.tellurics.include_tellurics`` is False, falls back to
-    :func:`~exoplore.pipelines.tellurics.pipeline_fixedTellurics`.
+    Direct-transmission methods run their configured reference division.
+    The fitted-normalisation branches use
+    :func:`~exoplore.pipelines.tellurics.pipeline_fixedTellurics` when
+    ``inputs.tellurics.include_tellurics`` is False.
 
     Parameters
     ----------
@@ -121,6 +124,13 @@ def preparing_pipeline(
     # Retrieval flags carry the mask and uncertainty settings needed to
     # compare the prepared model with the prepared data.
     # Lazy imports to avoid circular dependencies
+    # Seidel22 forms a stellar-frame reference and then returns ratios to the
+    # observer frame through its adapter, matching the downstream CCF velocity grid.
+    if inputs.pipeline.name == 'Seidel22':
+        from exoplore.pipelines.seidel22 import preparing_pipeline_adapter
+        return preparing_pipeline_adapter(inputs, data, noise, wave, mask,
+                                          without_signal, masks,
+                                          correct_uncertainties, retrieval)
     if inputs.pipeline.name == 'Palle2020':
         from exoplore.pipelines.palle2020 import preparing_pipeline_adapter
         return preparing_pipeline_adapter(

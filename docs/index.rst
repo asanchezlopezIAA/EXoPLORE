@@ -40,6 +40,7 @@ current and next-generation ground-based spectrographs.
    config_reference
    outputs
    input_files
+   stellar_intensities
    crires_reduction
    nortmann26_pipeline
    igrins_pipeline

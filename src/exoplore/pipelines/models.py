@@ -48,3 +48,9 @@ class PreparationInputs:
     sysrem_iterations: int
     telluric_transmission: np.ndarray | None = None
     helium_observation: HeliumObservation | None = None
+    # Actual observed stellar line shift for each exposure, in km/s. Direct
+    # transmission preparation uses it to construct the master in that frame.
+    stellar_rv_kms: np.ndarray | None = None
+    # Atmosphere-free observer-frame spectra for matched RM+CLV correction
+    # after stellar-reference division in the direct-transmission preparation.
+    stellar_model_flux: np.ndarray | None = None

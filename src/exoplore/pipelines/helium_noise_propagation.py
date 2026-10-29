@@ -1,8 +1,14 @@
 """Analytical noise propagation for direct helium transmission spectra.
 
-Propagate the one supplied pixel-variance array, without drawing additional
-observations. Continuum and molecfit fit parameters remain fixed. Shared
+Propagate the supplied pixel-variance array through the preparation derivatives.
+Continuum and Molecfit fit parameters remain fixed. Shared
 reference noise and interpolation correlations are retained in linear operators.
+
+
+Seidel22 supplies its actual stellar and planetary interpolation matrices,
+reference weights and coadd weights to the functions below. They propagate
+the derivatives of each reference-divided spectrum back to native pixels.
+This retains correlations caused by reusing the same out-of-transit spectra.
 """
 from __future__ import annotations
 
@@ -18,12 +24,114 @@ from exoplore.pipelines.helium_math import stellar_wavelength, planet_wavelength
 
 def interpolation_operator(wave, destination, valid):
     """Sparse linear interpolator with finite-pixel and detector-gap masking."""
+    # Find the neighbouring input pixels around every destination wavelength.
     index=np.clip(np.searchsorted(wave,destination,side='right')-1,0,len(wave)-2)
+    # Measure input spacing so interpolation can identify detector gaps.
     widths=np.diff(wave)
+    # Calculate the linear interpolation fraction inside each input-pixel pair.
     t=(destination-wave[index])/widths[index]
+    # Keep destination points bracketed by valid pixels within one detector section.
     good=(t>=0)&(t<=1)&valid[index]&valid[index+1]&(widths[index]<=5*np.median(widths))
+    # Identify usable destination rows and their left input-pixel indices.
     rows=np.flatnonzero(good);left=index[good]
+    # Place weights 1-t and t in a sparse destination-by-input interpolation matrix.
     return csr_matrix((np.r_[1-t[good],t[good]],(np.r_[rows,rows],np.r_[left,left+1])),shape=(len(destination),len(wave)))
+
+
+def transmission_coadd_covariance(stellar_operators, native_variances,
+                                  planet_operators, normalized_flux, master,
+                                  reference_coefficients, coadd_coefficients,
+                                  reference_indices, transit_indices):
+    """Propagate native pixel noise through a shared transmission reference.
+
+    Preparation supplies its actual interpolation operators and normalised
+    averaging coefficients. Continuum fits and those coefficients are held
+    fixed. The reference-exposure contribution is accumulated once after
+    combining its effects on all transit spectra.
+    """
+    # Use the reciprocal stellar reference at valid channels and zero elsewhere.
+    inv = np.divide(1., master, out=np.zeros_like(master),
+                    where=np.isfinite(master) & (master > 0))
+    # The final coadd covariance has one row and column per wavelength channel.
+    shape = (len(master), len(master))
+    # Begin with empty covariance and an accumulated derivative with respect to the master.
+    covariance = csr_matrix(shape, dtype=float)
+    shared = csr_matrix(shape, dtype=float)
+    # Propagate each in-transit numerator and accumulate its dependence on the common master.
+    for k, i in enumerate(transit_indices):
+        # Combine planet-frame interpolation with this exposure's actual coadd weights.
+        weighted_shift = diags(coadd_coefficients[k]) @ planet_operators[i]
+        # Differentiate the coadd with respect to this exposure's native pixels,
+        # including stellar alignment and division by the fixed master.
+        numerator = weighted_shift @ diags(inv) @ stellar_operators[i]
+        # Add J diag(native variance) J-transpose for this independent exposure.
+        covariance += numerator @ diags(native_variances[i]) @ numerator.T
+        # For f/master, the derivative with respect to master is -f/master squared.
+        derivative = np.where(np.isfinite(normalized_flux[i]),
+                              -normalized_flux[i] * inv**2, 0.)
+        # Add this exposure's weighted master derivative to the common-reference derivative.
+        shared += weighted_shift @ diags(derivative)
+    # Each reference exposure affects every transit ratio through the same master.
+    for k, j in enumerate(reference_indices):
+        # Apply its reference weight and stellar interpolation to that accumulated derivative.
+        reference = shared @ diags(reference_coefficients[k]) @ stellar_operators[j]
+        # Add this reference exposure's covariance contribution once, after combining its effects.
+        covariance += reference @ diags(native_variances[j]) @ reference.T
+    return covariance
+
+
+def transmission_band_covariance(stellar_operators, native_variances,
+                                 planet_operators, normalized_flux, master,
+                                 reference_coefficients, reference_indices,
+                                 band, valid_exposures):
+    """Propagate a planetary-band mean, retaining the shared master-out noise.
+
+    The continuum levels, exposure weights and stellar correction are fixed.
+    Reference exposures contribute to both their own numerator and the common
+    denominator, so their two derivatives are combined before squaring.
+    """
+    # The light-curve covariance has one row and column per exposure.
+    count = len(stellar_operators)
+    inv = np.divide(1., master, out=np.zeros_like(master),
+                    where=np.isfinite(master) & (master > 0))
+    # Represent the arithmetic planet-frame band mean as a one-row linear operator.
+    mean = csr_matrix(np.asarray(band, float)[None, :]/np.count_nonzero(band))
+    # Store each exposure's numerator derivative and its derivative through the master.
+    direct, shared = [], []
+    # Build the band measurement for every exposure, including reference exposures.
+    for i, shift in enumerate(planet_operators):
+        # Combine the wavelength shift and band mean when that exposure has complete coverage.
+        row = mean @ shift if valid_exposures[i] else csr_matrix(mean.shape)
+        # Propagate its own numerator through the fixed-reference division and stellar shift.
+        direct.append(row @ diags(inv) @ stellar_operators[i])
+        derivative = np.where(np.isfinite(normalized_flux[i]),
+                              -normalized_flux[i]*inv**2, 0.)
+        # Retain its sensitivity to the common out-of-transit reference.
+        shared.append(row @ diags(derivative))
+    # Stack the reference derivatives into an exposure-by-stellar-wavelength matrix.
+    shared = vstack(shared).tocsr()
+    covariance = np.zeros((count, count))
+    # Map each reference exposure to the row containing its master averaging coefficients.
+    refs = {int(j): k for k, j in enumerate(reference_indices)}
+    # Propagate each independent native exposure through all light-curve measurements it affects.
+    for j in range(count):
+        # A reference exposure contributes to its own numerator and to every shared denominator.
+        if j in refs:
+            # First calculate its contribution through the common reference.
+            operator = shared @ diags(reference_coefficients[refs[j]]) @ stellar_operators[j]
+            # Select this exposure's own light-curve row for the numerator contribution.
+            position = csr_matrix(([1.], ([j], [0])), shape=(count, 1))
+            # Add numerator and denominator derivatives before squaring so their covariance is retained.
+            operator = operator + position @ direct[j]
+            # Accumulate this native exposure's full covariance between light-curve times.
+            covariance += (operator @ diags(native_variances[j]) @ operator.T).toarray()
+        else:
+            # An in-transit exposure enters its own numerator, giving this direct diagonal term.
+            covariance[j, j] += float((direct[j] @ diags(native_variances[j])
+                                       @ direct[j].T).toarray()[0, 0])
+    # Mark rows and columns for incomplete band measurements as missing.
+    return np.where(valid_exposures[:, None] & valid_exposures[None, :],
+                    covariance, np.nan)
 
 
 def carmenes_coadd_covariance(waves_nm, flux, error, berv_kms, rv_kms, config, result):

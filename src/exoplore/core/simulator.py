@@ -10,7 +10,7 @@ and runs the full simulation workflow.
 Workflow map
 ------------
 The numbered blocks below describe the standard molecular-spectroscopy route.
-Helium simulation, observed-data recipes and helium grids dispatch to their
+Direct sodium, helium simulation, observed-data recipes and helium grids dispatch to their
 own runners at the beginning of :meth:`ExoploreSimulator.run`.
 
 1. Resolve inputs, planet parameters, instrument grids and stellar spectrum.
@@ -82,9 +82,10 @@ from exoplore.observation.timing import (
     find_nights_with_extrema,
     get_event,
 )
-from exoplore.observation.velocity import get_V, get_V_eccentric
+from exoplore.observation.velocity import get_V, get_V_eccentric, stellar_radial_velocity
 from exoplore.pipelines.masking import Correct_NaN, Remove_Outliers, merge_masks, _merge_masks
-from exoplore.pipelines.prepare import injection, preparing_pipeline
+from exoplore.pipelines.prepare import injection
+from exoplore.pipelines.runner import prepare_observation
 from exoplore.pipelines.models import PreparationInputs
 from exoplore.pipelines.sysrem import (
     SYSREM_filtering_projector,
@@ -189,6 +190,15 @@ def build_simulation_name(cfg: SimulationConfig) -> str:
     if cfg.retrieval.enabled and cfg.retrieval.log_likelihood == "Blain24_beta":
         pipeline_label = ("Blain24_beta" if pipe.name == "Blain24"
                           else f"{pipe.name}_Blain24_beta")
+    # Stellar-effect experiments get their own output directory. Default
+    # configurations retain the established simulation names.
+    stellar_flag = (f"_stellar_{cfg.rm_clv.effects}"
+                    f"_sim{int(cfg.rm_clv.simulate)}_cor{int(cfg.rm_clv.correct)}"
+                    if cfg.rm_clv.active else "")
+    if cfg.rm_clv.active and cfg.rm_clv.coupling == "spatial":
+        stellar_flag += "_spatial"
+    if cfg.rm_clv.correct and cfg.rm_clv.correction_method == "factorized":
+        stellar_flag += "_correction_factorized"
 
     return (
         f"{pipeline_label}_{signal_flag}_"
@@ -196,7 +206,7 @@ def build_simulation_name(cfg: SimulationConfig) -> str:
         f"{obs.n_nights}nights_"
         f"{signif_flag}_{stack_flag}_{real_flag}_"
         f"{noise_flag}_"
-        f"stdnoisex{sf_str}"
+        f"stdnoisex{sf_str}{stellar_flag}"
     )
 
 
@@ -223,6 +233,11 @@ class SimulationSummary:
     helium_backend: Optional[str] = None
     helium_grid_models: Optional[int] = None
     helium_observed: bool = False
+    atomic_transmission: bool = False
+    stellar_effects: Optional[str] = None
+    stellar_simulate: bool = False
+    stellar_correct: bool = False
+    stellar_coupling: str = "factorized"
 
     def __post_init__(self):
         # Expose the configured planet name in the summary.
@@ -254,6 +269,13 @@ class SimulationSummary:
         ]
         if self.pipeline in self._SYSREM_PIPELINES:
             lines.append(f"  SYSREM iterations   : {self.sysrem_iterations}")
+        if self.atomic_transmission:
+            lines.append("  Spectroscopy        : Direct sodium transmission")
+        if self.stellar_effects is not None:
+            lines += [f"  Stellar effects     : {self.stellar_effects}",
+                      f"  Stellar coupling    : {self.stellar_coupling}",
+                      f"  Simulate RM/CLV     : {self.stellar_simulate}",
+                      f"  Correct RM/CLV      : {self.stellar_correct}"]
         if self.helium_grid_models is not None:
             lines += ['  Analysis            : Sunbather He I grid fit',
                       f'  Grid models         : {self.helium_grid_models}',
@@ -319,8 +341,23 @@ class ExoploreSimulator:
 
     def _validate(self) -> None:
         cfg = self.config
+        from exoplore.observation.carmenes_noise import configured_carmenes_etc
+        configured_carmenes_etc(cfg)
+        if cfg.pipeline.name == 'Seidel22':
+            from exoplore.pipelines.seidel22 import validate_run
+            validate_run(cfg)
         from exoplore.core.spectroscopy_mode import spectroscopy_route
         route = spectroscopy_route(cfg)
+        # Check the stellar-effect route before any specialized runner returns.
+        # Stop early when the selected runner cannot use the requested stellar effect.
+        from exoplore.stellar.observation import validate_route
+        validate_route(cfg, route)
+        # The direct sodium runner checks its own instrument, atmosphere, ETC and
+        # Molecfit inputs before any spectra are generated.
+        if route == 'atomic_simulation':
+            from exoplore.core.atomic_simulation import validate_atomic_run
+            validate_atomic_run(cfg)
+            return
         if route == 'helium_grid':
             from exoplore.retrieval.helium_grid import validate_grid_config
             validate_grid_config(cfg)
@@ -402,6 +439,11 @@ class ExoploreSimulator:
                             if route == 'helium_simulation' else None),
             helium_grid_models=grid_models,
             helium_observed=(route == 'helium_observed'),
+            atomic_transmission=(route == 'atomic_simulation'),
+            stellar_effects=cfg.rm_clv.effects if cfg.rm_clv.active else None,
+            stellar_simulate=cfg.rm_clv.simulate,
+            stellar_correct=cfg.rm_clv.correct,
+            stellar_coupling=cfg.rm_clv.coupling,
         )
 
     # ------------------------------------------------------------------
@@ -499,9 +541,25 @@ class ExoploreSimulator:
         # Results become available when this attempt completes successfully.
         self._completed_run = None
         cfg = self.config
+        from exoplore.observation.carmenes_noise import configured_carmenes_etc
+        _carmenes_etc = configured_carmenes_etc(cfg)
+        if cfg.pipeline.name == 'Seidel22':
+            from exoplore.pipelines.seidel22 import validate_run
+            validate_run(cfg)
         from exoplore.core.spectroscopy_mode import spectroscopy_route
-        # Select the runner for the configured molecular or helium experiment.
+        # Select the runner for the configured molecular, sodium or helium experiment.
         route = spectroscopy_route(cfg)
+        if cfg.rm_clv.active:
+            # Users can edit a config after previewing it. Recheck stellar
+            # compatibility at execution so unsupported changes stop early.
+            from exoplore.stellar.observation import validate_route
+            validate_route(cfg, route)
+        # Run the integrated sodium observation and transmission analysis. Its own
+        # runner writes the two line diagnostics and returns after reduction.
+        if route == 'atomic_simulation':
+            from exoplore.core.atomic_simulation import run_atomic_simulation
+            run_atomic_simulation(cfg)
+            return
         if route=='helium_grid':
             from exoplore.retrieval.helium_grid import run_helium_grid
             run_helium_grid(cfg)
@@ -590,7 +648,9 @@ class ExoploreSimulator:
         _is_andes_yjhk = cfg.instrument.name in ("ANDES_YJHK", "ANDES")
 
         # Load wavelength grid (and SNR / JD / airmass reference arrays)
-        _wg = get_WaveGrid(cfg.instrument, cfg.observation, inst, n_orders_total)
+        _etc_reader_options = {'use_etc': True} if _carmenes_etc is not None else {}
+        _wg = get_WaveGrid(cfg.instrument, cfg.observation, inst, n_orders_total,
+                           **_etc_reader_options)
         _wg = _wg + (None,) * (7 - len(_wg))   # normalise to 7-tuple
         wave_star, n_pixels, sig_og, snr_og, JD_og, airmass_og, wave_mid_og = _wg
 
@@ -630,7 +690,45 @@ class ExoploreSimulator:
         _pw = cfg.paths.phoenix_wave_file or None
         _pf = cfg.paths.phoenix_flux_file or None
         _phoenix = (_pw, _pf) if (_pw and _pf) else None
-        if _phoenix is not None:
+        # An enabled surface calculation supplies its own disk-integrated
+        # stellar reference. Existing runs keep their PHOENIX loading path.
+        _stellar_surface = None
+        _correction_surface = None
+        # Choose the local ray integration or the separate photospheric-factor calculation.
+        _spatial_rm_clv = cfg.rm_clv.active and cfg.rm_clv.coupling == "spatial"
+        if cfg.rm_clv.active:
+            from exoplore.stellar.observation import TransitStellarModel
+            if _spatial_rm_clv:
+                from exoplore.stellar.coupled import SpatialTransitModel
+                # Spatial mode combines local stellar light with atmospheric rays from pRT.
+                _stellar_surface = SpatialTransitModel(cfg.rm_clv, planet, inst.res)
+            else:
+                # Factorized mode calculates the stellar line distortion as a separate multiplier.
+                _stellar_surface = TransitStellarModel(cfg.rm_clv, planet, inst.res)
+            # A separate factorized correction can be applied to a spatial injection
+            # through Seidel22, optionally using another stellar synthesis.
+            if cfg.rm_clv.correct and cfg.rm_clv.correction_method == "factorized":
+                if cfg.pipeline.name != 'Seidel22':
+                    raise ValueError("The separate factorized correction requires Seidel22 preparation")
+                # Construct that correction model with its own selected stellar input.
+                correction_choices = replace(cfg.rm_clv, coupling="factorized",
+                    model_file=cfg.rm_clv.correction_model_file or cfg.rm_clv.model_file)
+                _correction_surface = TransitStellarModel(correction_choices, planet, inst.res)
+            # Check the selected orders before loading atmospheric opacities.
+            # Exposure-specific Doppler and convolution margins are checked
+            # again when the observing-frame model is evaluated in Block 4.
+            _model_wave = (wave_star[:, _order_sel_b1]
+                           if cfg.instrument.name in ("CARMENES_NIR", "CARMENES_VIS")
+                           else wave_star[_order_sel_b1, :])
+            _local_wave = _stellar_surface.surface.local.wavelength_um
+            if (_model_wave.min() < _local_wave[0]
+                    or _model_wave.max() > _local_wave[-1]):
+                raise ValueError(
+                    "RM/CLV intensity model must cover the selected instrument orders "
+                    f"({_model_wave.min():.6f} to {_model_wave.max():.6f} microns)")
+            print(f"  Stellar effects : {cfg.rm_clv.effects}, "
+                  f"simulate={cfg.rm_clv.simulate}, correct={cfg.rm_clv.correct}")
+        if _phoenix is not None and not cfg.rm_clv.active:
             spec_star_ins = LoadPhoenix(
                 _phoenix,
                 wave_star,
@@ -661,6 +759,7 @@ class ExoploreSimulator:
             airmass_og=airmass_og,
             wave_mid_og=wave_mid_og,
             spec_star_ins=spec_star_ins,
+            stellar_surface=_stellar_surface,
             kp_range=kp_range,
             wave_file=inst.wave_file,
         )
@@ -990,7 +1089,10 @@ class ExoploreSimulator:
         _oi = cfg.instrument.order_indices
         _n_sel_orders = inst.n_orders_total if not _oi else len(_oi)
         sig_all: np.ndarray | None = None
-        if cfg.noise.fixed_snr is None:
+        if _carmenes_etc is not None:
+            # The ETC S/N is evaluated for the actual exposures in Block 5d.
+            snr_all = np.ones_like(wave_star, dtype=float)
+        elif cfg.noise.fixed_snr is None:
             if not cfg.observation.specific_event:
                 if snr_og is not None and snr_og.ndim == 3:
                     from scipy.interpolate import interp1d as _interp1d_snr
@@ -1034,6 +1136,12 @@ class ExoploreSimulator:
             wave_star = wave_star.T
             if cfg.noise.fixed_snr is not None and snr_all is not None:
                 snr_all = snr_all.T
+
+        if _carmenes_etc is not None:
+            # Check the full cadence before paying for any pRT or stellar models.
+            _etc_airmass = (np.concatenate([np.asarray(x) for x in airmass])
+                            if cfg.observation.different_nights else airmass)
+            _carmenes_etc.check_airmass(_etc_airmass)
 
         # ----------------------------------------------------------------
         # Block 2f, external planet model (optional)
@@ -1265,7 +1373,16 @@ class ExoploreSimulator:
             wvl_max = wave_ins[-1] + 1.0e-3
 
             # Per-order SNR and signal arrays
-            if not _is_andes_any:
+            if _carmenes_etc is not None:
+                # Fill these arrays in Block 5d, when the current night's
+                # telluric spectrum and airmass are available.
+                snr = ([np.ones((int(n_spectra[n]), n_pixels))
+                        for n in range(cfg.observation.n_nights)]
+                       if cfg.observation.different_nights
+                       else np.ones((n_spectra, n_pixels)))
+                sig = ([np.zeros_like(row) for row in snr]
+                       if cfg.observation.different_nights else None)
+            elif not _is_andes_any:
                 if not cfg.observation.different_nights:
                     if snr_all.ndim > 2:
                         if cfg.noise.fixed_snr is None:
@@ -1312,6 +1429,7 @@ class ExoploreSimulator:
             # This is the injected planet, described by atmosphere.planet_model
             # or its limb regions. The search template is built separately.
             # its composition need not match this simulated atmospheric truth.
+            _atmospheric_chords = None
             if cfg.observation.simulate_planet:
 
                 if not cfg.atmosphere.limb_asymmetries:
@@ -1342,6 +1460,21 @@ class ExoploreSimulator:
                         P_cloud=pm.cloud_pressure_bar,
                         easychem_CtoO_ret=pm.use_easychem,
                     )
+                    if _spatial_rm_clv:
+                        from exoplore.atmosphere.transmission import calculate_chord_transmission
+                        from petitRADTRANS import physical_constants as _cst_chord
+                        # Use the exact temperature, chemistry and pressure
+                        # structure just calculated by call_pRT. Additional
+                        # opacity outputs preserve the native ray information.
+                        # Export transmission at each atmospheric radius for local stellar illumination.
+                        # The adapter checks its integrated area against the pRT transit radius.
+                        _atmospheric_chords = calculate_chord_transmission(
+                            atmosphere, temperatures=temperature,
+                            mass_fractions=mass_fractions, mean_molar_masses=MMW,
+                            reference_gravity=_cst_chord.G*planet.M_pl/planet.R_pl**2,
+                            reference_pressure=pm.reference_pressure_bar,
+                            planet_radius=planet.R_pl,
+                            opaque_cloud_top_pressure=pm.cloud_pressure_bar)
 
                     # External planet model override
                     if cfg.observation.external_planet_model:
@@ -1591,26 +1724,66 @@ class ExoploreSimulator:
                 if os.path.exists(_berv_file):
                     _berv_ref = _fits.open(_berv_file)[0].data
             if not cfg.observation.different_nights:
-                v_star = get_V(
-                    planet.stellar_rv_semiamplitude_kms, phase,
-                    _berv_ref, planet.systemic_velocity_kms, 0,
-                )
-                mat_star = get_stellar_matrix(
-                    spec_star_phoenix, v_star, wave_ins,
-                )
+                if _stellar_surface is not None:
+                    # Both RM/CLV modes use stellar reflex motion opposite to
+                    # the planet's orbital RV, in the same observer frame.
+                    v_star = stellar_radial_velocity(
+                        phase, planet.stellar_rv_semiamplitude_kms,
+                        planet.systemic_velocity_kms, _berv_ref)
+                else:
+                    v_star = get_V(
+                        planet.stellar_rv_semiamplitude_kms, phase,
+                        _berv_ref, planet.systemic_velocity_kms, 0,
+                    )
+                # The surface model already contains stellar rotation. Its
+                # reference replaces the integrated template when simulating
+                # RM/CLV, so rotational broadening is applied once.
+                _stellar_model = (None if _stellar_surface is None or _spatial_rm_clv else
+                                  _stellar_surface.evaluate(
+                                      wave_ins, phase, v_star,
+                                      cfg.observation.exposure_time_seconds))
+                # The planet-only template builder needs an exposure-shaped
+                # background. Spatial mode assembles the physical stellar
+                # reference and full observed flux after the planet velocities.
+                mat_star = (np.ones((len(phase), len(wave_ins))) if _spatial_rm_clv else
+                            _stellar_model.reference if _stellar_model is not None else
+                            get_stellar_matrix(spec_star_phoenix, v_star, wave_ins))
             else:
                 v_star = []
                 mat_star = []
+                _stellar_model = []
                 for nn in range(cfg.observation.n_nights):
-                    v_star.append(get_V(
-                        planet.stellar_rv_semiamplitude_kms, phase[nn],
-                        (_berv_pn[nn] if _berv_pn is not None
-                         else _berv_ref),
-                        planet.systemic_velocity_kms, 0,
-                    ))
-                    mat_star.append(get_stellar_matrix(
-                        spec_star_phoenix, v_star[nn], wave_ins,
-                    ))
+                    _stellar_berv = (_berv_pn[nn] if _berv_pn is not None else _berv_ref)
+                    # The enabled surface calculation must follow the same
+                    # measured/reference BERV as the planetary track in Block
+                    # 4b. Resolve it here before constructing stellar spectra.
+                    if (_stellar_surface is not None and
+                            (cfg.observation.use_real_data or
+                             (cfg.observation.specific_event and
+                              cfg.observation.exposure_time_seconds_per_night is None))):
+                        _stellar_berv = _fits.getdata(
+                            Path(cfg.paths.inputs_dir) / 'reference_night' /
+                            f'observations_berv_{nn}.fits')
+                    if _stellar_surface is not None:
+                        v_star.append(stellar_radial_velocity(
+                            phase[nn], planet.stellar_rv_semiamplitude_kms,
+                            planet.systemic_velocity_kms, _stellar_berv))
+                    else:
+                        v_star.append(get_V(
+                            planet.stellar_rv_semiamplitude_kms, phase[nn],
+                            _stellar_berv,
+                            planet.systemic_velocity_kms, 0,
+                        ))
+                    exposure_seconds = (cfg.observation.exposure_time_seconds
+                        if cfg.observation.exposure_time_seconds_per_night is None else
+                        cfg.observation.exposure_time_seconds_per_night[nn])
+                    _model_night = (None if _stellar_surface is None or _spatial_rm_clv else
+                                    _stellar_surface.evaluate(
+                                        wave_ins, phase[nn], v_star[nn], exposure_seconds))
+                    _stellar_model.append(_model_night)
+                    mat_star.append(np.ones((len(phase[nn]), len(wave_ins))) if _spatial_rm_clv else
+                                    _model_night.reference if _model_night is not None else
+                                    get_stellar_matrix(spec_star_phoenix, v_star[nn], wave_ins))
 
             # ----------------------------------------------------------
             # Block 4b, planet velocity (h==0 only, reused per order)
@@ -1837,6 +2010,51 @@ class ExoploreSimulator:
                     )
 
             # ----------------------------------------------------------
+            # Build the stellar contribution before telluric transmission and
+            # noise. Spatial mode includes the continuum transit in its flux.
+            # Factorized mode keeps BATMAN's white-light factor and adds the
+            # continuum-normalised photospheric line distortion.
+            if _spatial_rm_clv:
+                # The coupled flux already contains opaque occultation and
+                # atmospheric absorption. Replace the factorized observation
+                # once, keeping the shifted planet template for CCF diagnostics.
+                if cfg.observation.different_nights:
+                    _stellar_model = []
+                    for night in range(cfg.observation.n_nights):
+                        exposure_seconds = (cfg.observation.exposure_time_seconds
+                            if cfg.observation.exposure_time_seconds_per_night is None else
+                            cfg.observation.exposure_time_seconds_per_night[night])
+                        # Integrate the complete stellar and planetary observation for this night
+                        # using its phases, stellar velocities and exposure duration.
+                        _stellar_model.append(_stellar_surface.evaluate(
+                            wave_ins, phase[night], v_star[night], exposure_seconds,
+                            chords=_atmospheric_chords, planet_velocity_kms=v_planet[night]))
+                    # Use the resulting coupled flux as the observation and keep its stellar reference.
+                    spec_mat = [model.flux.copy() for model in _stellar_model]
+                    mat_star = [model.reference for model in _stellar_model]
+                else:
+                    # For one shared observing sequence, evaluate the coupled transit directly
+                    # at the injection velocities already selected by this runner.
+                    _stellar_model = _stellar_surface.evaluate(
+                        wave_ins, phase, v_star, cfg.observation.exposure_time_seconds,
+                        chords=_atmospheric_chords, planet_velocity_kms=_v_inject)
+                    # This flux includes opaque occultation, limb brightness and atmospheric absorption.
+                    # It supplies the complete transit observation before tellurics and noise.
+                    spec_mat = _stellar_model.flux.copy()
+                    mat_star = _stellar_model.reference
+            # For separate stellar and planetary factors, apply the photospheric line
+            # distortion to the existing transit observation.
+            elif cfg.rm_clv.simulate:
+                if cfg.observation.different_nights:
+                    for night, model in enumerate(_stellar_model):
+                        spec_mat[night] *= model.distortion
+                        if not cfg.atmosphere.limb_asymmetries:
+                            spec_mat[night] *= model.reference
+                else:
+                    spec_mat *= _stellar_model.distortion
+                    if not cfg.atmosphere.limb_asymmetries:
+                        spec_mat *= _stellar_model.reference
+
             # Update per-order results with Block 4 outputs
             # ----------------------------------------------------------
             _order_result.update({
@@ -1845,6 +2063,8 @@ class ExoploreSimulator:
                 "spec_mat":       spec_mat,
                 "spec_mat_shift": spec_mat_shift,
             })
+            if cfg.rm_clv.active:
+                _order_result["rm_clv_model"] = _stellar_model
 
             # ----------------------------------------------------------
             # Block 5a, telluric transmittances
@@ -2200,6 +2420,21 @@ class ExoploreSimulator:
                 _spec_tp = _apply_throughput(
                     spec_mat, cfg.observation, order_selection[h], b)
 
+                if _carmenes_etc is not None:
+                    # Apply the same ETC-anchor prescription to every pipeline.
+                    # A 2-D S/N matrix already includes relative telluric scaling.
+                    _tell_etc = (tell_trans[b] if _dn and tell_trans is not None
+                                 else tell_trans)
+                    if _tell_etc is None:
+                        _tell_etc = np.ones((n_spectra, n_pixels))
+                    _snr_etc = _carmenes_etc.pixel_snr(
+                        order_selection[h], wave_ins, _tell_etc, airmass,
+                        cfg.observation.exposure_time_seconds, inst.res)
+                    if _dn:
+                        snr[b] = _snr_etc
+                    else:
+                        snr = _snr_etc
+
                 # 5d.3, noise standard-deviation matrix
                 _nc = cfg.noise.noise_choice
                 _nf = cfg.observation.noise_scaling_factor
@@ -2272,12 +2507,15 @@ class ExoploreSimulator:
                 # 5d.5, SNR mask
                 if not _dn:
                     _mask_snr_bool = (snr / _nf) < cfg.pipeline.snr_mask_threshold
-                    _mask_snr_bool |= (_std_noise_b5[b, :] < 1e-9)
+                    # A fixed per-pixel SNR can be one-dimensional while
+                    # uncertainties have one row per exposure. Let NumPy
+                    # broadcast the pixel mask into that time-series shape.
+                    _mask_snr_bool = _mask_snr_bool | (_std_noise_b5[b, :] < 1e-9)
                     _mask_snr_indices = np.argwhere(_mask_snr_bool)
                 else:
                     _mask_snr_bool = (
                         (snr[b] / _nf) < cfg.pipeline.snr_mask_threshold)
-                    _mask_snr_bool |= (
+                    _mask_snr_bool = _mask_snr_bool | (
                         _std_noise_b5[b, :n_spectra, :] < 1e-9)
                     _mask_snr_indices = np.argwhere(_mask_snr_bool)
 
@@ -2340,6 +2578,81 @@ class ExoploreSimulator:
                     _mat_noise_b5[b, :n_spectra, :] = np.copy(_spec_tp)
                 elif _urd and not _nl and not _dn:
                     _mat_noise_b5[b] = np.copy(_spec_tp)
+
+                # Direct transmission prepares the stellar model alongside
+                # the data, then corrects the individual master-out ratios.
+                # Other preparation methods retain their native-flux correction.
+                # Prepare an optional atmosphere-free stellar spectrum for Seidel22.
+                _seidel_stellar_flux = None
+                if cfg.rm_clv.active:
+                    from exoplore.stellar.observation import correct_stellar_distortion
+                    _model_current = (_stellar_model[b] if _dn else _stellar_model)
+                    # Seidel22 will normalize this stellar spectrum alongside the data, build
+                    # a matching model reference and divide the individual transmission ratios.
+                    if cfg.rm_clv.correct and cfg.pipeline.name == 'Seidel22':
+                        if _correction_surface is not None:
+                            exposure_seconds = (cfg.observation.exposure_time_seconds
+                                if cfg.observation.exposure_time_seconds_per_night is None else
+                                cfg.observation.exposure_time_seconds_per_night[b])
+                            # Calculate the requested separate stellar-correction model for this night.
+                            correction_model = _correction_surface.evaluate(
+                                wave_ins, phase,
+                                v_star[b] if _dn else v_star, exposure_seconds)
+                            _seidel_stellar_flux = (correction_model.reference
+                                                    * correction_model.distortion)
+                        else:
+                            # The matched choice reconstructs the opaque-body spectrum from the injected model.
+                            _seidel_stellar_flux = (_model_current.reference
+                                                    * _model_current.distortion)
+                            if _spatial_rm_clv:
+                                # Restore the continuum transit when reconstructing a spatial opaque-body spectrum.
+                                _seidel_stellar_flux *= _model_current.opaque_transmission
+                    # For other preparations, apply the fixed distortion to flux and error
+                    # on the observer grid before their preparation begins.
+                    elif cfg.rm_clv.correct:
+                        _flux = _mat_noise_b5[b, :n_spectra, :]
+                        _error = _std_noise_b5[b, :n_spectra, :]
+                        (_mat_noise_b5[b, :n_spectra, :],
+                         _std_noise_b5[b, :n_spectra, :]) = correct_stellar_distortion(
+                            _flux, _error, _model_current.distortion)
+                        # Keep the saved Gaussian draw in these same flux
+                        # units. The noiseless diagnostic subtracts this draw
+                        # from the corrected noisy matrix later in the run.
+                        if not _nl and not _urd:
+                            _gauss_noise_b5[b, :n_spectra, :] /= _model_current.distortion
+                    # Save the stellar factors, model source and correction stage for later
+                    # comparison plots and checks of the applied normalization.
+                    if cfg.output.save_rm_clv_model:
+                        _spatial_products = {}
+                        if _seidel_stellar_flux is not None:
+                            _spatial_products['correction_flux'] = _seidel_stellar_flux
+                        if _spatial_rm_clv:
+                            _spatial_products.update(dict(
+                                coupled_flux=_model_current.flux,
+                                opaque_transmission=_model_current.opaque_transmission,
+                                atmosphere_base_radius_cm=_model_current.base_radius_cm,
+                                atmosphere_top_radius_cm=_model_current.top_radius_cm,
+                                planet_velocity_kms=_v_inject[b] if _dn else _v_inject,
+                                prt_version=(_atmospheric_chords.prt_version
+                                             if _atmospheric_chords is not None else ""),
+                                atmospheric_radial_points=(len(_atmospheric_chords.impact_parameter_cm)
+                                    if _atmospheric_chords is not None else 0)))
+                        np.savez_compressed(
+                            Path(dirs['root']) / f"rm_clv_order_{order_selection[h]}_night_{b}.npz",
+                            wavelength_um=wave_ins, phase=phase,
+                            distortion=_model_current.distortion,
+                            reference=_model_current.reference,
+                            stellar_velocity_kms=v_star[b] if _dn else v_star,
+                            effects=cfg.rm_clv.effects,
+                            coupling=cfg.rm_clv.coupling,
+                            normalization=cfg.rm_clv.normalization,
+                            simulate=cfg.rm_clv.simulate, correct=cfg.rm_clv.correct,
+                            correction_stage=("stellar_residuals" if _seidel_stellar_flux is not None
+                                              else "native_flux" if cfg.rm_clv.correct else "disabled"),
+                            correction_method=cfg.rm_clv.correction_method,
+                            correction_source=(_correction_surface.metadata['source']
+                                if _correction_surface is not None else _stellar_surface.metadata['source']),
+                            model_source=_stellar_surface.metadata['source'], **_spatial_products)
 
                 # Apply SNR mask
                 if _mask_snr_indices.T[1].shape != (0,):
@@ -2434,6 +2747,9 @@ class ExoploreSimulator:
                     pipeline=cfg.pipeline,
                     tellurics=cfg.tellurics,
                     use_real_data=_urd,
+                    stellar_rv_kms=(np.asarray(v_star[b] if _dn else v_star)
+                                    if cfg.pipeline.name == 'Seidel22' else None),
+                    stellar_model_flux=_seidel_stellar_flux,
                     sysrem_iterations=_si,
                     telluric_transmission=(
                         _telluric_model[order_selection[h]] if _telluric_model is not None else None
@@ -2558,7 +2874,7 @@ class ExoploreSimulator:
                 # The dispatcher returns residuals, uncertainties, masks and
                 # detrending information needed later by CCFs and retrieval.
                 _sl = slice(None, n_spectra) if _dn else slice(None)
-                _pp_result = preparing_pipeline(
+                _pp_result = prepare_observation(
                     preparation_inputs,
                     _mat_noise_b5[b, _sl],
                     _std_noise_b5[b, _sl],
@@ -2714,7 +3030,7 @@ class ExoploreSimulator:
                                         ))
                                     del _Pf, _Uf, _Nf
                                 else:
-                                    _syn_mat_res_b5 = preparing_pipeline(
+                                    _syn_mat_res_b5 = prepare_observation(
                                         preparation_inputs,
                                         _mat_cc_b5,
                                         _std_noise_b5[b, :],
@@ -2843,7 +3159,7 @@ class ExoploreSimulator:
                                     ))
                                 del _Pf, _Uf, _Nf
                             else:
-                                _syn_mat_res_b5 = preparing_pipeline(
+                                _syn_mat_res_b5 = prepare_observation(
                                     preparation_inputs,
                                     _mat_cc_b5,
                                     _std_noise_b5[b, :n_spectra, :],
@@ -5392,7 +5708,7 @@ class ExoploreSimulator:
                                     if _mrp_ll == "embedded"
                                     else model_mat[hh])
                                 model_mat_prepared[hh] = \
-                                    preparing_pipeline(
+                                    prepare_observation(
                                         retrieval_preparation,
                                         _mm_in,
                                         _std_noise_ret[_night_index, :_n_sp_ll, hh * _n_px_b9 : (hh + 1) * _n_px_b9],
@@ -5681,7 +5997,7 @@ class ExoploreSimulator:
                                     _sysrem_pass = None
                                 if cfg.pipeline.name != "Gibson22":
                                     model_mat_prepared[hh] = \
-                                        preparing_pipeline(
+                                        prepare_observation(
                                             retrieval_preparation,
                                             model_mat[hh],
                                             _std_noise_ret[jj, :_n_sp_c, :],
@@ -6526,7 +6842,7 @@ class ExoploreSimulator:
                                 if not cfg.pipeline.sysrem_robust_halt:
                                     _sysrem_pass = None
                                 model_mat_prepared[hh] = \
-                                    preparing_pipeline(
+                                    prepare_observation(
                                         retrieval_preparation,
                                         model_mat[hh],
                                         _std_noise_ret[_night_index, :n_spectra, hh * _n_px_b9 : (hh + 1) * _n_px_b9],

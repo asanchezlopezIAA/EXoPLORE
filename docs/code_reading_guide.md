@@ -249,3 +249,31 @@ gives the corresponding JSON fields.
 
 MultiNest receives a likelihood and a separate prior transform. Emcee receives
 a log-posterior that includes the prior and likelihood.
+
+## Follow the optional stellar RM and CLV model
+
+Start at `config/rm_clv.py` for the JSON switches. `simulate` includes the
+photospheric distortion in a synthetic observation. `correct` divides the
+data and its uncertainties by the specified fixed stellar model.
+
+`io/stellar_surface.py` reads the local intensities and their angular grid.
+`stellar/surface.py` assigns those intensities to the projected disk, shifts
+them with stellar rotation and subtracts the light hidden by the planet.
+`stellar/observation.py` samples the exposure duration and instrument response,
+then constructs the line-distortion factor in the observing velocity frame.
+
+Follow `_stellar_surface` through Blocks 1, 4 and 5 of `core/simulator.py` to
+see where the model enters the observation and its preparation. With both
+switches disabled, the existing stellar and planetary calculations are used.
+The [configuration reference](config_reference.md#19-stellar-rm-and-clv)
+explains the required intensity file and the current physical approximations.
+
+For `rm_clv.coupling: spatial`, follow `calculate_chord_transmission()` in
+`atmosphere/transmission.py`. It requests opacity and hydrostatic-radius
+outputs from pRT, constructs ray transmissions and checks that their area
+matches pRT's effective radius. `SpatialTransitModel` in `stellar/coupled.py`
+then integrates the stellar intensity behind the opaque body and atmospheric
+annulus. Its polar quadrature resolves the thin annulus using the native
+atmospheric radii. Exposure averaging and instrumental convolution operate on
+the joint flux. The observing runner places this flux into the synthetic data
+before tellurics and noise.

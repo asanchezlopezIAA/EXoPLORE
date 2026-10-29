@@ -2,6 +2,39 @@
 
 This document lists every external file the simulator needs, where to obtain it, and where to place it.
 
+## CARMENES ETC maximum-anchor inputs
+
+For synthetic CARMENES observations, save the HTML response from the ETC for
+your target and exposure duration. Obtain responses at airmasses bracketing
+the observing sequence, keeping the other ETC inputs fixed. Package them with:
+
+```bash
+python scripts/carmenes_etc_to_fits.py \
+    --planet HD189733b --channel VIS --exposure_seconds 198 \
+    --etc_html 1.0=etc_X1.html --etc_html 1.35=etc_X1p35.html \
+    --output_dir inputs/CARMENES_VIS/HD189733b
+```
+
+Set `noise.carmenes_etc_file` in your simulation JSON to the resulting
+`CARMENES_VIS_ETC_HD189733b.npz`. Use `--channel NIR` for that channel.
+The bundle stores all returned curves, their native ETC wavelength samples,
+airmasses, the declared exposure duration and source-file hashes.
+The converter preserves an existing bundle by refusing to overwrite it.
+
+The simulation uses each order's maximum S/N and its wavelength as anchors.
+The native EXoPLORE wavelength grid supplies the pixels-per-resolution-element
+conversion. Each exposure's telluric spectrum supplies relative attenuation,
+and the ANDES analytic blaze supplies the order envelope. The complete native
+order is needed to position that envelope, even when a later diagnostic
+displays only a small wavelength interval.
+
+Enter the actual ETC exposure duration in `--exposure_seconds`. The simulator
+requires that duration to match `observation.exposure_time_seconds` and requires
+all exposure airmasses to fall within the supplied ETC conditions.
+The ETC atmosphere remains part of the absolute anchor, while the simulated
+atmosphere defines relative wavelength structure. See the
+[noise configuration](config_reference.md#carmenes-etc-maximum-anchors) for the equations.
+
 ---
 
 ## Overview
@@ -10,7 +43,8 @@ Input files fall into four categories:
 
 1. **Instrument files**, wavelength grids and SNR tables specific to the spectrograph
 2. **Observation reference files**, real data from a reference night (JD, airmass, signal, SNR arrays)
-3. **Stellar atmosphere models**, PHOENIX spectra for the target star
+3. **Stellar atmosphere models**, PHOENIX flux spectra and optional
+   [local intensity spectra for RM and CLV](stellar_intensities.md)
 4. **Telluric reference spectra**, [SkyCalc](https://skycalc-ipy.readthedocs.io)-generated atmospheric transmission
 
 [petitRADTRANS](https://petitradtrans.readthedocs.io) opacity tables are a fifth category handled separately (see the [Installation guide](installation.md)).

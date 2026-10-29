@@ -1707,6 +1707,188 @@ Both runs retain the per-exposure corrected spectra in `observations.npz`, the t
 
 ---
 
+(tutorial-13-sodium)=
+## Tutorial 13: Recover sodium absorption with stellar RM+CLV
+
+> **Approximate run time:** 40 min for the synthetic observation, followed by 79 min for telluric correction and transmission analysis with 16 Molecfit workers. These timings come from a machine with 24 CPU cores and 64 GB RAM. Use fewer workers if your machine has fewer available cores.
+
+During transit, the planet blocks different rotation velocities across the stellar disk. This produces the Rossiter–McLaughlin (RM) distortion in the stellar lines. Their local profiles also change from disk centre to limb (CLV). Both effects enter a transmission spectrum when we divide by an out-of-transit stellar reference. [Casasayas-Barris et al. (2020)](https://doi.org/10.1051/0004-6361/201937221) show why this correction matters for searches for planetary sodium.
+
+Here we simulate HD 189733 b with ANDES and recover its Na D doublet after correcting telluric absorption and RM+CLV. We know the injected atmosphere, so we can compare the recovered transmission spectrum with the expected signal. We use the same three-panel diagnostics as Tutorial 12.
+
+### Step 1: Set up the experiment
+
+Open `configs/hd189733b_andes_sodium_rm_clv.json`. The main choices are:
+
+| Component | Configuration |
+|---|---|
+| Instrument | ANDES UBV, order index 56, resolving power 100,000 |
+| Wavelength interval | 588.5–592.9 nm, vacuum, 1,862 native pixels |
+| Observing sequence | 388 exposures, 30 s integrations and 6 s readout |
+| Transit selection | 194 in-transit and 194 out-of-transit exposures |
+| Planetary atmosphere | pRT, isothermal 2,750 K, H₂/He with Na mass fraction 0.001 |
+| Atmospheric grid | 445 layers from 10⁻¹⁵ to 100 bar, reference pressure 0.01 bar |
+| Stellar intensities | MARCS/Turbospectrum, Na NLTE |
+| Stellar geometry | Projected rotation 3.5 km/s, projected obliquity 0° |
+| Tellurics | Paranal SkyCalc reference, PWV 10 mm, scaled by exposure airmass |
+| Noise | ANDES ETC, Gaussian and throughput seeds both 12345 |
+| Preparation | Molecfit followed by `Seidel22`, with matched RM+CLV correction |
+| Retrieval | Disabled |
+
+This is a prescribed neutral-sodium atmosphere. Its abundance and temperature let us test signal recovery through the complete calculation. Interpreting HD 189733 b itself would require assessing its temperature structure and sodium ionization. The extended pressure grid avoids truncating the cores at the upper atmospheric boundary. It also uses pRT's opacity treatment below the tabulated pressure range.
+
+Run the commands below from the repository root, using the [project environment](installation.md). This spatial atmosphere calculation currently requires pRT 3.2.0 and its `Na__LorCut`, H₂/He Rayleigh and H₂–H₂/H₂–He continuum data. Set `paths.prt_input_data` to your opacity-data directory. ESO Molecfit and `esorex` must also be installed, as described in [Tutorial 12](#tutorial-12-he-i-transmission-spectroscopy-with-crires-wasp-121-b).
+
+The [ANDES ETC input](input_files.md#andes-elt) is `inputs/ANDES/HD189733b/ANDES_ETC_WAVE_SNR_UBV_HD189733b.fits`. The 30 s exposure follows the HD 189733 b setup of Sánchez-López, Pallé & Millán, *Resolving inhomogeneous hot and ultra-hot Jupiter atmospheres with ANDES: insights from simulated ELT observations* (Accepted in A&A).
+
+### Step 2: Prepare the stellar model and observing sequence
+
+The stellar input is a set of local specific intensities, {math}`I(\lambda,\mu)`, where {math}`\mu=1` at disk centre and approaches zero at the limb. Follow [Stellar spectra for RM and CLV](stellar_intensities.md) to synthesize and convert them. Save the resulting bundle as:
+
+```text
+inputs/ANDES/HD189733b/sodium/stellar_Na_intensities.npz
+```
+
+The displayed experiment uses a MARCS/Turbospectrum synthesis with effective temperature 5,052 K, log g = 4.587, [Fe/H] = −0.03, microturbulence 1 km/s and stellar A(Na) = 6.14. Its 71 angles cover {math}`\mu=10^{-10}` to 1, and its wavelength coverage is 585.0–600.5 nm in air before conversion to vacuum. Supply the intrinsic spectrum and continuum, with `resolving_power: 0` in the bundle. EXoPLORE applies rotation and instrumental convolution later. This externally synthesized stellar bundle must be prepared separately. Its stellar sodium abundance is independent of `atmosphere.planet_model.mass_fractions`.
+
+The small reference inputs under `inputs/ANDES/HD189733b/sodium/` contain the observing times, airmasses and SkyCalc transmission used here. Convert the supplied sequence to the NPZ format read by EXoPLORE:
+
+```python
+from pathlib import Path
+import numpy as np
+
+# Read exposure midpoints in BJD_TDB and their corresponding airmasses.
+folder = Path("inputs/ANDES/HD189733b/sodium")
+sequence = np.loadtxt(folder / "observing_sequence.csv", delimiter=",", skiprows=1)
+
+# Save the two named arrays expected by atomic_transmission.observing_sequence_file.
+sequence_file = folder / "observing_sequence.npz"
+if sequence_file.exists():
+    raise FileExistsError(sequence_file)
+np.savez_compressed(sequence_file, bjd=sequence[:, 0], airmass=sequence[:, 1])
+```
+
+The sequence uses a visible transit window with Paranal geometry and airmasses 1.48–1.95. We fix `observation.berv_kms: 0` as an idealized velocity convention. This choice sets the synthetic observer-frame velocity zero point. The input {download}`README <../inputs/ANDES/HD189733b/sodium/README.md>` records the reference settings. For another target, supply its own sequence and adjust the coordinates, ephemeris and velocity convention.
+
+### Step 3: Include RM+CLV in the observation
+
+The JSON selects:
+
+```json
+"rm_clv": {
+  "simulate": true,
+  "correct": true,
+  "effects": "rm_clv",
+  "coupling": "spatial",
+  "correction_method": "matched",
+  "model_file": "inputs/ANDES/HD189733b/sodium/stellar_Na_intensities.npz",
+  "projected_obliquity_deg": 0.0,
+  "normalization": "continuum",
+  "exposure_subsamples": 3,
+  "stellar_radial_points": 48,
+  "planet_radial_points": 24,
+  "azimuth_points": 64
+}
+```
+
+At each exposure, EXoPLORE locates the planet on the rotating stellar surface. The opaque disk removes the light behind it, while the atmospheric annulus absorbs the local stellar spectrum using the pRT sodium model. Integrating over the disk gives the changing stellar and planetary observation. The stellar rotation comes from `v_rotsini_kms` in `planet_params/HD189733b.json`. `projected_obliquity_deg` sets the orientation of the transit chord relative to that rotation.
+
+This spatial integration already includes the transit, limb darkening and ingress/egress. An additional BATMAN transit multiplication would count the occultation twice. The [stellar-model guide](stellar_intensities.md) explains the integration and its input requirements.
+
+EXoPLORE then multiplies the intrinsic observation by the exposure's terrestrial transmission, applies the instrumental response and integrates onto native pixels. Throughput variations and Gaussian noise complete the synthetic time series. The ETC gives an order-centre S/N of approximately 872 per resolution element at the reference conditions. With 2.5 pixels per resolution element, this corresponds to approximately 552 per pixel at that anchor. Stellar absorption, the blaze and tellurics reduce the local S/N, particularly in the sodium cores.
+
+With both the Gaussian-noise and throughput seeds fixed, the stochastic realisation is reproducible. End-to-end floating-point results may still differ at machine-precision level, so bitwise-identical output is not guaranteed.
+
+### Step 4: Correct tellurics and prepare the transmission spectra
+
+Molecfit fits H₂O in each exposure, using four retained intervals between 590.13 and 592.16 nm. These anchors avoid the sodium lines and selected stellar blends. The fit varies the Gaussian instrumental width and local continuum while keeping the wavelength solution fixed. The first accepted exposure starts the remaining fits, with concurrency controlled by `atomic_transmission.molecfit_workers`.
+
+After telluric correction, `Seidel22` aligns the spectra with the star and normalizes them by their median flux in the configured continuum windows. For this example those windows sample the red side, approximately 590.11–592.85 nm. Inspect the full intervals in `pipeline.seidel22.continuum_windows_nm` before using them for another stellar spectrum. The out-of-transit exposures form a master reference, weighted by continuum S/N following [Seidel et al. (2022)](https://doi.org/10.1093/mnrasl/slac027).
+
+The stellar correction uses the same surface model and transit geometry with an opaque planet and **no planetary atmosphere**. Let {math}`f_i` be a normalized observation, {math}`F_{\rm out}` its reference, {math}`m_i` the normalized opaque-body model and {math}`M_{\rm out}` that model's reference. The corrected transmission is
+
+```{math}
+\mathcal{T}_i(\lambda)=\frac{f_i(\lambda)/F_{\rm out}(\lambda)}{m_i(\lambda)/M_{\rm out}(\lambda)}.
+```
+
+EXoPLORE applies this correction to individual stellar-frame spectra before shifting them into the planetary frame. The matched processing retains the atmospheric absorption and its local stellar illumination. Exposure-by-exposure stellar corrections are described by [Langeveld et al. (2021)](https://doi.org/10.1093/mnras/stab134) and [Sicilia et al. (2022)](https://doi.org/10.1051/0004-6361/202244055). Joint local stellar and planetary modelling is discussed by [Mounzer et al. (2025)](https://doi.org/10.1051/0004-6361/202554785).
+
+### Step 5: Run
+
+Once the input files are ready, preview the configuration:
+
+```bash
+python scripts/run_exoplore.py configs/hd189733b_andes_sodium_rm_clv.json
+```
+
+Then run the simulation and analysis:
+
+```bash
+python scripts/run_exoplore.py configs/hd189733b_andes_sodium_rm_clv.json --run
+```
+
+The Python interface performs the same execution:
+
+```python
+from exoplore.config import SimulationConfig
+from exoplore.core import ExoploreSimulator
+
+# Load the complete experiment, including the stellar and telluric inputs.
+config = SimulationConfig.from_json("configs/hd189733b_andes_sodium_rm_clv.json")
+
+# Preview the selected settings, then generate and analyse the observation.
+simulator = ExoploreSimulator(config)
+print(simulator.summary())
+simulator.run()
+```
+
+Choose either execution method. Each run requires a new `paths.output_root`, which defaults here to `outputs/hd189733b_andes_sodium`. It writes the synthetic observation, individual telluric fits, `final_summary.json`, and a transmission NPZ and figure for each sodium line.
+
+### Step 6: Inspect both sodium lines
+
+```{figure} figures/tutorial13_Na_D2_transmission.png
+:width: 100%
+:align: center
+
+Na D2 at 589.158326 nm in vacuum. Top: corrected stellar-frame transmission map, with absorption in red, the moving planet track in black, the optical contacts marked horizontally. The colour limits use the central 98% of absolute deviations from unity within the displayed window, so extreme residuals do not set the contrast. Middle: in-transit planet-frame spectrum with the rest wavelength marked vertically and its uncertainty, compared with the prepared noiseless injected model in red. Bottom: the planet-following light curve over ±20 km/s, with uncertainties and the prepared model. Negative excess indicates absorption in the lower panels.
+```
+
+The red moving feature follows the planetary track through transit. Once aligned with the planet, its absorption adds in the middle panel. Individual light-curve points remain noisy, while their transit average recovers the injected band absorption.
+
+```{figure} figures/tutorial13_Na_D1_transmission.png
+:width: 100%
+:align: center
+
+Na D1 at 589.755814 nm, using the same preparation and plotting conventions. Each line has its own display scale. The red curves show the noiseless, telluric-free observation processed through the same stellar correction and transmission estimator.
+```
+
+For each line, the light curve measures
+
+```{math}
+E(t)=100\left[\left\langle\mathcal{T}(\lambda,t)\right\rangle_{|v|\leq20\,{\rm km\,s^{-1}}}-1\right].
+```
+
+The band follows the planet and has total width approximately 0.79 Å. The table reports positive absorption depth, {math}`-E`, from the coadded in-transit spectrum:
+
+| Line | Recovered band depth (%) | Prepared injected model (%) |
+|---|---|---|
+| Na D2 | 0.1510 ± 0.0078 | 0.1600 |
+| Na D1 | 0.1468 ± 0.0069 | 0.1468 |
+
+The uncertainties propagate 600 native-noise draws through continuum normalization, reference construction and coaddition. The fitted telluric and stellar models stay fixed in this calculation, so their modelling uncertainty requires separate assessment. The remaining D2 offset is comparable to the uncertainty and warrants inspecting telluric residuals when interpreting a particular observation.
+
+This experiment recovers sodium after including the star, spatial RM+CLV, tellurics, throughput variations and ETC-based noise. The atmosphere-free correction removes the stellar transit distortion while leaving planetary absorption. Activity, spots and sky emission are absent from this simulation. Its temperature and abundance describe the chosen atmosphere, and comparisons with observed line contrasts also depend on phase selection, passband and stellar modelling.
+
+### Things to try
+
+- Set `rm_clv.correct: false` with a new output root. Predict the stellar-frame residuals and compare both lines after preparation.
+- Change `rm_clv.projected_obliquity_deg` or the stellar rotation in a copy of the planet JSON. Inspect how the occulted stellar velocities change.
+- Change `atomic_transmission.band_half_width_kms` to compare core and wing absorption. Keep the same band when comparing instruments or noise realizations.
+
+The [configuration reference](config_reference.md#direct-synthetic-sodium-observations) lists the current sodium execution controls. The integrated example supports one optical order and a homogeneous isothermal H₂/He/Na atmosphere. Hα and other species require their own atmospheric inputs and validation.
+
+---
+
 ## Troubleshooting
 
 **Missing `--run` flag**, Running without `--run` only prints the simulation summary and exits. The `--run` flag must be added to actually execute the simulation.

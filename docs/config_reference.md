@@ -1,15 +1,28 @@
 # EXoPLORE Configuration Reference
 
-A simulation is fully defined by two files: a **simulation config** (JSON) and a **planet parameter file** (JSON). The sections below describe the molecular configuration, with links to the
-helium recipes and the detectability sweep. Field definitions and defaults live
-in `src/exoplore/config/`. The selected runner determines which controls apply.
+A simulation config selects the atmosphere, observation and analysis. Its
+planet parameter file supplies the orbit, stellar properties and planet size.
+The sections below explain the molecular, helium and sodium controls, including
+RM+CLV. Field definitions and defaults live in `src/exoplore/config/`.
 
-The working example for everything described here is:
+Start with the Tutorial 1 reference files:
 
 ```
 configs/hd189733b_andes_transit_clean.json
 planet_params/HD189733b.json
 ```
+
+The simulation JSON contains a `_notes` section explaining where to edit each
+part of the experiment. The loader reads the scientific fields and leaves
+these reading notes out of the resolved configuration saved with a run.
+RM+CLV and direct sodium are disabled in this reference file. The `seidel22`
+entry is `null` because Tutorial 1 uses Blain24.
+
+For a complete sodium example, open
+`configs/hd189733b_andes_sodium_rm_clv.json` and follow
+{ref}`Tutorial 13 <tutorial-13-sodium>`.
+It sets the optical order, atmosphere, observing sequence, stellar intensities
+and telluric fit together. Check these inputs when adapting it to another target.
 
 > **Running a simulation:** Always pass `--run` to actually execute. Without it the simulator prints a summary and exits:
 > ```bash
@@ -39,6 +52,8 @@ planet_params/HD189733b.json
 16. [Supported instruments](#16-supported-instruments)
 17. [Adding a new planet](#17-adding-a-new-planet)
 18. [Detectability sweeps and helium configurations](#18-detectability-sweeps-and-helium-configurations)
+19. [Stellar RM and CLV](#19-stellar-rm-and-clv)
+20. [Direct synthetic sodium observations](#direct-synthetic-sodium-observations)
 
 ---
 
@@ -213,6 +228,78 @@ Additional observation controls:
 | `use_mean_snr` | `true`, `false` | If `true`, replace the time- and wavelength-varying SNR cube with its mean value. Produces more uniform noise. |
 | `snr_correction` | float | Additive offset applied to the SNR at all wavelengths and times. 0.0 = no correction. Positive values increase SNR. |
 | `noise_seed` | int or `null` | Integer seed for the Gaussian noise random number generator. Using the same seed reproduces identical noise realisations across runs, essential for reproducibility. Set to `null` to draw a different random noise realisation every run. Default: `12345`. |
+| `carmenes_etc_file` | path or `null` | CARMENES ETC response bundle. Selects maximum-per-order anchors with the ANDES analytic blaze and relative exposure-dependent telluric scaling. Default `null` retains the existing S/N-file route. Requires synthetic CARMENES, `noise_choice: "SNR"`, `fixed_snr: null` and `use_mean_snr: false`. |
+
+### CARMENES ETC maximum anchors
+
+Select the ETC input in the simulation JSON:
+
+```json
+"noise": {
+  "noise_choice": "SNR",
+  "fixed_snr": null,
+  "use_mean_snr": false,
+  "snr_correction": 0.0,
+  "noise_seed": 12345,
+  "carmenes_etc_file": "inputs/CARMENES_VIS/HD189733b/CARMENES_VIS_ETC_HD189733b.npz"
+}
+```
+
+EXoPLORE takes the maximum S/N per resolution element and its wavelength from
+each downloaded order curve. It converts to pixels using the local native
+sampling, {math}`m=\lambda/(R\,\Delta\lambda_{\rm pixel})`, then applies the
+ANDES sinc-squared blaze and the exposure's telluric transmission relative
+to the anchor wavelength:
+
+```{math}
+S_{t,\lambda}=\frac{S_{\mathrm{ETC,max}}}{\sqrt{m_\lambda}}
+\sqrt{\frac{B_\lambda}{B_{\mathrm{anchor}}}}
+\sqrt{\frac{T_{t,\lambda}}{T_{t,\mathrm{anchor}}}}.
+```
+
+For multiple supplied airmasses, the resulting S/N is interpolated between
+the ETC conditions for each exposure. The uncertainty follows the existing
+ANDES convention, {math}`\sigma=1/S`, in continuum-relative flux units, with the
+runner's S/N floor of 1. `observation.noise_scaling_factor` multiplies that
+uncertainty and `noise.snr_correction` is added afterward on this route.
+Stellar-line scaling and throughput-jitter noise scaling retain the ANDES defaults.
+
+The ETC maximum includes its atmospheric and observing conditions. We adopt
+our simulated telluric spectrum for the relative wavelength dependence because
+the ETC reference transmission is unavailable. This is the atmospheric-reference
+approximation used by this option. The complete ETC curves remain in the bundle
+for inspection of broad sensitivity variations.
+
+The same option is available to the CARMENES helium simulation. An incompatible
+channel, exposure duration or airmass produces an error. A single-airmass bundle
+supports exposures at that airmass. See the
+[input instructions](input_files.md#carmenes-etc-maximum-anchor-inputs) for preparing a bundle.
+
+#### Direct sodium transmission uncertainties
+
+The direct sodium experiment uses
+`observation/sodium_noise.py:sodium_photon_uncertainty` to derive
+photon-dominated errors from the noiseless expected flux. The flux already
+contains the stellar lines, planetary transit, tellurics and throughput,
+in out-of-transit stellar-continuum units. With the ETC-derived continuum
+S/N above and transmission {math}`T`, the effective photon response is:
+
+```{math}
+A=\frac{S_{\rm cont}^2}{T},\qquad
+\sigma_f=\sqrt{\frac{f}{A}},\qquad
+S_{\rm local}=\sqrt{fA}.
+```
+
+This counts attenuation once. Dividing the observation by a fitted telluric
+transmission also divides its uncertainty by that transmission. Seidel22
+then propagates these errors through continuum normalization, the shared
+stellar reference and planetary-frame coaddition.
+
+The effective response adopts a photon-dominated approximation to the ETC
+budget. Separate background and detector terms require their own measured
+or supplied variance budget. The CCF simulator and helium routes retain
+their existing uncertainty prescriptions. Their validation is separate from
+this sodium experiment.
 
 ---
 
@@ -412,7 +499,7 @@ Four pipeline recipes are available. They fall into two groups depending on whet
 
 | Field | Valid values | Description |
 |---|---|---|
-| `name` | `"BL19"`, `"Blain24"`, `"ASL19"`, `"Gibson22"` | Data reduction pipeline to use. `"BL19"`: [Brogi & Line (2019)](https://doi.org/10.3847/1538-3881/aaffd3)-style pipeline, normalisation, telluric mask, telluric correction, noisy-column masking. No SYSREM. `"Blain24"`: Blain, Sánchez-López & Mollière (2024, AJ, 167, 179), throughput fit removal and telluric fit removal. No SYSREM. `"ASL19"`: [Sánchez-López et al. (2019)](https://doi.org/10.1051/0004-6361/201936084), BL19 normalisation + telluric-window mask + SYSREM iterations. `"Gibson22"`: Gibson et al. (2022), out-of-transit normalisation + SYSREM (blaze correction disabled by default). |
+| `name` | `"BL19"`, `"Blain24"`, `"ASL19"`, `"Gibson22"`, `"Seidel22"` | Data reduction pipeline to use. `"BL19"`: [Brogi & Line (2019)](https://doi.org/10.3847/1538-3881/aaffd3)-style pipeline, normalisation, telluric mask, telluric correction, noisy-column masking. No SYSREM. `"Blain24"`: Blain, Sánchez-López & Mollière (2024, AJ, 167, 179), throughput fit removal and telluric fit removal. No SYSREM. `"ASL19"`: [Sánchez-López et al. (2019)](https://doi.org/10.1051/0004-6361/201936084), BL19 normalisation + telluric-window mask + SYSREM iterations. `"Gibson22"`: Gibson et al. (2022), out-of-transit normalisation + SYSREM (blaze correction disabled by default). |
 | `sysrem_iterations` | int ≥ 1 | Number of SYSREM iterations. Only used by `"ASL19"` and `"Gibson22"`. Ignored for `"BL19"` and `"Blain24"`. More iterations remove more correlated systematics but also attenuate the planet signal. Typical range: 2 to 8. Start with 4 and optimise. |
 | `snr_mask_threshold` | float > 0 | SNR threshold below which columns (wavelength channels) are masked before SYSREM. Pixels with SNR < threshold are excluded. Typical: 10. |
 | `prepare_template` | `true`, `false` | If `true`, apply the same filtering to the CCF template as was applied to the data, so that the template correctly represents the distorted planetary signal seen in the residuals. **Always set `true` for rigorous CCF computation and retrievals.** How the template is filtered depends on the pipeline, see the note below. |
@@ -430,13 +517,107 @@ Additional preparation controls:
 | `continuum_method` | Cheverall26 continuum estimator: `maxima` (default), `cm2024` or `polyfit`. |
 | `detrend_method` | `sysrem` (default) or `pca` in the preparation branches that support this switch. Component count is set by `sysrem_iterations`. |
 | `czesla2024` | Direct CRIRES+ helium settings, defined in `config/czesla2024.py`. See Tutorial 12. |
+| `seidel22` | Stellar-reference transmission settings for `name: "Seidel22"`. Continuum and stellar-core windows use vacuum nm in the stellar frame. See below. |
 | `carmenes_helium` | Direct CARMENES helium normalization and averaging settings, defined in `config/carmenes_helium.py`. See Tutorial 12b. |
 | `palle2020` | Observed CARMENES input and correction settings used by Tutorial 12b. |
 | `oh_treatment` | Explicit OH treatment for the direct-helium routes. Valid choices and required inputs are checked in `config/helium_oh.py`. |
 
+### Seidel22: stellar-reference transmission spectra
+
+Select `pipeline.name: "Seidel22"` to align the stellar spectra, normalise
+their continuum and divide by a common out-of-transit reference. Exposures
+receive weights proportional to their continuum S/N. The direct array
+interface also aligns the transmission spectra to the planet and combines
+the selected in-transit exposures. The reference is
+[Seidel et al. (2022), MNRAS, 513, L15](https://doi.org/10.1093/mnrasl/slac027).
+
+Continuum levels and exposure S/N are measured after alignment, using the
+same wavelength channels on the common stellar-rest-frame grid.
+
+Choose windows for the line interval being analysed. This example illustrates
+the fields for a sodium interval. Inspect the continuum and stellar cores
+before choosing windows for your data.
+
+```json
+"pipeline": {
+  "name": "Seidel22",
+  "prepare_template": false,
+  "seidel22": {
+    "continuum_windows_nm": [[589.2, 589.4], [589.8, 589.95]],
+    "stellar_mask_windows_nm": [],
+    "minimum_continuum_pixels": 10,
+    "input_telluric_corrected": false,
+    "input_sky_subtracted": false
+  }
+}
+```
+
+All windows use **vacuum nm in the stellar frame**. Supply explicit
+`stellar_mask_windows_nm` to exclude low-S/N stellar cores. The direct API
+retains these masks as they move through the planet frame. The CCF runner
+uses wavelength columns valid in every exposure and therefore takes the
+union of the invalid columns after returning to the observer frame.
+
+The current synthetic CCF route requires `tellurics.include_tellurics: false`.
+Observed input spectra must already have their telluric absorption and sky
+emission corrected. Set both input correction flags to `true` after those
+operations. These flags record the state of the supplied data. The direct
+sodium runner calls Molecfit before Seidel22. Choose stellar correction through
+the `rm_clv` block. Retrieval and SYSREM optimisation are rejected
+for this preparation.
+
+For direct sodium or Hα transmission spectra, call
+`exoplore.pipelines.seidel22.prepare_transmission()`. Supply the observed
+stellar velocity, the planetary velocity relative to the star and explicit
+reference/transit exposure indices. Positive velocities indicate recession.
+The returned dataclass contains the reference, exposure S/N weights, stellar
+and planetary transmission matrices, coadd and coverage per wavelength.
+The default uncertainty arrays carry diagonal propagation. The conditional
+coadd variance holds the shared reference and continuum estimates fixed.
+Set `calculate_covariance=True` in the array call to obtain
+`result.coadd_covariance`, a sparse matrix including the shared reference
+and both wavelength interpolations. Exclude missing coadd pixels using
+`np.isfinite(result.planet_coadd)`. Continuum estimates, S/N weights and any
+upstream telluric or RM+CLV model remain fixed in this propagation.
+
+To propagate continuum fitting and exposure-weight variability, also pass
+`noise_resamples=500` and an explicit `noise_resample_seed` to the array call.
+Each native-pixel Gaussian draw is aligned, normalised, divided by its own
+shared reference and combined in the planet frame. The resulting sample
+covariance replaces `coadd_covariance` and `lightcurve_covariance`. The
+prepared spectrum and light curve remain those of the supplied observation.
+`result.covariance_method` identifies the uncertainty method, and
+`result.noise_resamples` records the number of draws. Check convergence with
+the number of draws for the measurement being reported.
+The sample covariance has rank at most `noise_resamples - 1`, which matters
+when inverting a covariance for a large wavelength interval.
+
+For a simulation, `noise_expectation` can supply the noiseless flux on the
+same input wavelength grid and flux scale. With this argument omitted, the
+measured flux supplies the mean for a parametric bootstrap. Supplied errors
+and upstream telluric and stellar models remain fixed. Uncertainty in those
+models requires separate experiments. Intermediate diagonal variance arrays
+retain their conditional interpretation. The resampling options belong to
+the direct Python interface. The integrated direct-sodium runner reads
+`noise_resamples` and `noise_resample_seed` from `pipeline.seidel22` and
+supplies its noiseless expectation for the draws.
+
+Check the preparation transfer function with synthetic injection and recovery
+at the relevant S/N, including a control with atmospheric absorption removed.
+
+If interference wiggles are present, `remove_wiggles()` fits a sinusoidal
+baseline to explicitly selected continuum windows of the final transmission
+spectrum. Supply period bounds in nm and keep planetary absorption outside
+the fitting windows. The function returns the fitted baseline for inspection
+and errors conditional on that fit. It is an optional separate operation.
+
+The array preparation accepts either line region. Generating a physical
+planetary Hα spectrum additionally requires a model for the excited hydrogen
+population. Selecting this preparation does not supply that atmospheric model.
+
 ### Template preparation and SYSREM distortions
 
-SYSREM removes dominant telluric and stellar structure and also changes the underlying planetary signal as a function of time and wavelength. Preparing the template with the corresponding operator accounts for this distortion when comparing it with the residual data. Therefore, **`prepare_template: true` is strongly recommended for all pipelines.** The implementation differs by pipeline:
+SYSREM removes dominant telluric and stellar structure and also changes the underlying planetary signal as a function of time and wavelength. Preparing the template with the corresponding operator accounts for this distortion when comparing it with the residual data. Use **`prepare_template: true` for the fitted-normalisation and SYSREM pipelines below**. Direct stellar-reference preparation with `Seidel22` requires `prepare_template: false`. The implementation differs by pipeline:
 
 - **`BL19` / `Blain24`**, the template is normalised and continuum-corrected in the same way as the data (polynomial fits, telluric correction). No SYSREM is involved, so the template retains full spectral line structure.
 
@@ -588,7 +769,7 @@ likelihood. The scalar β multiplies all selected uncertainties.
 
 Set its prior as the last pair in
 `retrieval.prior_bounds.1D_Blain24_beta`. The default is `[0.01, 100]`, matching
-`1D_Gibson22`. Tutorial 7's noiseless example instead uses `[0.999, 1.001]`,
+`1D_Gibson22`. Tutorial 7's noiseless example uses `[0.999, 1.001]`,
 matching its restricted Gibson comparison. These are comparison choices. The
 paper's P-19 example used `[0.5, 100]`.
 
@@ -724,7 +905,8 @@ Selects which per-order spectral matrices are written to disk. Almost all of a r
   "save_U_sysrem": true,
   "save_mat_cc": false,
   "save_mat_noise": false,
-  "save_std_noise": false
+  "save_std_noise": false,
+  "save_rm_clv_model": false
 }
 ```
 
@@ -738,6 +920,7 @@ Selects which per-order spectral matrices are written to disk. Almost all of a r
 | `save_mat_cc` | `false` | diagnostic only | ~181 MB |
 | `save_mat_noise` | `false` | diagnostic only | ~411 MB |
 | `save_std_noise` | `false` | diagnostic only | ~419 MB |
+| `save_rm_clv_model` | `false` | stellar distortion and coupled-flux diagnostics when RM/CLV is enabled | depends on orders and exposures |
 
 The default saving flags write ~1.2 GB for a 76-order run, including spectral inputs and uncertainty products used by the CCF and retrieval calculations. Saving every optional matrix uses ~2.2 GB. Set every flag to `false` for a minimal ~few-MB result (the Kp-Vsys map plus metadata). See [outputs.md](outputs.md) for the full matrix descriptions.
 
@@ -814,7 +997,7 @@ If your setting covers only one detector order, set `"order_indices": [0]` in th
    ```
    or look up the measured value from radial velocity studies.
 
-   For a circular orbit the planet velocity is `Kp·sin(2πφ)`, with `φ = 0` at mid-transit. If `observation.significant_eccentricity` is set, the velocity is instead computed by solving Kepler's equation for the true anomaly at each phase (`get_V_eccentric` in `src/exoplore/observation/velocity.py`). `eccentricity` and `argument_of_periastron_deg` (in degrees) then also shape the velocity curve.
+   For a circular orbit the planet velocity is `Kp·sin(2πφ)`, with `φ = 0` at mid-transit. With `observation.significant_eccentricity` enabled, EXoPLORE solves Kepler's equation for the true anomaly at each phase (`get_V_eccentric` in `src/exoplore/observation/velocity.py`). `eccentricity` and `argument_of_periastron_deg` (in degrees) then also shape the velocity curve.
 4. For the PHOENIX stellar model, download the file matching `stellar_teff_K` (rounded to nearest 100 K), `stellar_logg` (nearest 0.5), and `stellar_metallicity` (nearest 0.5) from https://phoenix.astro.physik.uni-goettingen.de/data/HiResFITS/PHOENIX-ACES-AGSS-COND-2011/
 5. Create `configs/yourplanet_instrument_event.json` by copying the HD189733b config and updating all planet, instrument, atmosphere, and path fields.
 6. Preview: `python scripts/run_exoplore.py configs/yourplanet_instrument_event.json`
@@ -843,3 +1026,277 @@ fields are defined in `config/helium.py`, with Sunbather settings in
 The direct observed-data recipes are demonstrated in
 [Tutorial 12](tutorial.md#tutorial-12-he-i-transmission-spectroscopy-with-crires-wasp-121-b)
 and [Tutorial 12b](tutorial.md#tutorial-12b-he-i-transmission-spectroscopy-with-carmenes-gj-3470-b).
+
+## 19. Stellar RM and CLV
+
+Add `rm_clv` to your simulation JSON to select photospheric line distortions
+caused by rotation and centre-to-limb variation during a transit. All choices
+live in the same simulation config. Existing configs omit this block and keep
+both operations disabled.
+
+```json
+"rm_clv": {
+  "simulate": false,
+  "correct": false,
+  "effects": "rm_clv",
+  "coupling": "factorized",
+  "model_file": "",
+  "wavelength_medium": "vacuum",
+  "projected_obliquity_deg": null,
+  "cells_across_diameter": 200,
+  "subpixels_per_axis": 1,
+  "exposure_subsamples": 3,
+  "azimuth_points": 128,
+  "stellar_radial_points": 48,
+  "planet_radial_points": 24,
+  "normalization": "continuum"
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `simulate` | Construct synthetic spectra with the selected stellar effects and coupling, before tellurics and noise. |
+| `correct` | Apply the fixed opaque-body photospheric correction. Seidel22 divides the individual stellar-frame master-out ratios by the identically prepared model before planetary alignment. Other pipelines divide native flux and uncertainty before preparation. |
+| `correction_method` | `matched` uses the injected opaque-body model. `factorized` constructs a separate, simpler photospheric model for Seidel22 while retaining the selected injection coupling. |
+| `correction_model_file` | Optional alternative intensity bundle for `correction_method: factorized`. An empty string uses `model_file`. |
+| `effects` | `rm_clv` includes both effects. `rm` keeps the disk-centre line shape with continuum limb darkening. `clv` sets surface rotation to zero as a diagnostic control. |
+| `coupling` | `factorized` keeps the separate stellar and planetary factors. `spatial` propagates local stellar light through the planetary atmosphere before integrating the flux. |
+| `model_file` | NPZ file containing local specific intensities, angular coordinates and synthesis metadata, described below. |
+| `wavelength_medium` | `vacuum` or `air`, matching the observing wavelength grid. The bundle must declare the same convention. |
+| `projected_obliquity_deg` | Projected angle between stellar spin and orbital angular momentum. Required for `rm` and `rm_clv`. Obtain it for the target system. |
+| `cells_across_diameter` | Number of spatial cells across the stellar diameter in factorized mode. Increase it until the spectra converge at the precision needed. |
+| `subpixels_per_axis` | Samples along each factorized-mode cell axis to resolve the stellar edge and planetary silhouette. |
+| `exposure_subsamples` | Uniform midpoint samples across each exposure. Fluxes are averaged before normalization. |
+| `azimuth_points` | Angular quadrature points around each ring in spatial mode. Increase it to check convergence of local line profiles and limb overlap. |
+| `stellar_radial_points` | Radial quadrature points for the full stellar disk in spatial mode. |
+| `planet_radial_points` | Radial quadrature points for the opaque planetary disk in spatial mode. The atmospheric annulus uses the native pRT radii. |
+| `normalization` | `continuum` divides by the integrated local continuum. `band_mean` divides by the mean flux over the selected wavelength interval. |
+
+To study the uncorrected contamination, enable `simulate` alone. To test a
+fixed-model correction on a simulation, enable both switches. Seidel22 aligns and
+normalizes the atmosphere-free correction model with the data, constructs its
+master-out using the same reference exposures and weights, and divides the
+individual residual ratios before planetary alignment. Variances are divided
+by the squared fixed divisor. Assess uncertainty in the stellar model separately
+from these propagated data errors. This follows
+the exposure-by-exposure correction discussed by
+[Langeveld et al. (2022)](https://academic.oup.com/mnras/article/514/4/5192/6607503).
+For measured
+data, enable `correct` and supply the appropriate stellar model.
+
+The current integration supports the standard CCF transit runner with circular
+orbits and unsplit detector orders. Direct-helium routes, dayside observations,
+eccentric orbits and alternative CCF template sources produce an explanatory
+error when this feature is enabled. A missing model file also stops the run.
+
+### Local stellar spectra
+
+The input is an NPZ bundle with these arrays and scalar metadata:
+
+| Key | Required content |
+|---|---|
+| `wavelength_um` | Strictly increasing wavelength vector in microns, with margin for rotation, observer velocity and instrumental convolution. |
+| `mu` | Strictly increasing angular coordinates within [0, 1], covering every surface sample. |
+| `intensity` | Shape `(n_mu, n_wavelength)`, retaining relative specific intensity between angles. |
+| `continuum` | Same shape and units, with spectral lines removed. Required for `continuum` normalization and `rm` mode. |
+| `intensity_kind` | Scalar string `specific_intensity`. |
+| `intensity_unit` | Scalar string stating the common physical unit. |
+| `wavelength_medium` | Scalar string `vacuum` or `air`. |
+| `source` | Scalar string identifying the stellar synthesis and its physical parameters. |
+| `resolving_power` | Instrumental Gaussian resolution already applied to the synthesis, or `0` for a synthesis without instrumental convolution. Numerical wavelength sampling alone does not determine this value. |
+
+Save arrays exported by your stellar synthesis, for example:
+
+```python
+import numpy as np
+
+# These arrays and metadata come from the stellar synthesis for your target.
+# Preserve the relative brightness of the different mu spectra.
+np.savez_compressed(
+    "stellar_intensities.npz",
+    wavelength_um=wavelength_um,
+    mu=mu,
+    intensity=intensity,
+    continuum=continuum,
+    intensity_kind="specific_intensity",
+    intensity_unit=intensity_unit,
+    wavelength_medium=wavelength_medium,
+    source=synthesis_description,
+    resolving_power=applied_instrumental_resolving_power,
+)
+```
+
+Choose a synthesis appropriate for the target's temperature, gravity,
+composition and lines. The loader checks array shapes, coverage and metadata.
+The source description records the physical model, whose accuracy must be
+validated against the stellar spectrum. The example ATLAS9 FITS files need
+their original angular grid, intensity units and synthesis details confirmed
+before conversion. A disk-integrated PHOENIX flux file supplies insufficient
+angular information for a CLV model.
+
+### Calculation and interpretation
+
+Local spectra are shifted by the projected stellar rotation and integrated
+over the visible disk. The opaque planetary silhouette removes the covered
+intensities at each exposure sample. The resulting fluxes are averaged,
+convolved to the instrumental resolution and sampled in the observing frame.
+Only the additional instrumental broadening missing from a Gaussian-convolved
+input synthesis is applied.
+
+For continuum normalization, the stellar distortion is
+
+\[
+D(\lambda,t)=
+\frac{F_{\rm in}(\lambda,t)/F_{c,{\rm in}}(\lambda,t)}
+     {F_{\rm out}(\lambda)/F_{c,{\rm out}}(\lambda)}.
+\]
+
+With `coupling: factorized`, the continuum transit is removed from this
+photospheric factor. The existing planetary transmission, BATMAN white-light
+weighting and photospheric distortion are multiplied as separate factors. The configured
+noise prescription remains in use. A fixed-model correction propagates
+`uncertainty / D`, conditional on that stellar model.
+
+With `output.save_rm_clv_model: true`, the runner writes
+`rm_clv_order_<id>_night_<id>.npz` with the distortion,
+stellar reference, wavelength, phase, observer-frame stellar velocity and model
+source. Enabled experiments have distinct output-directory names containing
+their effect and simulation/correction switches.
+
+The method follows the disk-integration construction described by
+[Casasayas-Barris et al. (2021), section 3.6](https://arxiv.org/abs/2101.04094).
+Strong atomic line cores require particular care with stellar synthesis.
+[Canocchi et al. (2024)](https://doi.org/10.1051/0004-6361/202347858)
+compare solar Na and K centre-to-limb profiles with 1D and 3D LTE/NLTE models.
+
+(spatial-star-atmosphere-coupling)=
+### Spatial star–atmosphere coupling
+
+Choose `coupling: spatial` and `simulate: true` to evaluate the atmosphere
+against the stellar spectrum directly behind it. For each exposure sample,
+the calculation subtracts the opaque planetary disk and integrates
+`I_local × (1 − transmission)` over the atmospheric annulus. The completed
+flux is then averaged over the exposure, convolved with the instrument profile
+and sampled on the observing wavelength grid.
+
+The native pRT pressure layers determine the atmospheric radii and ray
+transmissions. The adapter checks that integrating those rays recovers pRT's
+own effective transit radius. This adapter currently requires pRT 3.2.0,
+whose opacity conventions have been checked. A different version stops with
+an explanatory error. The numerical area check is repeated at runtime.
+
+The new mode includes the continuum transit in the integrated flux. The
+BATMAN factor is therefore excluded from the simulated flux in this mode.
+The existing analysis windows and CCF reference templates remain in use.
+An extended atmosphere can absorb light beyond the nominal continuum transit,
+so inspect the exposures selected for the out-of-transit reference.
+
+The stellar synthesis must include continuum intensities, the disk centre
+(`mu=1`) and every angle sampled by the disk and atmospheric quadratures.
+A small positive minimum `mu` is supported. The calculation checks its rays
+and stops if they require angles outside the supplied grid. The
+[stellar input guide](stellar_intensities.md) describes synthesis and conversion.
+The model must use vacuum wavelengths and declare
+`resolving_power: 0`, meaning that instrumental convolution has not yet been
+applied. Multiplication by the planetary transmission occurs before the
+instrument response.
+
+The current spatial calculation supports a spherical 1D hydrostatic
+atmosphere, a circular orbit and the configured bulk wind offset. Orbital
+planet and stellar reflex velocities are sampled across the exposure. BERV
+and bulk wind retain their exposure values. Set
+`atmosphere.limb_asymmetries: false`, `retrieval.enabled: false`,
+`observation.scale_injection: 1` and
+`observation.signal_uses_light_curve: true`. External effective-radius spectra
+cannot supply ray transmissions. Unsupported combinations stop before a run.
+Regional atmospheres, spatially varying atmospheric rotation and joint
+retrieval trial spectra require further implementation.
+
+Spatial mode uses `stellar_radial_velocity()` with the stellar orbital term
+`−K_star sin(2π phase)`, opposite to the planetary orbital term. Factorized
+mode uses that same negative stellar orbital term when RM+CLV is active.
+Controlled comparisons must also account for the separate treatment of the continuum light curve.
+
+With `observation.simulate_planet: false`, spatial mode retains the opaque
+transiting body and removes atmospheric absorption, providing a photospheric
+control experiment. With `correct: true`, the fixed correction describes the
+opaque-body stellar line distortion and preserves the atmospheric absorption.
+Its divisor is independent of the atmospheric line signal. Modelling the full
+coupling in atmospheric inference requires joint trial spectra.
+
+Spatial runs have `_spatial` in their output directory. Their per-order/night
+stellar archive, when requested with `output.save_rm_clv_model: true`, also
+contains `coupled_flux`, `opaque_transmission` and the
+atmospheric base and top radii, planetary velocity, pRT version and radial
+point count. The base radius is the deepest hydrostatic
+radius used by pRT. It can differ from the radius defined at the reference
+pressure in the planet configuration.
+
+This construction follows the local-intensity transport described by
+[Dethier & Bourrier (2023), equation 4](https://arxiv.org/abs/2304.13759).
+Its 1D hydrostatic atmospheric assumptions are those supplied by EXoPLORE's
+pRT model.
+
+## Direct synthetic sodium observations
+
+Set `atomic_transmission.enabled: true` to run a CARMENES VIS or ANDES UBV sodium
+observation through `ExoploreSimulator.run()`. This route constructs the pRT
+atmosphere and stellar observation, multiplies by terrestrial transmission,
+applies the instrumental response and native pixel integration, adds the
+configured throughput and ETC-based Gaussian noise, fits Molecfit, and
+prepares the two sodium transmission spectra with Seidel22.
+
+The atmospheric model is supplied by `atmosphere.planet_model`, the stellar
+surface by `rm_clv.model_file`, the observing grid by the instrument file,
+and the CARMENES ETC bundle by `noise.carmenes_etc_file`. ANDES reads its
+order-centre S/N from the instrument ETC FITS file. The current route supports
+one homogeneous isothermal H2/He/Na atmosphere, one native optical order and one
+transit, with an explicit fixed BERV. Spatial RM+CLV uses the same planetary
+atmosphere as the synthetic observation. With `rm_clv.simulate: false`, a
+chromatic BATMAN transit multiplies the disk-integrated stellar spectrum.
+The matched stellar correction uses an opaque body without the atmosphere.
+
+`atomic_transmission` supplies these observing and reduction inputs:
+
+| Field | Meaning |
+|---|---|
+| `enabled` | Select the direct sodium observation. Default `false`. |
+| `observing_sequence_file` | NPZ containing increasing `bjd` exposure midpoints and the matching `airmass` array. |
+| `wavelength_interval_um` | Vacuum wavelength interval to retain from the selected native order. |
+| `model_wavelength_limits_um` | pRT wavelength boundaries covering the observation and Doppler shifts with instrumental padding. |
+| `line_wavelengths_nm` | Vacuum Na D2 and D1 wavelengths, in increasing order. |
+| `observatory_lon_lat_height` | Longitude and latitude in degrees, height in metres, for the barycentric-time conversion used by Molecfit. |
+| `band_half_width_kms` | Half-width of each planetary light-curve and absorption band. Default 20 km/s. |
+| `molecfit_workers` | One to sixteen simultaneous external fits. Default 1. |
+| `molecfit` | Explicit `CarmenesMolecfitConfig` settings, including molecular anchors, calibrated resolution, fit choices and acceptance gates. |
+| `etc_reference_exposure_seconds` | Exposure duration used to generate the ANDES ETC table. Required for ANDES and checked against `observation.exposure_time_seconds`. CARMENES reads the duration from its ETC bundle. |
+
+The telluric reference is selected by
+`tellurics.reference_telluric_file`. It must contain a SkyCalc binary table
+with `lam` in nm and `trans`, and cover the full modelled observation.
+Transmission is scaled by exposure airmass relative to
+`tellurics.reference_airmass` before instrumental convolution. The current
+route uses one reference transmission with `use_full_skycalc: false`.
+
+For the CARMENES sodium route, uncertainties use the photon-dominated ETC response
+in `observation/sodium_noise.py`. The ETC order maximum anchors the continuum
+S/N, native sampling converts it to per-pixel S/N, and stellar absorption,
+tellurics and throughput determine the expected photon rate. Record the
+Gaussian and throughput seeds separately. Set the Seidel22 continuum windows
+explicitly and use `pipeline.seidel22.noise_resamples` to propagate continuum
+refitting through the final spectral and light-curve covariance.
+
+ANDES uses `observation/andes_sodium_noise.py` with the existing ANDES
+order-centre anchor, sinc-squared blaze and relative telluric S/N model.
+Its photon response converts the expected flux to Gaussian uncertainties on
+the same flux scale. Select one `ANDES_UBV` order covering both lines and the
+configured continuum windows. Set `noise.carmenes_etc_file: null` and supply
+Molecfit's `calibrated_resolving_power` for ANDES. Each exposure receives an
+independent Molecfit fit, with up to sixteen concurrent fits. A 30-second
+sequence can therefore require several hours of telluric fitting.
+
+Every execution requires a fresh `paths.output_root`. It writes the resolved
+configuration, intrinsic and noisy observation arrays, individual Molecfit
+products, and a residual matrix, transmission spectrum and light curve for
+each line. `final_summary.json` records the band measurements, uncertainty
+method, input hashes, seeds, software version, Git revision and runtime.

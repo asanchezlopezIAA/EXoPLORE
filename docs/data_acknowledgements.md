@@ -67,3 +67,18 @@ Stellar spectra use the PHOENIX-ACES-AGSS-COND-2011 library:
 > *A new extensive library of PHOENIX stellar atmospheres and synthetic spectra.*
 > A&A, 553, A6.
 > [doi:10.1051/0004-6361/201219058](https://doi.org/10.1051/0004-6361/201219058)
+
+## Local stellar intensities for RM and CLV
+
+The optional [RM/CLV intensity inputs](stellar_intensities.md) retain the
+source description of the stellar synthesis. For MARCS/Turbospectrum models,
+cite [Gustafsson et al. (2008)](https://marcs.astro.uu.se/),
+[Plez (2012)](https://ascl.net/1205.004) and, when using the NLTE version,
+[Gerber et al. (2023)](https://www.aanda.org/articles/aa/abs/2023/01/aa43673-22/aa43673-22.html).
+Include the references for the line lists, model atoms and departure
+coefficients used in the synthesis.
+
+The public [3D sodium intensity grid](https://zenodo.org/records/14055808)
+is described by [Canocchi et al. (2024)](https://arxiv.org/abs/2410.15810)
+and distributed under CC BY 4.0. Its input coverage and conventions should
+be checked when preparing a model for EXoPLORE.

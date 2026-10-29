@@ -45,6 +45,12 @@ EXoPLORE uses [petitRADTRANS](https://petitradtrans.readthedocs.io) to compute t
 radiative-transfer interface uses petitRADTRANS 3. Scientific opacity tables
 are downloaded separately.
 
+The optional {ref}`spatial RM/CLV mode <spatial-star-atmosphere-coupling>`
+currently requires petitRADTRANS **3.2.0** and an unconvolved stellar
+specific-intensity grid with continuum spectra covering disk centre and
+every angle sampled by the transit integration. The
+[stellar input guide](stellar_intensities.md) explains how to prepare that grid.
+
 Download the opacity tables following the [petitRADTRANS documentation](https://petitradtrans.readthedocs.io/en/latest/content/installation.html). In particular, the line-by-line opacity tables required for high-resolution retrieval amount to several GB. Note the absolute path to the resulting `input_data/` directory, as it must be set in the simulation config under `paths.prt_input_data`.
 
 ## 5. Install retrieval dependencies (optional)

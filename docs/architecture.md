@@ -53,6 +53,15 @@ ExoploreSimulator.run()
       +--- Helium simulation: core/helium_simulation.py
       |                       core/carmenes_helium_simulation.py
       |
+      +--- Direct sodium: core/atomic_simulation.py
+      |       spatial stellar/planetary transfer
+      |           v
+      |       tellurics, native sampling and ETC uncertainties
+      |           v
+      |       Molecfit and pipelines/seidel22.py
+      |           v
+      |       transmission spectra and line light curves
+      |
       +--- Observed helium: pipelines/palle2020.py
       |                     pipelines/czesla2024.py
       |
@@ -62,7 +71,11 @@ ExoploreSimulator.run()
 `core/spectroscopy_mode.py` selects the workflow. The block numbers in the
 molecular path label sections of `core/simulator.py`. Blocks 3–6 process one
 spectral order before advancing to the next. The helium runners each manage
-their own observing, preparation and analysis sequence.
+their own observing, preparation and analysis sequence. The direct sodium
+runner is selected by `atomic_transmission.enabled`. It reads the existing
+atmospheric, stellar, instrument and noise configuration and writes the full
+resolved settings beside its outputs. Seidel22 uncertainty resampling repeats
+continuum fitting and shared-reference preparation on native-pixel noise draws.
 
 ## Where to find a calculation
 
@@ -74,14 +87,32 @@ Paths in this table are relative to `src/exoplore/`.
 | `core/` | Experiment execution and workflow selection | `simulator.py`, `spectroscopy_mode.py`, `cli.py` |
 | `planets/` | Planetary-system parameters and derived quantities | `models.py`, `catalog.py` |
 | `instruments/` | Instrument information, wavelength grids and observing inputs | `base.py`, `wavegrid.py`, instrument readers |
-| `atmosphere/` | Radiative transfer, chemistry, temperature and broadening | `prt.py`, `chemistry.py`, `temperature.py`, `winds.py`, helium solvers |
+| `atmosphere/` | Radiative transfer, chemistry, temperature, ray transmissions and broadening | `prt.py`, `transmission.py`, `chemistry.py`, `temperature.py`, `winds.py`, helium solvers |
+| `stellar/` | Local stellar intensities, rotating disk integration and joint atmospheric transfer | `surface.py`, `observation.py`, `coupled.py` |
 | `observation/` | Exposure times, velocities, airmass and noise | `timing.py`, `velocity.py`, `airmass.py`, `noise.py`, `randomness.py` |
 | `pipelines/` | Spectral masks, preparation and model filtering | `prepare.py`, `masking.py`, preparation-method modules |
 | `ccf/` | Cross-correlation and velocity-map calculations | `kernels.py`, `compute.py`, `statistics.py` |
 | `retrieval/` | Likelihoods, priors, sampling interfaces and helium grid fitting | `likelihood.py`, `priors.py`, `samplers.py`, `helium_grid.py` |
 | `analysis/` | Statistical summaries and comparisons of calculated products | `stats.py`, `multi_night.py`, `diagnostics.py` |
 | `plotting/` | Spectral, CCF, detection-map and retrieval figures | `matrices.py`, `kpvsys.py`, instrument and helium plotting modules |
-| `io/` | File readers, output paths and saved products | `paths.py`, `stellar.py`, `utils.py`, `results.py` |
+| `io/` | File readers, output paths and saved products | `paths.py`, `stellar.py`, `stellar_surface.py`, `utils.py`, `results.py` |
+
+The optional `rm_clv` section selects stellar line distortions in the standard
+transit workflow. `io/stellar_surface.py` validates local intensity inputs.
+`stellar/surface.py` integrates the rotating and occulted disk.
+`stellar/observation.py` averages exposures, applies the instrumental response
+and constructs the observer-frame model. Block 4 inserts the distortion when
+requested. Block 5 applies a requested correction to flux and uncertainty
+before preparation. The [RM/CLV reference](config_reference.md#19-stellar-rm-and-clv)
+describes both coupling choices and their supported routes.
+With `coupling: spatial`, `atmosphere/transmission.py` exports native ray
+transmissions from pRT and checks their integrated area. `stellar/coupled.py`
+weights those rays by the local stellar spectrum and integrates the joint
+flux. Block 4 uses that completed flux, which already includes the continuum
+transit. The existing CCF template and analysis windows remain available.
+`pipelines/runner.py` supplies the preparation result structure consumed by
+the observing loop. For fixed-telluric preparation it carries forward the
+calculated flux/error pair together with the unchanged column selection.
 
 The observing loop and several retrieval-model and likelihood functions are
 inside `core/simulator.py`. The runner imports `spec_to_mat_fraction()` from
