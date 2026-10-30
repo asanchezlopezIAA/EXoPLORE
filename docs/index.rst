@@ -32,7 +32,6 @@ current and next-generation ground-based spectrographs.
    :caption: Tutorials
 
    tutorial
-   tutorial14_stellar_activity
 
 .. toctree::
    :maxdepth: 2
