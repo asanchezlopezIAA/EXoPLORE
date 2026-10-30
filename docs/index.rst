@@ -32,6 +32,7 @@ current and next-generation ground-based spectrographs.
    :caption: Tutorials
 
    tutorial
+   tutorial14_stellar_activity
 
 .. toctree::
    :maxdepth: 2
@@ -41,6 +42,7 @@ current and next-generation ground-based spectrographs.
    outputs
    input_files
    stellar_intensities
+   heterogeneous_stellar_surface
    crires_reduction
    nortmann26_pipeline
    igrins_pipeline

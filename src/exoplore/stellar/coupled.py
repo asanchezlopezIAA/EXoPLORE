@@ -141,6 +141,9 @@ class CoupledObservation:
     top_radius_cm: float
     # Optionally retain fine-grid fluxes for telluric absorption before convolution.
     intrinsic: IntrinsicCoupledObservation | None = None
+    correction_flux: np.ndarray | None = None
+    correction_distortion: np.ndarray | None = None
+    correction_intrinsic: IntrinsicCoupledObservation | None = None
 
 
 def _disk_rings(radius, count):
@@ -190,9 +193,9 @@ class SpatialTransitModel(TransitStellarModel):
     bulk wind are held at their supplied exposure values.
     """
 
-    def __init__(self, choices, planet, resolving_power):
+    def __init__(self, choices, planet, resolving_power, *, surface_config=None):
         # Reuse the local-intensity loading, effect selection and instrument checks.
-        super().__init__(choices, planet, resolving_power)
+        super().__init__(choices, planet, resolving_power, surface_config=surface_config)
         # The inherited surface holds the validated angular stellar synthesis.
         local = self.surface.local
         # Spatial absorption uses the continuum brightness across the stellar disk.
@@ -211,8 +214,11 @@ class SpatialTransitModel(TransitStellarModel):
         # Precompute the angular quadrature reused by every star and planet ring.
         self._angle_nodes, self._angle_weights = leggauss(choices.azimuth_points)
 
-    def _rays(self, radii, planet_x, planet_y):
+    def _rays(self, radii, planet_x, planet_y, time_bjd=None):
         """Sample only the visible angular arc of each planet-centred ring."""
+        if self.field is not None:
+            from .quadrature import component_rays
+            return component_rays(self, radii, planet_x, planet_y, time_bjd)
         # Measure the ring centre's projected distance from stellar centre.
         distance = np.hypot(planet_x, planet_y)
         # For concentric rings, each radius is either fully illuminated or outside the star.
@@ -268,6 +274,9 @@ class SpatialTransitModel(TransitStellarModel):
         # A ring set entirely outside the star contributes zero line and continuum flux.
         if rays is None:
             return intensity, continuum
+        if self.field is not None:
+            # Reuse the compiled interpolation and summation for each component's rays.
+            return self.field.angular_flux(wave, rays, count, _integrate_local_intensities)
         # Unpack the geometry already calculated for this star/planet position.
         active, upper, mu_fraction, velocity, weights = rays
         local = self.surface.local
@@ -300,7 +309,7 @@ class SpatialTransitModel(TransitStellarModel):
 
     def evaluate(self, wave_um, phase, stellar_velocity_kms, exposure_seconds, *,
                  chords: ChordTransmission | None, planet_velocity_kms,
-                 return_intrinsic: bool = False):
+                 return_intrinsic: bool = False, times_bjd=None):
         """Compute complete fluxes, averaging exposure samples before convolution.
 
         chords=None selects the atmosphere-free opaque-body control.
@@ -338,9 +347,13 @@ class SpatialTransitModel(TransitStellarModel):
         star_subvelocity = star_velocity[:, None] - self.planet.stellar_rv_semiamplitude_kms*sin_difference
         # Update the planetary orbital velocity with its positive orbital sign.
         planet_subvelocity = planet_velocity[:, None] + self.planet.kp_kms*sin_difference
+        times = None if self.field is None else (
+            self.field.times(times_bjd, len(phase))[:, None]+offsets/86400)
         local = self.surface.local
         # Choose a fine log-wavelength grid resolving both the stellar synthesis and instrument.
         step = min(float(np.min(np.diff(np.log(local.wavelength_um)))), 1/(4*self.resolving_power))
+        if self.field is not None:
+            step = min(step, self.field.log_wavelength_step)
         # Also retain the atmospheric spectral sampling when it is finer.
         if chords is not None:
             step = min(step, float(np.min(np.diff(np.log(chords.wavelength_um)))))
@@ -362,14 +375,20 @@ class SpatialTransitModel(TransitStellarModel):
         # Set star-centred radial quadrature in projected stellar-radius units.
         star_radii, star_weights = _disk_rings(1.0, self.choices.stellar_radial_points)
         # Calculate viewing angles, rotation velocities and angular weights for the full star.
-        star_rays = self._rays(star_radii, 0, 0)
+        if self.field is not None:
+            from .quadrature import radial_rule
+            star_radii, star_weights = radial_rule(1., self.choices.stellar_radial_points,
+                                                   self.field, time=times[0, 0])
+        star_rays = self._rays(star_radii, 0, 0,
+                               None if times is None else times[0, 0])
+        dynamic = self.field is not None and self.field.settings.time_dependent
         # Allocate the full-star line and continuum spectra.
         disk = np.empty(len(star_grid))
         continuum_disk = np.empty_like(disk)
         # Bound temporary local-intensity arrays by evaluating a small number
         # of wavelength channels at once, independently of the order length.
         chunk = 128
-        for start in range(0, len(star_grid), chunk):
+        for start in ([] if dynamic else range(0, len(star_grid), chunk)):
             section = slice(start, start+chunk)
             # Integrate the local intensities around each star-centred ring for this wavelength chunk.
             spectra, continua = self._angular_flux(star_grid[section], star_rays, len(star_radii))
@@ -406,6 +425,14 @@ class SpatialTransitModel(TransitStellarModel):
                 # Build opaque-body radial quadrature with the stellar-edge split when needed.
                 body_radii, body_weights = _occulting_disk_rings(
                     base, self.choices.planet_radial_points, np.hypot(x, y))
+                if self.field is not None:
+                    body_radii, body_weights = radial_rule(base,
+                        self.choices.planet_radial_points, self.field, x, y, times[exposure, sample])
+                # A rotating map has an exposure-dependent unocculted spectrum.
+                if dynamic:
+                    current_radii, current_weights = radial_rule(1.,
+                        self.choices.stellar_radial_points, self.field, time=times[exposure, sample])
+                    current_rays = self._rays(current_radii, 0, 0, times[exposure, sample])
                 # Combine the opaque-body rings with the native atmospheric rays for local illumination.
                 radii = np.concatenate((body_radii, atmosphere_radii))
                 # Remember where the opaque-body rings end in the combined ray arrays.
@@ -415,7 +442,7 @@ class SpatialTransitModel(TransitStellarModel):
                 # Check whether the outer atmospheric radius overlaps the stellar disk.
                 overlap = front and np.hypot(x, y) < 1+top_cm/self.planet.R_star
                 # Calculate illuminated arcs once for this subsample, then reuse them across wavelengths.
-                rays = self._rays(radii, x, y) if overlap else None
+                rays = self._rays(radii, x, y, None if times is None else times[exposure, sample]) if overlap else None
                 for start in range(0, len(fine), chunk):
                     section = slice(start, start+chunk)
                     # Select this chunk of the fine observer-frame grid.
@@ -423,8 +450,12 @@ class SpatialTransitModel(TransitStellarModel):
                     # Remove the observed stellar velocity to sample its disk-integrated reference.
                     star_rest = observed_wave/(1+star_subvelocity[exposure, sample]/C_KMS)
                     # Interpolate unocculted line and continuum flux at the required stellar-rest wavelengths.
-                    full = np.interp(star_rest, star_grid, disk)
-                    full_continuum = np.interp(star_rest, star_grid, continuum_disk)
+                    if not dynamic:
+                        full = np.interp(star_rest, star_grid, disk)
+                        full_continuum = np.interp(star_rest, star_grid, continuum_disk)
+                    else:
+                        values, continua = self._angular_flux(star_rest, current_rays, len(current_radii))
+                        full, full_continuum = current_weights @ values, current_weights @ continua
                     # Start the opaque-body and atmospheric removed-light terms at zero.
                     blocked, blocked_continuum = np.zeros(len(full)), np.zeros(len(full))
                     atmosphere_blocked = np.zeros(len(full))
@@ -499,5 +530,14 @@ class SpatialTransitModel(TransitStellarModel):
         # Record the opaque-body continuum transit separately for diagnostics.
         opaque_transmission = continuum_bare/continuum_outside
         # Return the total observation, stellar correction components and atmospheric radius limits.
+        correction_flux = correction_distortion = correction_intrinsic = None
+        if self.quiet_correction is not None:
+            correction = self.quiet_correction.evaluate(wave, phase, star_velocity,
+                exposure_seconds, chords=chords, planet_velocity_kms=planet_velocity,
+                return_intrinsic=return_intrinsic, times_bjd=times_bjd)
+            correction_flux = correction.reference*correction.distortion*correction.opaque_transmission
+            correction_distortion = correction.distortion
+            correction_intrinsic = correction.intrinsic
         return CoupledObservation(flux, reference, distortion, opaque_transmission,
-                                  base_cm, top_cm, intrinsic)
+                                  base_cm, top_cm, intrinsic, correction_flux, correction_distortion,
+                                  correction_intrinsic)

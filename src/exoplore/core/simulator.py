@@ -701,10 +701,10 @@ class ExoploreSimulator:
             if _spatial_rm_clv:
                 from exoplore.stellar.coupled import SpatialTransitModel
                 # Spatial mode combines local stellar light with atmospheric rays from pRT.
-                _stellar_surface = SpatialTransitModel(cfg.rm_clv, planet, inst.res)
+                _stellar_surface = SpatialTransitModel(cfg.rm_clv, planet, inst.res, surface_config=cfg.stellar_surface)
             else:
                 # Factorized mode calculates the stellar line distortion as a separate multiplier.
-                _stellar_surface = TransitStellarModel(cfg.rm_clv, planet, inst.res)
+                _stellar_surface = TransitStellarModel(cfg.rm_clv, planet, inst.res, surface_config=cfg.stellar_surface)
             # A separate factorized correction can be applied to a spatial injection
             # through Seidel22, optionally using another stellar synthesis.
             if cfg.rm_clv.correct and cfg.rm_clv.correction_method == "factorized":
@@ -714,6 +714,11 @@ class ExoploreSimulator:
                 correction_choices = replace(cfg.rm_clv, coupling="factorized",
                     model_file=cfg.rm_clv.correction_model_file or cfg.rm_clv.model_file)
                 _correction_surface = TransitStellarModel(correction_choices, planet, inst.res)
+            if _stellar_surface.field is not None:
+                # Record each input hash and the selected geometry beside the spectra.
+                import json as _surface_json
+                (Path(dirs['root'])/'stellar_surface_provenance.json').write_text(
+                    _surface_json.dumps(_stellar_surface.field.provenance(), indent=2))
             # Check the selected orders before loading atmospheric opacities.
             # Exposure-specific Doppler and convolution margins are checked
             # again when the observing-frame model is evaluated in Block 4.
@@ -1741,7 +1746,7 @@ class ExoploreSimulator:
                 _stellar_model = (None if _stellar_surface is None or _spatial_rm_clv else
                                   _stellar_surface.evaluate(
                                       wave_ins, phase, v_star,
-                                      cfg.observation.exposure_time_seconds))
+                                      cfg.observation.exposure_time_seconds, times_bjd=syn_jd))
                 # The planet-only template builder needs an exposure-shaped
                 # background. Spatial mode assembles the physical stellar
                 # reference and full observed flux after the planet velocities.
@@ -1779,7 +1784,7 @@ class ExoploreSimulator:
                         cfg.observation.exposure_time_seconds_per_night[nn])
                     _model_night = (None if _stellar_surface is None or _spatial_rm_clv else
                                     _stellar_surface.evaluate(
-                                        wave_ins, phase[nn], v_star[nn], exposure_seconds))
+                                        wave_ins, phase[nn], v_star[nn], exposure_seconds, times_bjd=syn_jd[nn]))
                     _stellar_model.append(_model_night)
                     mat_star.append(np.ones((len(phase[nn]), len(wave_ins))) if _spatial_rm_clv else
                                     _model_night.reference if _model_night is not None else
@@ -2028,7 +2033,8 @@ class ExoploreSimulator:
                         # using its phases, stellar velocities and exposure duration.
                         _stellar_model.append(_stellar_surface.evaluate(
                             wave_ins, phase[night], v_star[night], exposure_seconds,
-                            chords=_atmospheric_chords, planet_velocity_kms=v_planet[night]))
+                            chords=_atmospheric_chords if cfg.observation.simulate_planet else None,
+                            planet_velocity_kms=v_planet[night], times_bjd=syn_jd[night]))
                     # Use the resulting coupled flux as the observation and keep its stellar reference.
                     spec_mat = [model.flux.copy() for model in _stellar_model]
                     mat_star = [model.reference for model in _stellar_model]
@@ -2037,7 +2043,8 @@ class ExoploreSimulator:
                     # at the injection velocities already selected by this runner.
                     _stellar_model = _stellar_surface.evaluate(
                         wave_ins, phase, v_star, cfg.observation.exposure_time_seconds,
-                        chords=_atmospheric_chords, planet_velocity_kms=_v_inject)
+                        chords=_atmospheric_chords if cfg.observation.simulate_planet else None,
+                        planet_velocity_kms=_v_inject, times_bjd=syn_jd)
                     # This flux includes opaque occultation, limb brightness and atmospheric absorption.
                     # It supplies the complete transit observation before tellurics and noise.
                     spec_mat = _stellar_model.flux.copy()
@@ -2045,15 +2052,19 @@ class ExoploreSimulator:
             # For separate stellar and planetary factors, apply the photospheric line
             # distortion to the existing transit observation.
             elif cfg.rm_clv.simulate:
+                from exoplore.stellar.observation import apply_factorized_surface
                 if cfg.observation.different_nights:
                     for night, model in enumerate(_stellar_model):
-                        spec_mat[night] *= model.distortion
-                        if not cfg.atmosphere.limb_asymmetries:
-                            spec_mat[night] *= model.reference
+                        apply_factorized_surface(spec_mat[night], model,
+                            radius_ratio=planet.R_pl/planet.R_star,
+                            transit_fraction=fraction[night],
+                            planet_present=cfg.observation.simulate_planet,
+                            include_reference=not cfg.atmosphere.limb_asymmetries)
                 else:
-                    spec_mat *= _stellar_model.distortion
-                    if not cfg.atmosphere.limb_asymmetries:
-                        spec_mat *= _stellar_model.reference
+                    apply_factorized_surface(spec_mat, _stellar_model,
+                        radius_ratio=planet.R_pl/planet.R_star, transit_fraction=fraction,
+                        planet_present=cfg.observation.simulate_planet,
+                        include_reference=not cfg.atmosphere.limb_asymmetries)
 
             # Update per-order results with Block 4 outputs
             # ----------------------------------------------------------
@@ -2604,9 +2615,11 @@ class ExoploreSimulator:
                             # The matched choice reconstructs the opaque-body spectrum from the injected model.
                             _seidel_stellar_flux = (_model_current.reference
                                                     * _model_current.distortion)
-                            if _spatial_rm_clv:
+                            if _model_current.opaque_transmission is not None:
                                 # Restore the continuum transit when reconstructing a spatial opaque-body spectrum.
                                 _seidel_stellar_flux *= _model_current.opaque_transmission
+                        if _model_current.correction_flux is not None:
+                            _seidel_stellar_flux = _model_current.correction_flux
                     # For other preparations, apply the fixed distortion to flux and error
                     # on the observer grid before their preparation begins.
                     elif cfg.rm_clv.correct:
@@ -2614,12 +2627,14 @@ class ExoploreSimulator:
                         _error = _std_noise_b5[b, :n_spectra, :]
                         (_mat_noise_b5[b, :n_spectra, :],
                          _std_noise_b5[b, :n_spectra, :]) = correct_stellar_distortion(
-                            _flux, _error, _model_current.distortion)
+                            _flux, _error, (_model_current.correction_distortion
+                                            if _model_current.correction_distortion is not None else _model_current.distortion))
                         # Keep the saved Gaussian draw in these same flux
                         # units. The noiseless diagnostic subtracts this draw
                         # from the corrected noisy matrix later in the run.
                         if not _nl and not _urd:
-                            _gauss_noise_b5[b, :n_spectra, :] /= _model_current.distortion
+                            _gauss_noise_b5[b, :n_spectra, :] /= (_model_current.correction_distortion
+                                if _model_current.correction_distortion is not None else _model_current.distortion)
                     # Save the stellar factors, model source and correction stage for later
                     # comparison plots and checks of the applied normalization.
                     if cfg.output.save_rm_clv_model:

@@ -1,0 +1,424 @@
+{
+  "planet": {
+    "name": "HD189733b",
+    "parameter_file": "planet_params/HD189733b.json"
+  },
+  "instrument": {
+    "name": "ANDES_UBV",
+    "observatory": "paranal",
+    "pixels_per_resolution_element": 2.5,
+    "order_indices": [
+      56
+    ],
+    "split_detectors": false,
+    "convolve_to_resolution": true
+  },
+  "observation": {
+    "event_type": "transit",
+    "flag_event": "full_event",
+    "pre_event_hours": 0.0,
+    "post_event_hours": 0.0,
+    "n_nights": 1,
+    "different_nights": false,
+    "exposure_time_seconds": 30.0,
+    "readout_time_seconds": 6.0,
+    "overhead_time_seconds": 0.0,
+    "specific_event": true,
+    "specific_T0_bjd": 2458321.68158481,
+    "use_real_data": false,
+    "noise_scaling_factor": 1.0,
+    "simulate_planet": true,
+    "external_planet_model": false,
+    "external_planet_model_file": "",
+    "signal_uses_light_curve": true,
+    "scale_injection": 1.0,
+    "significant_eccentricity": false,
+    "berv_kms": 0.0,
+    "use_accurate_berv": false,
+    "noiseless": false,
+    "first_night_noiseless": false,
+    "add_throughput_variations": true,
+    "mask_v_rotsini": false,
+    "exposure_time_seconds_per_night": null,
+    "helium_transmission_spectroscopy": null,
+    "throughput_seed": 12345
+  },
+  "noise": {
+    "noise_choice": "SNR",
+    "fixed_snr": null,
+    "use_mean_snr": false,
+    "snr_correction": 0.0,
+    "noise_seed": 12345,
+    "carmenes_etc_file": null
+  },
+  "atmosphere": {
+    "limb_asymmetries": false,
+    "planet_model": {
+      "species": [
+        "H2",
+        "He",
+        "Na__LorCut"
+      ],
+      "use_easychem": false,
+      "metallicity_wrt_solar": 0.53,
+      "carbon_to_oxygen_ratio": 0.41,
+      "mass_fractions": [
+        0.7392747854957099,
+        0.2597252145042901,
+        0.001
+      ],
+      "mean_molecular_weight": 2.3,
+      "reference_pressure_bar": 0.01,
+      "cloud_pressure_bar": null,
+      "pressure_min_bar": 1e-15,
+      "pressure_max_bar": 100.0,
+      "pressure_grid_size": 445,
+      "isothermal": true,
+      "isothermal_temperature_K": 2750.0,
+      "equilibrium_temperature_K": 1170.0,
+      "kappa_ir": 0.01,
+      "gamma_guillot": 0.4,
+      "two_point": false,
+      "two_point_pressures_bar": [
+        1.2589254117941673,
+        0.001778279410038923
+      ],
+      "two_point_temperatures_K": [
+        1750.0,
+        520.0
+      ],
+      "wind_velocity_kms": 0.0
+    }
+  },
+  "tellurics": {
+    "include_tellurics": true,
+    "use_full_skycalc": false,
+    "use_accurate_airmass": true,
+    "airmass_evolution": "up_and_down",
+    "airmass_limits": [
+      1.2,
+      1.6
+    ],
+    "airmass_limits_per_night": null,
+    "constant_pwv": true,
+    "pwv_mm": 10.0,
+    "pwv_mm_per_night": null,
+    "reference_airmass": 1.0,
+    "reference_telluric_file": "inputs/ANDES/HD189733b/sodium/paranal_reference.fits",
+    "mask_threshold": 0.2,
+    "safety_window_pixels": 7,
+    "skycalc_wavelength_limits_um": [
+      0.586,
+      0.601
+    ]
+  },
+  "pipeline": {
+    "name": "Seidel22",
+    "prepare_template": false,
+    "seidel22": {
+      "continuum_windows_nm": [
+        [
+          590.1052551347414,
+          590.1466618603657
+        ],
+        [
+          590.1870549039268,
+          590.2553513703814
+        ],
+        [
+          590.2661790406135,
+          590.2846588765535
+        ],
+        [
+          590.3291904528933,
+          590.3655309632603
+        ],
+        [
+          590.418767671521,
+          590.4882856977333
+        ],
+        [
+          590.5033966358918,
+          590.512722635462
+        ],
+        [
+          590.5765221983015,
+          590.6739175839083
+        ],
+        [
+          590.7435918663457,
+          590.8007461811002
+        ],
+        [
+          590.8177183125306,
+          590.8659157856159
+        ],
+        [
+          590.8698167254879,
+          590.8875745143816
+        ],
+        [
+          590.9195706922844,
+          590.9437374323836
+        ],
+        [
+          590.9605440728615,
+          590.98034215183
+        ],
+        [
+          590.999253934936,
+          591.0575503047463
+        ],
+        [
+          591.0806308470884,
+          591.1492195923413
+        ],
+        [
+          591.2588521164778,
+          591.3579973508765
+        ],
+        [
+          591.3743126242338,
+          591.4268887202504
+        ],
+        [
+          591.4451998723699,
+          591.4580856809057
+        ],
+        [
+          591.4784278152717,
+          591.5553560797704
+        ],
+        [
+          591.6063880943404,
+          591.6518999768659
+        ],
+        [
+          591.6698966437476,
+          591.702961880094
+        ],
+        [
+          591.7412289414901,
+          591.7761407341145
+        ],
+        [
+          591.8000371932628,
+          591.8206574789742
+        ],
+        [
+          591.8323678227815,
+          591.9011975615836
+        ],
+        [
+          591.9128328232564,
+          591.9612615787387
+        ],
+        [
+          591.9708445250251,
+          591.9971586663007
+        ],
+        [
+          592.0265942950168,
+          592.0547687171654
+        ],
+        [
+          592.0899917855058,
+          592.1180157465011
+        ],
+        [
+          592.1491185173879,
+          592.216159153671
+        ],
+        [
+          592.2333474334722,
+          592.2824300325183
+        ],
+        [
+          592.2956396735486,
+          592.328986759548
+        ],
+        [
+          592.338276248137,
+          592.3657152859965
+        ],
+        [
+          592.3846150345917,
+          592.3984811428619
+        ],
+        [
+          592.4461150500978,
+          592.4828560386542
+        ],
+        [
+          592.4920224254201,
+          592.5229028208769
+        ],
+        [
+          592.5643200078969,
+          592.5817510459613
+        ],
+        [
+          592.6097330130045,
+          592.6553308531154
+        ],
+        [
+          592.6793707462548,
+          592.8491157755055
+        ]
+      ],
+      "stellar_mask_windows_nm": [],
+      "minimum_continuum_pixels": 10,
+      "input_telluric_corrected": false,
+      "input_sky_subtracted": false,
+      "noise_resamples": 600,
+      "noise_resample_seed": 20261030
+    },
+    "optimize_criterion": "Maximum"
+  },
+  "retrieval": {
+    "enabled": false,
+    "dimensionality": "1D"
+  },
+  "paths": {
+    "output_root": "outputs/hd189733b_andes_stellar_activity",
+    "planet_parameter_dir": "planet_params",
+    "prt_input_data": "/path/to/petitRADTRANS/input_data",
+    "inputs_dir": "inputs/ANDES/HD189733b"
+  },
+  "rm_clv": {
+    "simulate": true,
+    "correct": true,
+    "effects": "rm_clv",
+    "coupling": "spatial",
+    "model_file": "inputs/ANDES/HD189733b/sodium/stellar_Na_intensities.npz",
+    "correction_method": "matched",
+    "correction_model_file": "",
+    "wavelength_medium": "vacuum",
+    "projected_obliquity_deg": 0.0,
+    "cells_across_diameter": 60,
+    "subpixels_per_axis": 1,
+    "exposure_subsamples": 3,
+    "azimuth_points": 64,
+    "stellar_radial_points": 48,
+    "planet_radial_points": 24,
+    "normalization": "continuum"
+  },
+  "atomic_transmission": {
+    "enabled": true,
+    "observing_sequence_file": "inputs/ANDES/HD189733b/sodium/observing_sequence.npz",
+    "wavelength_interval_um": [
+      0.5885,
+      0.5929
+    ],
+    "model_wavelength_limits_um": [
+      0.5882,
+      0.5932
+    ],
+    "line_wavelengths_nm": [
+      589.158326,
+      589.755814
+    ],
+    "observatory_lon_lat_height": [
+      -70.4042,
+      -24.6272,
+      2635.0
+    ],
+    "band_half_width_kms": 20.0,
+    "molecfit_workers": 16,
+    "molecfit": {
+      "esorex": "esorex",
+      "windows_nm": [
+        [
+          590.1341208438639,
+          590.2041208438638
+        ],
+        [
+          591.0279195838743,
+          591.0979195838743
+        ],
+        [
+          591.2052650602409,
+          591.2752650602408
+        ],
+        [
+          592.0927909358269,
+          592.1627909358268
+        ],
+        [
+          592.9579289076353,
+          593.0279289076352
+        ],
+        [
+          593.3375658530003,
+          593.4075658530003
+        ],
+        [
+          594.5611732215389,
+          594.6311732215388
+        ],
+        [
+          594.7316485581598,
+          594.8016485581597
+        ],
+        [
+          595.6244679781583,
+          595.6944679781583
+        ],
+        [
+          596.9562607383347,
+          597.0262607383346
+        ]
+      ],
+      "molecules": [
+        "H2O"
+      ],
+      "fit_molecules": [
+        1
+      ],
+      "relative_columns": [
+        1.0
+      ],
+      "helium_guard_kms": 80.0,
+      "gaussian_initial_fwhm_pixels": 2.2,
+      "gaussian_fwhm_range_pixels": [
+        1.0,
+        5.0
+      ],
+      "max_reduced_chi2": 5.0,
+      "ftol": 1e-06,
+      "xtol": 1e-06,
+      "kernel_factor": 5.0,
+      "timeout_seconds": 900.0,
+      "fit_gaussian_width": true,
+      "wavelength_degree": 0,
+      "calibrated_resolving_power": 100000.0,
+      "continuum_degree": 1,
+      "fit_wavelength": false
+    },
+    "etc_reference_exposure_seconds": 30.0
+  },
+  "stellar_surface": {
+    "default_component": "quiet",
+    "correction_surface": "quiet",
+    "components": {
+      "quiet": {
+        "intensity_model_file": "inputs/ANDES/HD189733b/sodium/stellar_Na_intensities.npz"
+      },
+      "spot": {
+        "intensity_model_file": "inputs/ANDES/HD189733b/stellar_activity/spot.npz"
+      },
+      "facula": {
+        "intensity_model_file": "inputs/ANDES/HD189733b/stellar_activity/facula.npz"
+      }
+    },
+    "regions": [
+      {
+        "component": "spot",
+        "geometry": "projected",
+        "x": -0.35,
+        "y": -0.65,
+        "radius": 0.25
+      }
+    ]
+  }
+}

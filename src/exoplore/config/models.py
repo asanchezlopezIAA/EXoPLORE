@@ -32,6 +32,7 @@ from exoplore.config.helium import HeliumPwindsConfig
 from exoplore.config.helium_grid import HeliumGridConfig
 from exoplore.config.rm_clv import RMCLVConfig
 from exoplore.config.atomic_transmission import AtomicTransmissionConfig
+from exoplore.config.stellar_surface import StellarSurfaceConfig
 
 
 # ---------------------------------------------------------------------------
@@ -1146,15 +1147,19 @@ class SimulationConfig:
     helium_grid: Optional[HeliumGridConfig] = None
     rm_clv: RMCLVConfig = field(default_factory=RMCLVConfig)
     atomic_transmission: Optional[AtomicTransmissionConfig] = None
+    # Optional local spectra and the regions selecting them on the stellar disk.
+    stellar_surface: Optional[StellarSurfaceConfig] = None
 
     def __post_init__(self) -> None:
-        """Construct the opt-in helium grid without changing existing routes."""
+        """Construct optional typed grid, stellar and atomic configuration blocks."""
         if isinstance(self.helium_grid,dict):
             self.helium_grid=HeliumGridConfig(**self.helium_grid)
         if isinstance(self.rm_clv, dict):
             self.rm_clv = RMCLVConfig(**self.rm_clv)
         if isinstance(self.atomic_transmission, dict):
             self.atomic_transmission = AtomicTransmissionConfig(**self.atomic_transmission)
+        if self.stellar_surface is not None:
+            self.stellar_surface = StellarSurfaceConfig.from_dict(self.stellar_surface)
 
     # ------------------------------------------------------------------
     # Serialization
@@ -1253,6 +1258,7 @@ class SimulationConfig:
             timing=bool(d.get("timing", False)),
             helium_grid=d.get('helium_grid'),
             atomic_transmission=d.get('atomic_transmission'),
+            stellar_surface=d.get('stellar_surface'),
             # Validate every new RM/CLV key, so a misspelled activation or
             # geometry field cannot silently disable a requested calculation.
             rm_clv=RMCLVConfig(**d.get("rm_clv", {})),

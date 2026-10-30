@@ -10,6 +10,10 @@ The [RM/CLV configuration](config_reference.md#19-stellar-rm-and-clv)
 selects the model file and the calculation. The existing PHOENIX flux input
 continues to supply the stellar spectrum for simulations with RM/CLV disabled.
 
+For multiple local spectra on one disk, see [stellar components and surface
+regions](heterogeneous_stellar_surface.md). That interface uses the same
+intensity files and preserves their relative surface brightness.
+
 ## Obtaining local intensities
 
 A practical synthesis route is **MARCS + Turbospectrum**, used by

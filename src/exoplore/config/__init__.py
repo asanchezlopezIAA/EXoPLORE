@@ -23,6 +23,9 @@ from exoplore.config.models import (
 from exoplore.config.rm_clv import RMCLVConfig
 from exoplore.config.seidel22 import Seidel22Config
 from exoplore.config.atomic_transmission import AtomicTransmissionConfig
+from exoplore.config.stellar_surface import (
+    StellarSurfaceConfig, StellarComponentConfig, SurfaceRegionConfig,
+)
 
 # Convenience alias, load_simulation_config(path) == SimulationConfig.from_json(path)
 def load_simulation_config(path):
@@ -45,6 +48,7 @@ __all__ = [
     "PathConfig",
     "SimulationConfig",
     "RMCLVConfig",
+    "StellarSurfaceConfig", "StellarComponentConfig", "SurfaceRegionConfig",
     "Seidel22Config",
     "AtomicTransmissionConfig",
     "load_simulation_config",

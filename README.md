@@ -154,6 +154,7 @@ machine-specific paths before running it, following
 | [docs/config_reference.md](docs/config_reference.md) | Every configuration field with units, valid values, and physical meaning |
 | [docs/outputs.md](docs/outputs.md) | Output file layout, selecting which matrices to write (disk usage), how to read Kp-Vsys maps, CCF matrices, retrieval products |
 | [docs/input_files.md](docs/input_files.md) | Required input files, download instructions, directory layout per instrument |
+| [docs/heterogeneous_stellar_surface.md](docs/heterogeneous_stellar_surface.md) | Independent stellar intensity components, surface regions, rotation and spot crossings |
 | [docs/data_acknowledgements.md](docs/data_acknowledgements.md) | Citation text for bundled datasets (CARMENES reference night, SkyCalc, PHOENIX) |
 
 ---

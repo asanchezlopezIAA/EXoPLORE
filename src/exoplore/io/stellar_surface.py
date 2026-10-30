@@ -10,6 +10,7 @@ This reader checks the file metadata that identifies the synthesis.
 """
 
 import numpy as np
+import json
 
 from exoplore.stellar.surface import LocalIntensityGrid
 
@@ -50,6 +51,15 @@ def load_local_intensities(path, *, wavelength_medium):
             raise ValueError("RM/CLV model needs its synthesis source and intensity units")
         # Zero identifies an intrinsic synthesis. A positive value records prior broadening.
         resolution = float(saved["resolving_power"].item())
+        # Preserve provider-specific provenance without interpreting its physics.
+        for name in ('metadata_json', 'provenance_json'):
+            if name in saved:
+                if saved[name].shape != ():
+                    raise ValueError(f'{name} must be scalar JSON text')
+                value = json.loads(str(saved[name].item()))
+                if not isinstance(value, dict):
+                    raise ValueError(f'{name} must describe a JSON object')
+                metadata[name] = value
         if not np.isfinite(resolution) or resolution < 0:
             raise ValueError("RM/CLV resolving_power must be zero or finite and positive")
         # Construct the validated wavelength-by-angle input grid. The continuum

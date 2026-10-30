@@ -27,6 +27,14 @@ def validate_route(config, route):
     # Read and validate the stellar-effect controls selected in the JSON.
     choices = config.rm_clv
     choices.__post_init__()
+    surface = getattr(config, 'stellar_surface', None)
+    if surface is not None and surface.active and not choices.simulate:
+        raise ValueError('Stellar regions require rm_clv.simulate=true')
+    if surface is not None and surface.active:
+        if config.observation.scale_injection != 1 or not config.observation.signal_uses_light_curve:
+            raise ValueError('Stellar regions require scale_injection=1 and signal_uses_light_curve=true')
+        if surface.correction_surface == 'quiet' and choices.correction_method != 'matched':
+            raise ValueError('A quiet correction surface requires rm_clv.correction_method=matched')
     # Leave the existing observing calculation in place when both switches are false.
     if not choices.active:
         return
@@ -71,21 +79,34 @@ def validate_route(config, route):
 
 @dataclass(frozen=True)
 class ObservedStellarModel:
-    """Instrument-sampled line distortion and stationary stellar reference."""
+    """Instrument-sampled line distortion and exposure-dependent stellar reference."""
 
     # Continuum-normalized stellar line ratio for each exposure and wavelength pixel.
     distortion: np.ndarray
     # Observer-frame unocculted stellar spectrum on the same wavelength grid.
     reference: np.ndarray
+    # Keep the continuum transit when regions change the blocked surface brightness.
+    opaque_transmission: np.ndarray | None = None
+    correction_flux: np.ndarray | None = None
+    correction_distortion: np.ndarray | None = None
 
 
 class TransitStellarModel:
     """Build the selected stellar effect once, then evaluate each order/night."""
 
-    def __init__(self, choices, planet, resolving_power):
+    def __init__(self, choices, planet, resolving_power, *, surface_config=None):
         # Load the specific intensities, prior instrumental resolution and synthesis metadata.
         local, source_resolution, self.metadata = load_local_intensities(
             choices.model_file, wavelength_medium=choices.wavelength_medium)
+        self.field = None
+        if surface_config is not None and surface_config.active:
+            from .components import StellarIntensityField
+            self.field = StellarIntensityField(surface_config, choices, planet)
+            local = self.field.default.grid
+            source_resolution = self.field.default.resolution
+            self.metadata = dict(self.metadata, stellar_surface=self.field.provenance())
+            if choices.normalization != 'continuum':
+                raise ValueError('Heterogeneous surfaces require continuum normalization')
         # Retain the input broadening for the subsequent resolution calculation.
         self.source_resolving_power = source_resolution
         # Check orbit and instrument assumptions before building the surface.
@@ -119,9 +140,15 @@ class TransitStellarModel:
             projected_obliquity_deg=(choices.projected_obliquity_deg or 0.0),
             cells_across_diameter=choices.cells_across_diameter,
             subpixels_per_axis=choices.subpixels_per_axis)
+        self.surface.field = self.field
         # Keep the geometry and JSON choices for order/night evaluations.
         self.choices, self.planet = choices, planet
         self.resolving_power = resolving_power
+        self.quiet_correction = None
+        if self.field is not None and surface_config.correction_surface == 'quiet':
+            from .components import quiet_correction_config
+            self.quiet_correction = type(self)(choices, planet, resolving_power,
+                surface_config=quiet_correction_config(surface_config))
         # Add only the instrumental broadening missing from the input synthesis.
         # Gaussian broadening variances add. Calculate the extra width needed
         # to bring the synthesis to the requested instrumental resolution.
@@ -131,7 +158,7 @@ class TransitStellarModel:
         # Express the remaining Gaussian standard deviation in log wavelength.
         self.sigma_log_wave = np.sqrt(max(0.0, inverse_r2)) / np.sqrt(8*np.log(2))
 
-    def evaluate(self, wave_um, phase, stellar_velocity_kms, exposure_seconds):
+    def evaluate(self, wave_um, phase, stellar_velocity_kms, exposure_seconds, *, times_bjd=None):
         """Average flux during exposures, convolve, then form observer-frame ratios.
 
         Phase zero is mid-transit for the circular orbit. Uniform midpoint
@@ -180,6 +207,8 @@ class TransitStellarModel:
         # Use the finer of the synthesis spacing and four samples per resolution element.
         log_step = min(float(np.min(np.diff(np.log(local_wave)))),
                        1.0/(4*self.resolving_power))
+        if self.field is not None:
+            log_step = min(log_step, self.field.log_wavelength_step)
         # Find stellar-rest-frame coverage over the range of observer-frame stellar velocities.
         shifted_min = wave[0]/(1 + velocity.max()/C_KMS)
         shifted_max = wave[-1]/(1 + velocity.min()/C_KMS)
@@ -193,7 +222,10 @@ class TransitStellarModel:
         # Record its actual spacing after rounding the number of wavelength samples.
         step = (high - low)/(n_wave - 1)
         # Integrate the star at every instantaneous planet position.
-        spectra = self.surface.integrate(fine_wave, x, y, ratio)
+        sample_times = None if self.field is None else (
+            self.field.times(times_bjd, len(phase))[:, None]+offsets/86400).ravel()
+        spectra = self.surface.integrate(fine_wave, x, y, ratio,
+                                         sample_times_bjd=sample_times)
 
         # Apply the same remaining instrumental Gaussian to each integrated flux array.
         def convolved(values):
@@ -208,12 +240,20 @@ class TransitStellarModel:
         inside = spectra.inside.reshape(len(phase), count, n_wave).mean(axis=1)
         # Convolve the averaged in-transit spectrum and unocculted reference separately.
         inside = convolved(inside)
-        outside = convolved(spectra.outside)
+        outside_flux = spectra.outside
+        if self.field is not None:
+            outside_flux = outside_flux.reshape(len(phase), count, n_wave).mean(axis=1)
+        outside = convolved(outside_flux)
+        opaque = None
         # Average and convolve the corresponding continua before normalizing the spectra.
         if self.choices.normalization == "continuum":
             continuum_in = spectra.continuum_inside.reshape(len(phase), count, n_wave).mean(axis=1)
+            cout = spectra.continuum_outside
+            if self.field is not None:
+                cout = cout.reshape(len(phase), count, n_wave).mean(axis=1)
+                opaque = convolved(continuum_in)/convolved(cout)
             inside /= convolved(continuum_in)
-            outside /= convolved(spectra.continuum_outside)
+            outside /= convolved(cout)
         if np.any(outside <= 0) or not np.isfinite(inside).all():
             raise ValueError("RM/CLV synthesis produced invalid stellar flux")
         # Allocate the stellar distortion and reference on the requested detector grid.
@@ -224,7 +264,7 @@ class TransitStellarModel:
             # Map detector wavelengths into the stellar rest frame.
             rest = wave/(1 + speed/C_KMS)
             # Sample the normalized out-of-transit reference at those wavelengths.
-            reference[exposure] = np.interp(rest, fine_wave, outside)
+            reference[exposure] = np.interp(rest, fine_wave, outside if self.field is None else outside[exposure])
             # Sample this exposure's normalized occulted spectrum at the same wavelengths.
             observed_in = np.interp(rest, fine_wave, inside[exposure])
             # Form the photospheric line distortion as in-transit divided by reference.
@@ -236,7 +276,17 @@ class TransitStellarModel:
         if np.any(model <= 0) or not np.isfinite(model).all():
             raise ValueError("RM/CLV correction must be finite and positive")
         # Return the observer-frame factor and stellar reference to the caller.
-        return ObservedStellarModel(model, reference)
+        observed_opaque = None if opaque is None else np.array([
+            np.interp(wave/(1+speed/C_KMS), fine_wave, opaque[i])
+            for i, speed in enumerate(velocity)])
+        correction_flux = correction_distortion = None
+        if self.quiet_correction is not None:
+            correction = self.quiet_correction.evaluate(wave, phase, velocity,
+                                                       exposure_seconds, times_bjd=times_bjd)
+            correction_distortion = correction.distortion
+            correction_flux = correction.reference*correction.distortion*correction.opaque_transmission
+        return ObservedStellarModel(model, reference, observed_opaque,
+                                    correction_flux, correction_distortion)
 
 
 def correct_stellar_distortion(flux, uncertainty, distortion):
@@ -254,3 +304,24 @@ def correct_stellar_distortion(flux, uncertainty, distortion):
         raise ValueError("RM/CLV distortion must be finite and positive")
     # Division by a fixed factor scales flux and standard deviation by that same factor.
     return flux/distortion, uncertainty/distortion
+
+
+def apply_factorized_surface(planet_matrix, model, *, radius_ratio, transit_fraction,
+                             planet_present, include_reference):
+    """Apply stellar factors on the existing factorized planet-matrix flux scale.
+
+    The planet matrix contains 1-depth(lambda)*fraction(t). For an active
+    surface, replace its catalog-radius opaque continuum term by the local
+    stellar occultation. Atmospheric spectral structure keeps the existing
+    factorized weighting. Spatial mode evaluates the local atmospheric rays.
+    """
+    if model.opaque_transmission is not None:
+        # Divide out the existing opaque continuum before inserting the surface value.
+        baseline = (1-radius_ratio**2*np.asarray(transit_fraction)
+                    if planet_present else np.ones(len(model.reference)))
+        planet_matrix *= model.opaque_transmission/baseline[:, None]
+    # Keep the original multiplication order for the legacy quiet-star path.
+    planet_matrix *= model.distortion
+    if include_reference:
+        planet_matrix *= model.reference
+    return planet_matrix

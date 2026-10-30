@@ -52,8 +52,9 @@ def validate_atomic_run(config):
     # The spatial calculation uses pRT rays and the physical transit geometry.
     if config.observation.external_planet_model or config.observation.scale_injection != 1 or not config.observation.signal_uses_light_curve:
         raise ValueError('Direct sodium uses the pRT atmosphere with physical transit geometry and scale_injection=1')
-    if not config.observation.simulate_planet or config.noise.snr_correction != 0:
-        raise ValueError('Direct sodium requires simulate_planet=true and snr_correction=0')
+    if ((not config.observation.simulate_planet and not (config.stellar_surface and config.stellar_surface.active))
+            or config.noise.snr_correction != 0):
+        raise ValueError('Use snr_correction=0. Stellar-only controls require an active stellar surface')
     if not {'H2', 'He'}.issubset(model.species) or not any(name.startswith('Na') for name in model.species):
         raise ValueError('Supply H2, He and a sodium opacity species')
     if config.observation.noise_scaling_factor != 1 or model.wind_velocity_kms != 0 or model.cloud_pressure_bar is not None:
@@ -145,12 +146,37 @@ def _factorized_transit(chords, planet, phase, planet_velocity, duration, sample
     return observed
 
 
-def build_atomic_observation(config, output):
-    """Compute stellar/planetary transfer, terrestrial absorption and native noise."""
-    from exoplore.atmosphere.transmission import calculate_chord_transmission
-    from exoplore.stellar.coupled import SpatialTransitModel
+def calculate_atomic_atmosphere(config, planet):
+    """Calculate the direct-sodium rays reused when only the stellar surface changes."""
     from petitRADTRANS.radtrans import Radtrans
     from petitRADTRANS import physical_constants as cst
+    from exoplore.atmosphere.transmission import calculate_chord_transmission
+    a = config.atomic_transmission
+    # Use the same atmospheric model for the spatial rays and the synthetic observation.
+    region = config.atmosphere.planet_model
+    # Sample pressure uniformly in log space between the configured bar limits.
+    pressure = np.logspace(np.log10(region.pressure_min_bar), np.log10(region.pressure_max_bar), region.pressure_grid_size)
+    # H2 and He supply Rayleigh scattering and collision-induced absorption.
+    # The remaining species supply line opacity.
+    species = [name for name in region.species if name not in ('H2', 'He')]
+    # Load the line-by-line opacities over the padded pRT wavelength interval.
+    rt = Radtrans(pressures=pressure, line_species=species, rayleigh_species=['H2', 'He'],
+                  gas_continuum_contributors=['H2--H2', 'H2--He'],
+                  wavelength_boundaries=a.model_wavelength_limits_um,
+                  line_opacity_mode='lbl', path_input_data=config.paths.prt_input_data)
+    # Assign the configured mass fraction to every pressure level in this homogeneous model.
+    fractions = {name: np.full_like(pressure, value) for name, value in zip(region.species, region.mass_fractions)}
+    # Calculate ray transmission versus wavelength and atmospheric radius.
+    # The gravity uses the catalog mass and radius in CGS units.
+    return calculate_chord_transmission(rt, temperatures=np.full_like(pressure, region.isothermal_temperature_K),
+        mass_fractions=fractions, mean_molar_masses=np.full_like(pressure, region.mean_molecular_weight),
+        reference_gravity=cst.G*planet.M_pl/planet.R_pl**2,
+        reference_pressure=region.reference_pressure_bar, planet_radius=planet.R_pl)
+
+
+def build_atomic_observation(config, output, *, planetary_rays=None):
+    """Compute stellar/planetary transfer, terrestrial absorption and native noise."""
+    from exoplore.stellar.coupled import SpatialTransitModel
     # Read the JSON and the separate planet file before constructing the observation.
     a = config.atomic_transmission
     planet = load_planet(config.planet.parameter_file)
@@ -199,35 +225,27 @@ def build_atomic_observation(config, output):
     stellar_velocity = planet.systemic_velocity_kms - planet.stellar_rv_semiamplitude_kms*np.sin(2*np.pi*phase) - berv
     # The planet has the opposite orbital sign. Both velocities are in the observer frame.
     planet_velocity = planet.systemic_velocity_kms + planet.kp_kms*np.sin(2*np.pi*phase) - berv
-    # Use the same atmospheric model for the spatial rays and the synthetic observation.
-    region = config.atmosphere.planet_model
-    # Sample pressure uniformly in log space between the configured bar limits.
-    pressure = np.logspace(np.log10(region.pressure_min_bar), np.log10(region.pressure_max_bar), region.pressure_grid_size)
-    # H2 and He supply Rayleigh scattering and collision-induced absorption.
-    # The remaining species supply line opacity.
-    species = [name for name in region.species if name not in ('H2', 'He')]
-    # Load the line-by-line opacities over the padded pRT wavelength interval.
-    rt = Radtrans(pressures=pressure, line_species=species, rayleigh_species=['H2', 'He'],
-                  gas_continuum_contributors=['H2--H2', 'H2--He'],
-                  wavelength_boundaries=a.model_wavelength_limits_um,
-                  line_opacity_mode='lbl', path_input_data=config.paths.prt_input_data)
-    # Assign the configured mass fraction to every pressure level in this homogeneous model.
-    fractions = {name: np.full_like(pressure, value) for name, value in zip(region.species, region.mass_fractions)}
-    # Calculate ray transmission versus wavelength and atmospheric radius.
-    # The gravity uses the catalog mass and radius in CGS units.
-    chords = calculate_chord_transmission(rt, temperatures=np.full_like(pressure, region.isothermal_temperature_K),
-        mass_fractions=fractions, mean_molar_masses=np.full_like(pressure, region.mean_molecular_weight),
-        reference_gravity=cst.G*planet.M_pl/planet.R_pl**2,
-        reference_pressure=region.reference_pressure_bar, planet_radius=planet.R_pl)
+    chords = None
+    if config.observation.simulate_planet:
+        if planetary_rays is None:
+            chords = calculate_atomic_atmosphere(config, planet)
+        else:
+            from exoplore.atmosphere.transmission import ChordTransmission
+            if not isinstance(planetary_rays, ChordTransmission):
+                raise TypeError('planetary_rays must be a ChordTransmission calculated for this atmosphere')
+            chords = planetary_rays
     # Use the configured integration time when averaging the transit geometry.
     duration = config.observation.exposure_time_seconds
     # Load the local stellar intensities and prepare rotation and surface sampling.
-    stellar = SpatialTransitModel(config.rm_clv, planet, instrument.res)
+    stellar = SpatialTransitModel(config.rm_clv, planet, instrument.res, surface_config=config.stellar_surface)
     # Integrate the same pRT atmospheric rays against the local stellar light.
     # Keep intrinsic spectra so telluric absorption can be applied before the instrument.
     result = stellar.evaluate(wave, phase, stellar_velocity, duration,
-        chords=chords if config.rm_clv.simulate else None,
-        planet_velocity_kms=planet_velocity, return_intrinsic=True)
+        chords=chords if config.rm_clv.simulate and config.observation.simulate_planet else None,
+        planet_velocity_kms=planet_velocity, return_intrinsic=True, times_bjd=jd)
+    if stellar.field is not None:
+        (output/'stellar_surface_provenance.json').write_text(
+            json.dumps(stellar.field.provenance(), indent=2))
     # Access the exposure-averaged flux components on their fine wavelength grid.
     intrinsic = result.intrinsic
     # For the disabled RM+CLV control, use the stationary disk-integrated star
@@ -272,8 +290,10 @@ def build_atomic_observation(config, output):
     else:
         # With throughput variation disabled, every exposure retains unit throughput.
         throughput = np.ones(len(jd))
+    # Reuse the quiet correction already integrated alongside the forward model.
+    correction_intrinsic = result.correction_intrinsic
     # Collect the observed expectation and comparison components using the same sampling.
-    arrays = {key: [] for key in ['expected_flux', 'bare_expected', 'no_telluric', 'bare_model', 'telluric_sampled']}
+    arrays = {key: [] for key in ['expected_flux', 'bare_expected', 'no_telluric', 'bare_model', 'matched_bare_model', 'telluric_sampled']}
     # Build each exposure at its own airmass and throughput.
     for n, x in enumerate(airmass):
         # Scale optical depth with airmass through T(X) = T_ref ** (X / X_ref).
@@ -288,7 +308,16 @@ def build_atomic_observation(config, output):
         # Keep the noiseless planetary observation for the prepared injected-model comparison.
         arrays['no_telluric'].append(sample(intrinsic.flux[n])*throughput[n]/continuum)
         # Keep the atmosphere-free stellar spectrum used for the matched correction.
-        arrays['bare_model'].append(sample(intrinsic.opaque_flux[n])/continuum)
+        arrays['matched_bare_model'].append(sample(intrinsic.opaque_flux[n])/continuum)
+        if result.correction_flux is None:
+            arrays['bare_model'].append(sample(intrinsic.opaque_flux[n])/continuum)
+        else:
+            # Sample the separately declared correction on its own continuum scale.
+            correction_flux = np.interp(fine, correction_intrinsic.wavelength_um,
+                                        correction_intrinsic.opaque_flux[n])
+            correction_continuum = np.interp(fine, correction_intrinsic.wavelength_um,
+                                             correction_intrinsic.continuum[n])
+            arrays['bare_model'].append(sample(correction_flux)/sample(correction_continuum))
         # Sample the terrestrial transmission for the photon-response calculation.
         arrays['telluric_sampled'].append(sample(trans))
     # Convert exposure lists into matrices with shape (exposure, pixel).
@@ -342,12 +371,10 @@ def run_atomic_simulation(config):
     reduce_atomic_observation(config, output, data, intrinsic, planet, resolution, started, physical_seconds)
 
 
-def reduce_atomic_observation(config, output, data, intrinsic, planet, resolution, started, physical_seconds):
-    """Fit terrestrial absorption and prepare each configured sodium line."""
+def fit_atomic_tellurics(config, output, data, planet, resolution):
+    """Fit each exposure once and return the correction for paired stellar analyses."""
     from exoplore.core.helium_synthetic_observation import utc_midpoints
     from exoplore.instruments.carmenes_helium_molecfit import fit_section, CarmenesMolecfitConfig
-    from exoplore.atmosphere.helium_pwinds import contact_phases
-    from exoplore.plotting.helium import plot_helium_summary
     a = config.atomic_transmission
     # Supply site, target coordinates and velocity convention to the shared telluric wrapper.
     science = SimpleNamespace(gamma_kms=planet.systemic_velocity_kms,
@@ -403,6 +430,39 @@ def reduce_atomic_observation(config, output, data, intrinsic, planet, resolutio
     flux = np.array([r['flux'] for r in fitted])
     error = np.array([r['error'] for r in fitted])
     T = np.array([r['transmittance'] for r in fitted])
+    corrections = dict(wave_nm=waves, flux=flux, error=error, transmittance=T,
+                       input_sha256=np.array(telluric_input_hash(config, data)))
+    np.savez_compressed(output/'corrected_observations.npz', **corrections)
+    return corrections
+
+
+def telluric_input_hash(config, data):
+    """Identify the observation and fitting choices used by a saved correction."""
+    digest = hashlib.sha256()
+    for name in ('raw_flux', 'raw_error', 'wave_nm', 'bjd', 'airmass'):
+        value = np.ascontiguousarray(data[name])
+        digest.update(name.encode())
+        digest.update(str((value.shape, value.dtype.str)).encode())
+        digest.update(value.tobytes())
+    settings = dict(molecfit=config.atomic_transmission.molecfit,
+        protected_lines=config.atomic_transmission.line_wavelengths_nm,
+        site=config.atomic_transmission.observatory_lon_lat_height,
+        berv=config.observation.berv_kms, exposure=config.observation.exposure_time_seconds,
+        planet_sha256=hashlib.sha256(Path(config.planet.parameter_file).read_bytes()).hexdigest())
+    digest.update(json.dumps(settings, sort_keys=True).encode())
+    return digest.hexdigest()
+
+
+def reduce_atomic_observation(config, output, data, intrinsic, planet, resolution, started, physical_seconds, *, corrections=None):
+    """Fit terrestrial absorption and prepare each configured sodium line."""
+    from exoplore.atmosphere.helium_pwinds import contact_phases
+    from exoplore.plotting.helium import plot_helium_summary
+    a = config.atomic_transmission
+    if corrections is None:
+        corrections = fit_atomic_tellurics(config, output, data, planet, resolution)
+    if str(corrections['input_sha256']) != telluric_input_hash(config, data):
+        raise ValueError('Telluric corrections belong to a different observation or fitting setup')
+    waves, flux, error, T = (corrections[k] for k in ('wave_nm', 'flux', 'error', 'transmittance'))
     # Exclude deep terrestrial absorption and samples with invalid uncertainties.
     good = (T > config.tellurics.mask_threshold) & np.isfinite(flux) & np.isfinite(error) & (error > 0)
     # Represent those excluded samples as NaN so preparation preserves their masks.
@@ -421,7 +481,7 @@ def reduce_atomic_observation(config, output, data, intrinsic, planet, resolutio
         settings=config.pipeline.seidel22, telluric_corrected=True, sky_subtracted=True,
         stellar_model_flux=stellar_model)
     # Begin a compact result record with exposure counts and forward-model runtime.
-    report = dict(exposures=len(times),in_transit=len(inside),reference_exposures=len(outside),
+    report = dict(exposures=len(data['bjd']),in_transit=len(inside),reference_exposures=len(outside),
         physical_seconds=physical_seconds,results={})
     # Analyse the two rest wavelengths in their supplied D2, D1 order.
     for k, line in enumerate(a.line_wavelengths_nm):
@@ -467,7 +527,7 @@ def reduce_atomic_observation(config, output, data, intrinsic, planet, resolutio
             line_wavelengths_nm=[line],line_transition_label=label)
         # Use the shared three-panel renderer for the stellar-frame map, planet-frame
         # spectrum and band light curve. The supplied line metadata labels it as sodium.
-        plot_helium_summary(output/(label+'_transmission.png'),products,data['phase'],relative_velocity,np.zeros(len(times)),plot,synthetic=True)
+        plot_helium_summary(output/(label+'_transmission.png'),products,data['phase'],relative_velocity,np.zeros(len(data['bjd'])),plot,synthetic=True)
         print(f'{label}: {depth:.4f} +/- {sigma:.4f} percent',flush=True)
     # Finish the run record with elapsed time, random seeds and cadence checks.
     report['seconds'] = time.monotonic()-started

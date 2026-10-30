@@ -66,6 +66,7 @@ Follow the selected calling function to see how its arguments are constructed.
 | `config/helium_oh.py` | Validate the OH-emission treatment and its required sky-fibre data. The selected correction is applied later by the instrument preparation code. | `core/carmenes_helium_simulation.py`, `core/helium_simulation.py`, `core/spectroscopy_mode.py`, `pipelines/czesla2024.py`, `pipelines/palle2020.py` |
 | `config/models.py` | Define simulation settings, defaults, JSON loading and field validation. | `ccf/models.py`, `config/__init__.py`, `core/simulator.py`, `instruments/__init__.py`, `instruments/base.py`, `io/paths.py`, `pipelines/models.py`, `scripts/generate_skycalc_inputs.py`, `scripts/plot_carmenes_palle2020.py`, `scripts/prepare_carmenes_palle2020.py`, `scripts/run_detectability_maps.py` |
 | `config/sunbather.py` | Define the installation paths and physical settings consumed by the optional Sunbather atmosphere solver. | `atmosphere/helium_sunbather.py`, `atmosphere/helium_sunbather_metals.py`, `config/helium.py`, `config/helium_grid.py` |
+| `config/stellar_surface.py` | Define spectral components, projected/physical regions, velocities and rotational reference parameters. | `config/models.py`, `stellar/components.py` |
 | `config/rm_clv.py` | Define the stellar-effect simulation and correction switches, angular model input and integration settings. | `config/models.py`, `stellar/observation.py` |
 
 ## core
@@ -192,11 +193,17 @@ Follow the selected calling function to see how its arguments are constructed.
 
 ## stellar
 
+The [surface guide](heterogeneous_stellar_surface.md) follows component spectra
+through region selection, occultation and atmospheric illumination.
+
 | File | Function | Used by |
 |---|---|---|
 | `stellar/__init__.py` | Export the local-intensity grid and disk-integrated transit types. | Stellar surface callers |
 | `stellar/surface.py` | Interpolate local intensities, apply projected rotation and integrate the disk with planetary occultation. | `stellar/observation.py`, `io/stellar_surface.py` |
 | `stellar/observation.py` | Average exposure samples, convolve to instrumental resolution and construct the observer-frame distortion and stellar reference. Divide flux and uncertainties by a requested fixed model. | `core/simulator.py`, `stellar/coupled.py` |
+| `stellar/components.py` | Load independent local spectra, interpolate their velocities and retain component provenance. | `stellar/observation.py`, `stellar/coupled.py` |
+| `stellar/regions.py` | Project circles and rotating spherical caps, resolve overlaps and locate integration boundaries. | `stellar/components.py`, `stellar/quadrature.py` |
+| `stellar/quadrature.py` | Split illuminated angular arcs and radial intervals at component boundaries. | `stellar/coupled.py` |
 | `stellar/coupled.py` | Integrate opaque-body occultation and atmospheric absorption against local stellar intensities, with exposure averaging and instrumental convolution of the joint flux. | `core/simulator.py` |
 
 ## Maintained command-line scripts

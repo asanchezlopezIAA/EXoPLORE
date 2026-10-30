@@ -97,9 +97,11 @@ class LocalIntensityGrid:
 class StellarTransitSpectra:
     """Disk-integrated intensities before instrumental convolution.
 
-    outside has shape (n_wavelength,), inside has shape (n_exposures,
-    n_wavelength). Continuum arrays have the corresponding shapes. Projected
-    cell areas are included, with the stellar radius set to unity.
+    The legacy quiet outside spectrum has shape (n_wavelength,). Component
+    maps return one outside spectrum per position, shaped (n_exposures,
+    n_wavelength), so rotating regions can change the reference. inside always
+    has that two-dimensional shape. Continua follow their matching spectra.
+    Projected cell areas include a stellar radius set to unity.
 
     Keep these fluxes separate until the instrument response has been applied.
     Convolution and division generally give different results when reordered.
@@ -216,7 +218,7 @@ class StellarSurface:
         return (1.0 - self._weight[:, None])*low + self._weight[:, None]*high
 
     def integrate(self, wavelength_um, planet_x, planet_y, radius_ratio, *,
-                  wavelength_chunk_size=128):
+                  wavelength_chunk_size=128, sample_times_bjd=None):
         """Integrate spectra for supplied instantaneous planet positions.
 
         planet_x and planet_y are one-dimensional arrays in stellar radii.
@@ -245,6 +247,10 @@ class StellarSurface:
                 or not isinstance(wavelength_chunk_size, (int, np.integer))
                 or wavelength_chunk_size < 1):
             raise ValueError("wavelength_chunk_size must be a positive integer")
+        # Component selection precedes the same projected-area occultation sum.
+        if getattr(self, 'field', None) is not None:
+            return self.field.integrate_surface(self, wave, px, py, radius_ratio,
+                                                sample_times_bjd, wavelength_chunk_size)
         # Require synthesis coverage of every rotationally shifted wavelength.
         # Use the most redshifted and blueshifted surface samples to check wavelength margins.
         factors = 1.0 + self.velocity_kms / C_KMS

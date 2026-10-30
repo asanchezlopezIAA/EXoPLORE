@@ -1997,6 +1997,8 @@ The [configuration reference](config_reference.md#direct-synthetic-sodium-observ
 
 ---
 
+Continue with [Tutorial 14: stellar spots and faculae in Na D2 transmission](tutorial14_stellar_activity.md), using the same ANDES observation and planetary atmosphere.
+
 ## Troubleshooting
 
 **Missing `--run` flag**, Running without `--run` only prints the simulation summary and exits. The `--run` flag must be added to actually execute the simulation.

@@ -1,0 +1,26 @@
+{
+  "planet": {"parameter_file": "planet_params/HD189733b.json"},
+  "observation": {"simulate_planet": false},
+  "rm_clv": {
+    "simulate": true,
+    "coupling": "spatial",
+    "model_file": "outputs/stellar_surface_example/quiet.npz",
+    "projected_obliquity_deg": 0.0,
+    "azimuth_points": 24,
+    "stellar_radial_points": 16,
+    "planet_radial_points": 12,
+    "exposure_subsamples": 1
+  },
+  "stellar_surface": {
+    "default_component": "quiet",
+    "components": {
+      "quiet": {"intensity_model_file": "outputs/stellar_surface_example/quiet.npz"},
+      "cool_region": {"intensity_model_file": "outputs/stellar_surface_example/cool_region.npz"},
+      "facular_region": {"intensity_model_file": "outputs/stellar_surface_example/facular_region.npz"}
+    },
+    "regions": [
+      {"component": "cool_region", "geometry": "projected", "x": -0.2, "y": -0.65, "radius": 0.22},
+      {"component": "facular_region", "geometry": "projected", "x": 0.4, "y": 0.1, "radius": 0.18, "priority": 1}
+    ]
+  }
+}

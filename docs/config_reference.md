@@ -1300,3 +1300,16 @@ configuration, intrinsic and noisy observation arrays, individual Molecfit
 products, and a residual matrix, transmission spectrum and light curve for
 each line. `final_summary.json` records the band measurements, uncertainty
 method, input hashes, seeds, software version, Git revision and runtime.
+
+## 21. Heterogeneous stellar surface
+
+The optional `stellar_surface` block selects independent local-intensity
+components and places them in projected circles or rotating spherical caps.
+It works with the current `rm_clv` integration. Components contain spectra,
+continua and optional local velocities. Regions reference a component and
+supply geometry and overlap priority.
+
+See [the complete field definitions and example](heterogeneous_stellar_surface.md).
+Missing, null or empty regions retain the existing quiet-star calculation.
+`configs/stellar_surface_example.json` is a lightweight stellar-only example
+used by `scripts/example_stellar_components.py`.

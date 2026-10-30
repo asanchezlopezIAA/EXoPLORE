@@ -263,3 +263,18 @@ Tutorial 1 offers the canonical notebook as a direct download. Sphinx checks
 its saved outputs and copies the file into `_downloads/`. It does not execute
 notebook cells. The notebook runs locally from a source checkout with the
 project environment and `notebooks/_tutorial_support.py` available.
+
+### Heterogeneous stellar surfaces
+
+`config/stellar_surface.py` separates local spectral components from surface
+regions. `stellar/components.py` loads their independent intensity grids,
+retains provenance and interpolates local spectra. `stellar/regions.py`
+projects static circles or rotating spherical caps and resolves overlaps.
+`stellar/quadrature.py` splits spatial integration at component boundaries.
+The existing `surface.py` and `coupled.py` integrators select these local
+spectra before occultation and atmospheric illumination. Their original
+quiet-star path remains selected when regions are absent.
+
+`plotting/stellar_surface.py` draws the component map and transit chord.
+The [surface guide](heterogeneous_stellar_surface.md) describes coordinates,
+input intensity scales, local velocities and physical rotation.
