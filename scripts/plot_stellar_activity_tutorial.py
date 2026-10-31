@@ -20,6 +20,68 @@ LABELS={'quiet':'Quiet star','unocculted_spot':'Unocculted spot',
         'crossed_spot':'Spot crossing','crossed_facula':'Facular crossing'}
 
 
+def rotation_surface_image(model,x,y,time_bjd,centre_um):
+    """Colour the disk by the integrator's projected rotational velocity.
+
+    Continuum brightness comes from the selected component at the current
+    viewing angle. Thin region boundaries keep their identities visible over
+    the blue/red rotation map. This image is only a diagnostic display.
+    """
+    visible=x*x+y*y<=1
+    mu=np.sqrt(np.maximum(1-x*x-y*y,0))
+    labels=model.field.labels(x,y,time_bjd)
+    continuum=np.zeros_like(x)
+    for name,component in model.field.components.items():
+        grid=component.grid
+        # Interpolate the model continuum at the displayed line's wavelength.
+        column=np.array([np.interp(centre_um,grid.wavelength_um,row)
+                         for row in grid.continuum])
+        selected=(labels==name)&visible
+        continuum[selected]=np.interp(mu[selected],grid.mu,column)
+    quiet=model.field.default.grid
+    reference=np.interp(centre_um,quiet.wavelength_um,quiet.continuum[-1])
+    velocity=model.vsini_kms*(x*np.cos(model.obliquity)-y*np.sin(model.obliquity))
+    scale=max(abs(model.vsini_kms),1e-12)
+    rgba=plt.get_cmap('coolwarm')((velocity/scale+1)/2)
+    rgba[...,:3]*=(.35+.65*continuum/reference)[...,None]
+    rgba[...,:3]=np.clip(rgba[...,:3],0,1)
+    for name,color in [('spot','#432c23'),('facula','#edc96d')]:
+        selected=(labels==name)&visible
+        interior=selected.copy()
+        for shift,axis in [(1,0),(-1,0),(1,1),(-1,1)]:
+            interior &= np.roll(selected,shift,axis=axis)
+        from matplotlib.colors import to_rgb
+        rgba[selected&~interior,:3]=to_rgb(color)
+    rgba[...,3]=visible
+    return rgba
+
+
+def region_edge_distances(surface,obliquity,px,py,times):
+    """Minimum sky-plane distance from each planet centre to its active cap."""
+    from exoplore.stellar.regions import cap_centre,cap_radial_boundaries,component_map
+    region=surface.regions[0]
+    if region.geometry=='projected':
+        return np.maximum(0,np.hypot(px-region.x,py-region.y)-region.radius)
+    distances=[]
+    for x,y,time in zip(px,py,times):
+        label=component_map(np.array([x]),np.array([y]),surface,obliquity,time)[0]
+        if x*x+y*y<=1 and label==region.component:
+            distances.append(0.)
+        else:
+            centre=cap_centre(region,surface,obliquity,time)
+            boundaries=cap_radial_boundaries(centre,region.angular_radius_deg,x,y)
+            # A visible cap can include an arc of the stellar limb. Its
+            # nearest point may lie inside that arc, away from the cap edge.
+            radius=np.hypot(x,y)
+            if radius>0:
+                limb=component_map(np.array([x/radius]),np.array([y/radius]),
+                                   surface,obliquity,time)[0]
+                if limb==region.component:
+                    boundaries.append(abs(radius-1))
+            distances.append(min(boundaries) if boundaries else np.inf)
+    return np.asarray(distances)
+
+
 def line_metrics(wave_nm,transmission,centre_nm,covariance=None):
     """Measure the core, band and absorption-weighted moments in fixed velocity windows.
 
@@ -124,12 +186,20 @@ def validate_observations(root,config):
             angle=2*np.pi*data['phase']
             a=planet.a/(planet.R_star/1e5)
             x,y=a*np.sin(angle),-a*np.cos(angle)*np.cos(planet.inc)
-            separation=np.hypot(x-region.x,y-region.y)
+            distance=region_edge_distances(current.stellar_surface,
+                current.rm_clv.projected_obliquity_deg or 0.,x,y,data['bjd'])
             base=rays['impact_parameter_cm'][-1]/planet.R_star
             top=rays['impact_parameter_cm'][0]/planet.R_star
-            blocked=(separation<region.radius+base)&(np.cos(angle)>0)
+            blocked=(distance<base)&(np.cos(angle)>0)
             checks.update(opaque_overlap_exposures=int(blocked.sum()),
-                          minimum_atmospheric_separation=float(np.min(separation-region.radius-top)))
+                          minimum_atmospheric_separation=float(np.min(distance-top)))
+            if current.stellar_surface.time_dependent:
+                from exoplore.stellar.regions import cap_centre
+                surface=current.stellar_surface
+                checks['rotation_travel_deg']=float(360*(data['bjd'][-1]-data['bjd'][0])/surface.rotation_period_days)
+                checks['region_centre_first_last']=[cap_centre(surface.regions[0],surface,
+                    current.rm_clv.projected_obliquity_deg or 0.,time).tolist()
+                    for time in data['bjd'][[0,-1]]]
             if name=='unocculted_spot' and (blocked.any() or checks['minimum_atmospheric_separation']<=0):
                 raise AssertionError('The unocculted region intersects the planet or atmosphere')
             if name!='unocculted_spot' and not blocked.any():
@@ -157,23 +227,25 @@ def geometry_figure(config,planet,destination):
     axes=axes.ravel()
     axis=np.linspace(-1,1,241)
     x,y=np.meshgrid(axis,axis)
-    colors=['#e7e2d9','#51403b','#edc96d']
     for ax,name in zip(axes[:3],CASES[1:]):
         current=case_config(config,name)
         model=SpatialTransitModel(current.rm_clv,planet,100000,surface_config=current.stellar_surface)
         # Component selection comes from the same field used by the spatial integration.
-        names=list(model.field.components)
-        labels=model.field.labels(x,y)
-        from matplotlib.colors import ListedColormap
-        values=np.vectorize(names.index)(labels).astype(float)
-        values[x*x+y*y>1]=np.nan
-        ax.imshow(values,origin='lower',extent=(-1,1,-1,1),cmap=ListedColormap(colors),vmin=-.5,vmax=2.5)
+        image=rotation_surface_image(model,x,y,current.stellar_surface.reference_bjd,
+            config.atomic_transmission.line_wavelengths_nm[0]/1000)
+        surface_image=ax.imshow(image,origin='lower',extent=(-1,1,-1,1))
         ax.add_patch(Circle((0,0),1,fill=False,color='black',lw=.8))
         t=np.linspace(-.025,.025,300)
         a=planet.a/(planet.R_star/1e5)
         px,py=a*np.sin(2*np.pi*t),-a*np.cos(2*np.pi*t)*np.cos(planet.inc)
         ax.plot(px,py,':',color='black',lw=1)
         index=np.argmin(abs(px+.35))
+        if current.stellar_surface.time_dependent:
+            time=current.stellar_surface.reference_bjd+t[index]*planet.orbital_period_days
+            surface_image.set_data(rotation_surface_image(model,x,y,time,
+                config.atomic_transmission.line_wavelengths_nm[0]/1000))
+        ax.text(.97,.03,f'{t[index]*planet.orbital_period_days*24:+.2f} h',
+                transform=ax.transAxes,ha='right',fontsize=8)
         ax.add_patch(Circle((px[index],py[index]),planet.R_pl/planet.R_star,color='black',alpha=.55))
         ax.set(xlim=(-1.05,1.05),ylim=(-1.05,1.05),aspect='equal',title=LABELS[name],xlabel=r'$x/R_\star$')
     axes[0].set_ylabel(r'$y/R_\star$')

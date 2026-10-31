@@ -31,9 +31,69 @@ def test_same_spot_spectrum_only_moves_between_geometries(config):
     a,b=(case_config(config,name).stellar_surface for name in ['unocculted_spot','crossed_spot'])
     assert a.components==b.components
     assert a.regions[0].component==b.regions[0].component=='spot'
-    assert a.regions[0].x==b.regions[0].x
-    assert a.regions[0].radius==b.regions[0].radius
-    assert a.regions[0].y>0>b.regions[0].y
+    assert a.regions[0].geometry==b.regions[0].geometry=='stellar'
+    assert a.regions[0].angular_radius_deg==b.regions[0].angular_radius_deg
+    assert a.regions[0].latitude_deg>0>b.regions[0].latitude_deg
+
+
+def test_tutorial_rotation_matches_spectroscopic_velocity(config):
+    from exoplore.planets import load_planet
+    planet=load_planet(config.planet.parameter_file)
+    surface=config.stellar_surface
+    expected=2*np.pi*planet.R_star*np.sin(np.deg2rad(surface.stellar_inclination_deg))
+    expected/=surface.rotation_period_days*86400*1e5
+    np.testing.assert_allclose(expected,planet.v_rotsini_kms,rtol=1e-12)
+
+
+def test_regions_start_at_reference_positions_and_rotate(config):
+    from exoplore.stellar.regions import cap_centre
+    for name,y in [('unocculted_spot',.55),('crossed_spot',-.65),('crossed_facula',-.65)]:
+        surface=case_config(config,name).stellar_surface
+        region=surface.regions[0]
+        t=surface.reference_bjd
+        centre=cap_centre(region,surface,0.,t)
+        np.testing.assert_allclose(centre[:2],[-.35,y],atol=1e-14)
+        before=cap_centre(region,surface,0.,t-4/24)
+        after=cap_centre(region,surface,0.,t+4/24)
+        assert before[0]<centre[0]<after[0]
+        np.testing.assert_allclose(before[1],after[1],atol=1e-14)
+        assert not np.allclose(before,after)
+
+
+def test_crossing_cap_matches_previous_midtransit_projected_area(config):
+    from exoplore.stellar.regions import cap_centre
+    surface=config.stellar_surface
+    region=surface.regions[0]
+    centre=cap_centre(region,surface,0.,surface.reference_bjd)
+    # A fully visible spherical cap projects to an ellipse with area
+    # pi*sin(alpha)^2*mu_centre. Match the previous radius-0.25 circle.
+    projected_area=np.pi*np.sin(np.deg2rad(region.angular_radius_deg))**2*centre[2]
+    np.testing.assert_allclose(projected_area,np.pi*.25**2,rtol=1e-13)
+
+
+def test_projected_cap_distance_handles_inside_outside_and_far_side(config):
+    from dataclasses import replace
+    from plot_stellar_activity_tutorial import region_edge_distances
+    surface=config.stellar_surface
+    cap=replace(surface.regions[0],latitude_deg=0.,longitude_deg=0.,angular_radius_deg=30.)
+    surface=replace(surface,regions=[cap])
+    epoch=surface.reference_bjd
+    # At the central meridian a 30-degree cap is a projected radius-0.5 circle.
+    distance=region_edge_distances(surface,0.,np.array([0.,.8,0.]),np.zeros(3),
+        np.array([epoch,epoch,epoch+surface.rotation_period_days/2]))
+    np.testing.assert_allclose(distance[:2],[0.,.3],atol=1e-8)
+    assert np.isinf(distance[2])
+
+
+def test_projected_cap_distance_includes_visible_stellar_limb(config):
+    from dataclasses import replace
+    from plot_stellar_activity_tutorial import region_edge_distances
+    surface=config.stellar_surface
+    cap=replace(surface.regions[0],latitude_deg=0.,longitude_deg=90.,angular_radius_deg=30.)
+    surface=replace(surface,regions=[cap])
+    distance=region_edge_distances(surface,0.,np.array([1.2]),np.array([0.]),
+                                  np.array([surface.reference_bjd]))
+    np.testing.assert_allclose(distance,[.2],atol=1e-12)
 
 
 def test_controlled_grids_keep_absolute_contrasts(config,tmp_path):

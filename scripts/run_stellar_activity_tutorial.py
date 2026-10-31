@@ -95,8 +95,21 @@ def case_config(base, name):
     if name == 'quiet':
         config.stellar_surface = None
     else:
-        region = SurfaceRegionConfig('facula' if name=='crossed_facula' else 'spot',
-            x=-.35, y=.55 if name=='unocculted_spot' else -.65, radius=.25)
+        component = 'facula' if name=='crossed_facula' else 'spot'
+        template = config.stellar_surface.regions[0]
+        if template.geometry == 'stellar':
+            # These coordinates put the same physical spot above the chord
+            # at the reference epoch. The crossing cases retain the JSON's
+            # latitude, longitude and angular radius. The integrator then
+            # advances every region using the configured stellar rotation.
+            region = replace(template, component=component)
+            if name == 'unocculted_spot':
+                region = replace(region, latitude_deg=33.36701296923175,
+                                 longitude_deg=-24.776456961103918)
+        else:
+            # Projected cases place the same circle above or on the transit chord.
+            region = SurfaceRegionConfig(component,
+                x=-.35, y=.55 if name=='unocculted_spot' else -.65, radius=.25)
         config.stellar_surface = replace(config.stellar_surface, regions=[region], correction_surface='quiet')
     return config
 

@@ -2,7 +2,7 @@
 
 Run from the repository root:
     python scripts/animate_stellar_activity_tutorial.py \
-        outputs/hd189733b_andes_stellar_activity docs/figures
+        outputs/hd189733b_andes_stellar_activity_rotating docs/figures
 """
 import argparse
 import json
@@ -12,16 +12,15 @@ import sys
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-from matplotlib.animation import FuncAnimation, PillowWriter
-from matplotlib.colors import ListedColormap
 from matplotlib.patches import Circle
 import numpy as np
+from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'src'))
 from exoplore.config import SimulationConfig
 from exoplore.planets import load_planet
 from exoplore.stellar.coupled import SpatialTransitModel
-from plot_stellar_activity_tutorial import C_KMS, LABELS
+from plot_stellar_activity_tutorial import C_KMS, LABELS, rotation_surface_image
 from run_stellar_activity_tutorial import CASES, case_config, file_hash, load_arrays
 
 
@@ -60,6 +59,27 @@ def intrinsic_profiles(path, centre_nm, velocity, groups):
     return mean_profiles(values, groups)
 
 
+def save_gif(fig,update,count,destination,fps):
+    """Keep smooth rotation colours with one shared, dithered GIF palette."""
+    frames=[]
+    for index in range(count):
+        update(index)
+        fig.canvas.draw()
+        # Copy the canvas before the next frame reuses its memory.
+        rgb=np.asarray(fig.canvas.buffer_rgba())[...,:3].copy()
+        frames.append(Image.fromarray(rgb))
+    # Sample several times so the palette includes every line and surface colour.
+    samples=np.unique(np.linspace(0,count-1,min(5,count),dtype=int))
+    sheet=Image.new('RGB',(frames[0].width,frames[0].height*len(samples)))
+    for row,index in enumerate(samples):
+        sheet.paste(frames[index],(0,row*frames[0].height))
+    palette=sheet.quantize(colors=256)
+    encoded=[frame.quantize(palette=palette,dither=Image.Dither.FLOYDSTEINBERG)
+             for frame in frames]
+    encoded[0].save(destination,save_all=True,append_images=encoded[1:],
+        duration=round(1000/fps/10)*10,loop=0,optimize=False,disposal=2)
+
+
 def animate_case(root, config, name, destination, frames=32, fps=3):
     """Synchronize the actual geometry, intrinsic line and paired preparations."""
     current = case_config(config, name)
@@ -74,6 +94,8 @@ def animate_case(root, config, name, destination, frames=32, fps=3):
         np.testing.assert_array_equal(other['stellar_wave_nm'], matched['stellar_wave_nm'])
     groups = exposure_groups(len(matched['phase']), frames)
     phase = np.array([matched['phase'][group].mean() for group in groups])
+    with np.load(root/name/'observations.npz') as saved:
+        times=np.array([saved['bjd'][group].mean() for group in groups])
     velocity = C_KMS*(matched['stellar_wave_nm']/centre-1)
     selected = abs(velocity) <= 45
     profiles = [100*(mean_profiles(data['stellar_transmission'][:, selected], groups)-1)
@@ -87,22 +109,18 @@ def animate_case(root, config, name, destination, frames=32, fps=3):
                                 surface_config=current.stellar_surface)
     axis = np.linspace(-1, 1, 241)
     x, y = np.meshgrid(axis, axis)
-    names = list(model.field.components)
-    labels = model.field.labels(x, y)
-    component = np.vectorize(names.index)(labels).astype(float)
-    component[x*x+y*y > 1] = np.nan
     a = planet.a/(planet.R_star/1e5)
     px = a*np.sin(2*np.pi*phase)
     py = -a*np.cos(2*np.pi*phase)*np.cos(planet.inc)
 
-    fig = plt.figure(figsize=(10.8, 6.4))
+    fig = plt.figure(figsize=(10.8, 6.4),dpi=90)
     grid = fig.add_gridspec(3, 2, width_ratios=[1, 1.5], hspace=.55, wspace=.35)
     disk = fig.add_subplot(grid[:, 0])
     star = fig.add_subplot(grid[0, 1])
     change = fig.add_subplot(grid[1, 1])
     trans = fig.add_subplot(grid[2, 1])
-    disk.imshow(component, origin='lower', extent=(-1, 1, -1, 1),
-        cmap=ListedColormap(['#e7e2d9', '#51403b', '#edc96d']), vmin=-.5, vmax=2.5)
+    surface_image=disk.imshow(rotation_surface_image(model,x,y,times[0],centre/1000),
+                             origin='lower',extent=(-1,1,-1,1))
     disk.add_patch(Circle((0, 0), 1, fill=False, color='black', lw=1))
     disk.plot(px, py, ':', color='.35', lw=1)
     body = Circle((px[0], py[0]), planet.R_pl/planet.R_star, color='black', alpha=.65)
@@ -146,6 +164,7 @@ def animate_case(root, config, name, destination, frames=32, fps=3):
 
     def update(frame):
         body.center = (px[frame], py[frame])
+        surface_image.set_data(rotation_surface_image(model,x,y,times[frame],centre/1000))
         for line, values in zip(stellar_lines, intrinsic):
             line.set_data(line_velocity, values[frame])
         change_line.set_data(line_velocity, difference[frame])
@@ -156,10 +175,8 @@ def animate_case(root, config, name, destination, frames=32, fps=3):
         hours = phase[frame]*planet.orbital_period_days*24
         clock.set_text(f'{LABELS[name]}  |  {hours:+.2f} h from mid-transit'
                        f'  |  {len(groups[frame])} exposures')
-        return [body, clock, track, change_line, *stellar_lines, *prepared_lines]
 
-    animation = FuncAnimation(fig, update, frames=len(groups), interval=1000/fps, blit=False)
-    animation.save(destination, writer=PillowWriter(fps=fps), dpi=90)
+    save_gif(fig,update,len(groups),destination,fps)
     plt.close(fig)
     return dict(file=destination.name, frames=len(groups), fps=fps,
                 exposures_per_frame=[len(group) for group in groups],

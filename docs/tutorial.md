@@ -1,6 +1,6 @@
 # EXoPLORE Tutorial
 
-This tutorial walks through twelve progressively more involved analyses. In particular, by the end the reader will know how to run the default HD 189733 b ANDES simulation, change the target planet, configure the atmospheric forward model, run a CARMENES NIR simulation, combine multiple nights, enable the Bayesian retrieval, assess retrieval pipeline bias, validate detection significances and retrieval uncertainties, analyse real CRIRES+ and IGRINS data reduced from archive frames (WASP-127 b and L 98-59 d), produce molecule detectability maps over a grid of atmospheric compositions, and prepare direct He I transmission spectra from CRIRES+ observations (WASP-121 b). Follow the tutorials in order on a first reading. Readers new to the technique may wish to read the [Concepts primer](concepts.md) first.
+This tutorial walks through fourteen progressively more involved analyses. In particular, by the end the reader will know how to run the default HD 189733 b ANDES simulation, change the target planet, configure the atmospheric forward model, run a CARMENES NIR simulation, combine multiple nights, enable the Bayesian retrieval, assess retrieval pipeline bias, validate detection significances and retrieval uncertainties, analyse real CRIRES+ and IGRINS data reduced from archive frames (WASP-127 b and L 98-59 d), produce molecule detectability maps over a grid of atmospheric compositions, and prepare direct He I transmission spectra from CRIRES+ observations (WASP-121 b). Follow the tutorials in order on a first reading. Readers new to the technique may wish to read the [Concepts primer](concepts.md) first.
 
 ---
 
@@ -2100,12 +2100,26 @@ contract when suitable local intensities are available.
 
 ### Step 3: Place the regions
 
-The quiet component fills the disk. A circular region replaces its spectrum
-at selected projected positions, in stellar-radius units:
+The quiet component fills the disk. The active regions are spherical caps
+with fixed stellar latitude and an initial longitude. They rotate across
+the visible surface throughout the pre-transit, transit and post-transit
+observations.
+
+For this controlled example we take the stellar spin inclination to be 90°.
+Keeping the configured radius and projected rotation of 3.5 km/s gives
+`rotation_period_days = 11.632989168911012` through
+{math}`P_{\rm rot}=2\pi R_\star\sin i_\star/(v\sin i_\star)`.
+This period makes the region motion consistent with the local rotational
+Doppler shifts. The reference epoch is mid-transit. The regions advance
+by about 5° during the 3.87-hour observing sequence.
 
 ```json
 "stellar_surface": {
   "default_component": "quiet",
+  "stellar_inclination_deg": 90.0,
+  "rotation_period_days": 11.632989168911012,
+  "reference_bjd": 2458321.68158481,
+  "reference_phase_deg": 0.0,
   "components": {
     "quiet": {
       "intensity_model_file": "inputs/ANDES/HD189733b/sodium/stellar_Na_intensities.npz"
@@ -2118,8 +2132,10 @@ at selected projected positions, in stellar-radius units:
     }
   },
   "regions": [
-    {"component": "spot", "geometry": "projected",
-     "x": -0.35, "y": -0.65, "radius": 0.25}
+    {"component": "spot", "geometry": "stellar",
+     "latitude_deg": -40.541601873504526,
+     "longitude_deg": -27.423648516609976,
+     "angular_radius_deg": 17.72175440601648}
   ],
   "correction_surface": "quiet"
 }
@@ -2127,31 +2143,37 @@ at selected projected positions, in stellar-radius units:
 
 The comparison driver calculates these surfaces:
 
-| Surface | Component | Centre `(x, y)` | Projected radius |
+| Surface | Latitude (deg) | Longitude at mid-transit (deg) | Angular radius (deg) |
 |---|---|---|---|
-| Quiet reference | quiet throughout | — | — |
-| Unocculted spot | spot | `(−0.35, +0.55)` | 0.25 |
-| Spot crossing | spot | `(−0.35, −0.65)` | 0.25 |
-| Facular crossing | facula | `(−0.35, −0.65)` | 0.25 |
+| Quiet reference | — | — | — |
+| Unocculted spot | +33.367 | −24.776 | 17.722 |
+| Spot crossing | −40.542 | −27.424 | 17.722 |
+| Facular crossing | −40.542 | −27.424 | 17.722 |
 
 The unocculted spot lies above the transit chord. The crossing cases place
 the region on the approaching stellar hemisphere, so the planet encounters
-it before mid-transit. The spot spectrum and radius are identical in both
+it before mid-transit. The spot spectrum and angular radius are identical in both
 spot cases. Changing position also changes the viewing angles sampled by
 that region. The facular case uses the crossing geometry with its own local
 spectrum.
 
-Projected regions stay fixed during this observation. Local stellar rotation
-still Doppler-shifts their spectra. This makes the chosen crossing geometry
-easy to follow. Physical latitude/longitude and rotational epochs are described
-in the surface guide.
+At mid-transit, the region centres project to `(−0.35, +0.55)` for the
+unocculted spot and `(−0.35, −0.65)` for the crossing cases, in stellar radii.
+The crossing cap covers 6.25% of the projected disk at that epoch. Its
+projected shape and area change with rotation and foreshortening. The
+integrator updates the component map at all three temporal samples of each
+exposure, including the out-of-transit stellar reference. The
+[surface guide](heterogeneous_stellar_surface.md) explains the coordinate
+and epoch conventions.
 
 ```{figure} figures/tutorial14_surface_components.png
 :width: 100%
 :align: center
 
-The projected regions and the common transit chord. The black disk marks the
-planet near the crossing position using its catalog reference radius.
+Blue marks the approaching stellar hemisphere and red the receding hemisphere.
+Brightness follows the component continuum, with brown spot boundaries and
+gold facular boundaries. The surface and black planet marker use the same
+pre-midtransit epoch. The marker uses the catalog planet radius.
 Bottom right: intrinsic local intensities at mu = 0.75, divided by the quiet
 continuum on the same wavelength grid. The relative brightness of all
 components is retained in the forward calculation.
@@ -2222,13 +2244,19 @@ The facular component fills the core, producing a much larger fractional
 change there than in the continuum. This is why a continuum brightness
 contrast alone would miss part of the effect in a resolved spectral line.
 
+The unocculted spot also changes the stellar reference during the observation.
+Its intrinsic continuum decreases from 97.05% to 96.86% of the quiet-star
+continuum over this sequence as the region rotates towards disk centre.
+The saved intrinsic arrays retain this brightness variation. The prepared
+spectra follow the continuum-normalized convention used in Tutorial 13.
+
 ### Step 5: Compare the recovered D2 profiles
 
 Generate the comparison figures after the campaign finishes:
 
 ```bash
 python scripts/plot_stellar_activity_tutorial.py \
-    outputs/hd189733b_andes_stellar_activity docs/figures
+    outputs/hd189733b_andes_stellar_activity_rotating docs/figures
 ```
 
 The script also writes `line_measurements.json` beside the observations.
@@ -2266,7 +2294,7 @@ below. Generate them from the completed observations with:
 
 ```bash
 python scripts/animate_stellar_activity_tutorial.py \
-    outputs/hd189733b_andes_stellar_activity docs/figures
+    outputs/hd189733b_andes_stellar_activity_rotating docs/figures
 ```
 
 Each animation has 32 frames. A frame averages 12 or 13 consecutive exposures,
@@ -2278,7 +2306,9 @@ The line measurements retain the full preparation described above.
 :align: center
 
 Unocculted spot. Left: the projected surface and moving planet, marked at its
-catalog radius and the mean phase of the exposure bin. Top right: the intrinsic star-plus-planet line, divided by
+catalog radius and the mean phase of the exposure bin. The active region
+advances with stellar rotation across the blue/red velocity field.
+Top right: the intrinsic star-plus-planet line, divided by
 its own stored continuum, for the quiet and active observations. Middle
 right: the fractional change between those normalized line profiles.
 Bottom right: the prepared transmission under matched and quiet-star
@@ -2321,34 +2351,35 @@ The measurements for this execution are:
 | Surface | Assumed correction | Mean absorption, ±20 km/s (%) | Core, ±3 km/s (%) | Centroid (km/s) | RMS width (km/s) |
 |---|---|---|---|---|---|
 | Quiet reference | Matched | 0.1510 ± 0.0078 | 0.3577 | +1.25 | 9.03 |
-| Unocculted spot | Matched | 0.1577 ± 0.0078 | 0.3719 | +1.24 | 9.03 |
-| Unocculted spot | Quiet | 0.1644 ± 0.0078 | 0.3767 | +1.32 | 9.13 |
-| Spot crossing | Matched | 0.1251 ± 0.0078 | 0.2989 | +0.97 | 9.18 |
-| Spot crossing | Quiet | 0.0917 ± 0.0079 | 0.2653 | −2.26 | 8.80 |
-| Facular crossing | Matched | 0.2583 ± 0.0075 | 0.6370 | +2.70 | 7.62 |
-| Facular crossing | Quiet | 0.5889 ± 0.0074 | 1.2463 | +5.04 | 5.57 |
+| Unocculted spot | Matched | 0.1585 ± 0.0078 | 0.3738 | +1.23 | 9.03 |
+| Unocculted spot | Quiet | 0.1649 ± 0.0078 | 0.3764 | +1.34 | 9.18 |
+| Spot crossing | Matched | 0.1234 ± 0.0078 | 0.2937 | +0.98 | 9.21 |
+| Spot crossing | Quiet | 0.0877 ± 0.0079 | 0.2532 | −2.45 | 8.98 |
+| Facular crossing | Matched | 0.2686 ± 0.0075 | 0.6763 | +2.64 | 7.53 |
+| Facular crossing | Quiet | 0.6261 ± 0.0074 | 1.3855 | +5.58 | 4.86 |
 
-The matched band depths agree with their prepared noiseless values to within
-about 0.011 percentage points. Those values are 0.1600%, 0.1686%, 0.1358%
-and 0.2658% for the quiet, unocculted-spot, spot-crossing and facular-crossing
-observations. Different local illumination and disk dilution change the
-transmission spectrum even with the same planetary opacity.
+The largest difference between a matched band depth and its prepared
+noiseless value is 0.012 percentage points. Those noiseless values are
+0.1600%, 0.1701%, 0.1340% and 0.2757% for the quiet,
+unocculted-spot, spot-crossing and facular-crossing observations. Different
+local illumination and disk dilution change the transmission spectrum
+even with the same planetary opacity.
 
 To isolate the error from the stellar correction, subtract each matched result
 from the quiet-star analysis of that same observation:
 
 | Surface | Change in mean absorption (ppm) | Centroid change (km/s) |
 |---|---|---|
-| Unocculted spot | +67 | +0.09 |
-| Spot crossing | −334 | −3.22 |
-| Facular crossing | +3305 | +2.34 |
+| Unocculted spot | +64 | +0.10 |
+| Spot crossing | −357 | −3.43 |
+| Facular crossing | +3575 | +2.94 |
 
 The unocculted-spot shift is small compared with the roughly 78 ppm conditional
 band uncertainty of this night. The spot crossing weakens the recovered
 absorption and leaves excess flux on its red side, shifting the centroid
 bluewards. The facular crossing makes the recovered line much deeper and
-asymmetric. The corresponding noiseless paired band shifts are +67, −334
-and +3311 ppm, so these differences persist when Gaussian noise is removed.
+asymmetric. The corresponding noiseless paired band shifts are +62,
+−359 and +3565 ppm in the prepared noiseless profiles.
 
 The paired profiles share their noise and telluric fits, so their errors are
 correlated. The quoted uncertainties condition on the fitted telluric and
@@ -2360,16 +2391,18 @@ model have stayed fixed throughout.
 
 ### Runtime and checks
 
-The full comparison took 6.06 hours on an Apple M2 Ultra with 24 CPU cores
+The full comparison took 6.38 hours on an Apple M2 Ultra with 24 CPU cores
 and 64 GB RAM, running macOS 15.1. Molecfit used 16 workers.
-Each forward calculation used one process, with the
-next surface calculated alongside the previous surface's telluric fits.
+Each forward calculation used one process. For this benchmark, independent
+forward calculations ran alongside each other and the telluric fits.
+The example driver runs the surface cases sequentially, so its elapsed time
+will be longer.
 
 | Surface | Forward calculation (min) | Molecfit, 388 exposures (min) | Both stellar analyses (min) |
 |---|---|---|---|
-| Unocculted spot | 69.6 | 76.2 | 13.9 |
-| Spot crossing | 97.0 | 70.9 | 13.7 |
-| Facular crossing | 97.7 | 73.7 | 13.5 |
+| Unocculted spot | 111.5 | 76.4 | 13.7 |
+| Spot crossing | 137.1 | 73.6 | 14.1 |
+| Facular crossing | 143.0 | 72.4 | 13.5 |
 
 The quiet reference reuses the completed Tutorial 13 observation and its 388
 accepted telluric fits. Recalculating its full intrinsic spectrum at four
@@ -2382,7 +2415,7 @@ The validation record checks the shared atmospheric-ray hash, observing
 sequence, velocity arrays, telluric transmission and ETC response. It also
 checks that each paired analysis uses the same observation and fits. The
 unocculted spot has no overlap with either the opaque planet or its atmosphere.
-Both crossing regions overlap the opaque planet during 80 exposure midpoints.
+Both crossing regions overlap the opaque planet during 86 exposure midpoints.
 The supplied continuum ratios remain 0.60 for the spot and 1.10–1.30 for the
 facular component.
 

@@ -280,7 +280,7 @@
     "dimensionality": "1D"
   },
   "paths": {
-    "output_root": "outputs/hd189733b_andes_stellar_activity",
+    "output_root": "outputs/hd189733b_andes_stellar_activity_rotating",
     "planet_parameter_dir": "planet_params",
     "prt_input_data": "/path/to/petitRADTRANS/input_data",
     "inputs_dir": "inputs/ANDES/HD189733b"
@@ -414,11 +414,15 @@
     "regions": [
       {
         "component": "spot",
-        "geometry": "projected",
-        "x": -0.35,
-        "y": -0.65,
-        "radius": 0.25
+        "geometry": "stellar",
+        "latitude_deg": -40.541601873504526,
+        "longitude_deg": -27.423648516609976,
+        "angular_radius_deg": 17.72175440601648
       }
-    ]
+    ],
+    "stellar_inclination_deg": 90.0,
+    "rotation_period_days": 11.632989168911012,
+    "reference_bjd": 2458321.68158481,
+    "reference_phase_deg": 0.0
   }
 }
