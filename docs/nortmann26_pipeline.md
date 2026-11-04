@@ -1,5 +1,7 @@
 # The Nortmann26 preparing pipeline (CRIRES+ division SYSREM)
 
+See [Spectral preparation](spectral_preparation.md) for the other recipes and their worked examples.
+
 `pipeline.name: "Nortmann26"` selects the CRIRES+ analysis recipe of
 Nortmann et al. (2026, A&A), developed for the GJ 1214 b K-band transits and
 applicable to any CRIRES+ nodding transit time series prepared with

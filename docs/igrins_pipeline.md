@@ -1,5 +1,7 @@
 # The Cheverall26 preparing pipeline (IGRINS HRCCS)
 
+See [Spectral preparation](spectral_preparation.md) for the other recipes and their worked examples.
+
 `pipeline.name: "Cheverall26"` selects the IGRINS high-resolution
 cross-correlation recipe of Cheverall et al. (2026), which builds on the IGRINS
 analysis lineage of Line et al. (2021), Brogi et al. (2023) and Smith et al.

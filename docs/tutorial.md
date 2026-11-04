@@ -4,6 +4,8 @@ This tutorial walks through fourteen progressively more involved analyses. In pa
 
 ---
 
+The [Spectral preparation reference](spectral_preparation.md) explains the available recipes and their configuration choices. Each example below selects the preparation used for that observation.
+
 ## Prerequisites
 
 In order to follow this tutorial, EXoPLORE and all dependencies must be installed as described in the [Installation guide](installation.md). Specifically:

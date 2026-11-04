@@ -474,6 +474,7 @@ where `T_ref` is the reference transmission at airmass `X_ref` and `X` is the ai
 each night when the selected synthetic observing setup uses those limits.
 The [input guide](input_files.md) describes the per-exposure and per-night files.
 
+(pipeline-settings)=
 ## 8. `pipeline`
 
 ```json
@@ -491,18 +492,21 @@ The [input guide](input_files.md) describes the per-exposure and per-night files
 }
 ```
 
-Four pipeline recipes are available. They fall into two groups depending on whether they use SYSREM for systematics removal:
+Choose the preparation through `pipeline.name`. The [Spectral preparation](spectral_preparation.md)
+reference explains each recipe and links to worked examples.
 
-**No SYSREM**, `"BL19"`, `"Blain24"`: systematics are removed by telluric correction and spectral fitting, not by iterative SYSREM. The `sysrem_iterations` field is ignored for these pipelines.
-
-**SYSREM-based**, `"ASL19"`, `"Gibson22"`: systematics removal relies on SYSREM iterations. The `sysrem_iterations` field controls how many iterations are applied.
+For molecular cross-correlation, the available choices are `BL19`, `Blain24`,
+`ASL19`, `Gibson22`, `Nortmann26` and `Cheverall26`. The resolved-line routes
+are `czesla2024`, `Palle2020`, `carmenes_helium` and `Seidel22`.
+Their nested settings define the continuum windows, reference exposures and
+corrections used for the measurement.
 
 | Field | Valid values | Description |
 |---|---|---|
-| `name` | `"BL19"`, `"Blain24"`, `"ASL19"`, `"Gibson22"`, `"Seidel22"` | Data reduction pipeline to use. `"BL19"`: [Brogi & Line (2019)](https://doi.org/10.3847/1538-3881/aaffd3)-style pipeline, normalisation, telluric mask, telluric correction, noisy-column masking. No SYSREM. `"Blain24"`: Blain, Sánchez-López & Mollière (2024, AJ, 167, 179), throughput fit removal and telluric fit removal. No SYSREM. `"ASL19"`: [Sánchez-López et al. (2019)](https://doi.org/10.1051/0004-6361/201936084), BL19 normalisation + telluric-window mask + SYSREM iterations. `"Gibson22"`: Gibson et al. (2022), out-of-transit normalisation + SYSREM (blaze correction disabled by default). |
-| `sysrem_iterations` | int ≥ 1 | Number of SYSREM iterations. Only used by `"ASL19"` and `"Gibson22"`. Ignored for `"BL19"` and `"Blain24"`. More iterations remove more correlated systematics but also attenuate the planet signal. Typical range: 2 to 8. Start with 4 and optimise. |
+| `name` | `"BL19"`, `"Blain24"`, `"ASL19"`, `"Gibson22"`, `"Nortmann26"`, `"Cheverall26"`, `"czesla2024"`, `"Palle2020"`, `"carmenes_helium"`, `"Seidel22"` | Preparation recipe. See [Spectral preparation](spectral_preparation.md) for the steps and input requirements of each choice. |
+| `sysrem_iterations` | int ≥ 0 | Detrending component count for `ASL19`, `Gibson22`, `Nortmann26` and `Cheverall26`. With Cheverall26 PCA, it sets the number of principal components. `BL19` and `Blain24` use polynomial preparation. Direct resolved-line routes use zero. |
 | `snr_mask_threshold` | float > 0 | SNR threshold below which columns (wavelength channels) are masked before SYSREM. Pixels with SNR < threshold are excluded. Typical: 10. |
-| `prepare_template` | `true`, `false` | If `true`, apply the same filtering to the CCF template as was applied to the data, so that the template correctly represents the distorted planetary signal seen in the residuals. **Always set `true` for rigorous CCF computation and retrievals.** How the template is filtered depends on the pipeline, see the note below. |
+| `prepare_template` | `true`, `false` | If `true`, apply the same filtering to the CCF template as was applied to the data, so that the template correctly represents the distorted planetary signal seen in the residuals. Use `true` for fitted-normalisation and SYSREM model comparisons. Direct Seidel22 transmission uses `false`. See the recipe-specific explanation below. |
 | `optimize_sysrem_order_by_order` | `true`, `false` | If `true`, choose the optimal number of SYSREM iterations independently for each spectral order based on `optimize_criterion`. Slower but can improve sensitivity. |
 | `optimize_criterion` | `"DeltaSigma"`, `"Maximum"`, `"Max_Diff"` | Criterion for selecting the optimal SYSREM iteration count per order when `optimize_sysrem_order_by_order: true`. `"DeltaSigma"` (**default, recommended**): stop when the fractional decrease in residual standard deviation falls below `sysrem_delta_sigma_threshold`, model-independent and avoids over-subtraction ([Parker et al. 2025](https://doi.org/10.1093/mnras/staf469)). `"Maximum"`: choose the iteration that maximises the CCF S/N. `"Max_Diff"`: choose the iteration that maximises the S/N difference between consecutive iterations. |
 | `sysrem_delta_sigma_threshold` | float (default 0.01) | Fractional σ-drop threshold for the `"DeltaSigma"` halting criterion. SYSREM stops when (σ[k-1] - σ[k]) / σ[k-1] < threshold. Only used when `optimize_criterion: "DeltaSigma"`. |

@@ -34,7 +34,7 @@ current and next-generation ground-based spectrographs.
    tutorial
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
    :caption: Reference
 
    config_reference
@@ -43,8 +43,7 @@ current and next-generation ground-based spectrographs.
    stellar_intensities
    heterogeneous_stellar_surface
    crires_reduction
-   nortmann26_pipeline
-   igrins_pipeline
+   spectral_preparation
    data_acknowledgements
 
 .. toctree::
