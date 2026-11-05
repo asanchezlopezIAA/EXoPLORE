@@ -2,7 +2,7 @@
 
 This page describes the molecular simulation products written by
 `core/simulator.py`. The [CRIRES+](crires_reduction.md),
-[IGRINS](igrins_pipeline.md) and [helium tutorials](tutorial.md#tutorial-12-he-i-transmission-spectroscopy-with-crires-wasp-121-b)
+[IGRINS](tutorial.md#tutorial-10-analyse-real-igrins-data-l-98-59-d) and [helium tutorials](tutorial.md#tutorial-12-he-i-transmission-spectroscopy-with-crires-wasp-121-b)
 describe their additional reduction and direct-transmission products.
 
 ## Output directory structure

@@ -23,13 +23,6 @@ The recipes implemented in EXoPLORE are summarised below.
 | `carmenes_helium` | Synthetic CARMENES helium observations with the shared arithmetic-reference preparation | See the helium settings below |
 | `Seidel22` | Stellar-reference transmission with an optional stellar-transit correction | {ref}`Tutorial 13 <tutorial-13-sodium>` |
 
-```{toctree}
-:maxdepth: 1
-
-nortmann26_pipeline
-igrins_pipeline
-```
-
 ## Molecular cross-correlation
 
 ### BL19
@@ -82,14 +75,23 @@ Select `pipeline.name: "Gibson22"` and set `pipeline.sysrem_iterations`.
 Tutorial 7 compares preparations and retrieval likelihoods. The preparation
 name and the likelihood name are separate configuration choices.
 
-### Nortmann26 and Cheverall26
+### Nortmann26
 
-Nortmann26 uses common-blaze normalisation and division SYSREM for CRIRES+
-segments. Cheverall26 provides the IGRINS continuum and detrending sequence,
-with `pipeline.continuum_method` and `pipeline.detrend_method` selecting the
-continuum estimator and PCA or SYSREM. Their method pages describe the steps,
-masking and associated analysis settings in [Nortmann26](nortmann26_pipeline.md)
-and [Cheverall26](igrins_pipeline.md).
+Select `pipeline.name: "Nortmann26"` for common-blaze normalisation, column
+and deep-telluric masking, followed by division SYSREM on CRIRES+ segments.
+`pipeline.sysrem_iterations` sets the component count. The fitted time basis
+is saved for division-form model filtering. [Tutorial 9](tutorial.md#tutorial-9-analyse-real-crires-data-wasp-127-b)
+explains the preparation, upstream reduction and implementation details.
+
+### Cheverall26
+
+Select `pipeline.name: "Cheverall26"` for per-exposure rescaling, continuum
+normalisation, masking and PCA or SYSREM detrending on IGRINS orders.
+`pipeline.continuum_method` selects the continuum estimator,
+`pipeline.detrend_method` selects the detrending method, and
+`pipeline.sysrem_iterations` sets the component count.
+[Tutorial 10](tutorial.md#tutorial-10-analyse-real-igrins-data-l-98-59-d)
+explains the preparation, noise convention and injection-recovery settings.
 
 ### Preparing the model
 

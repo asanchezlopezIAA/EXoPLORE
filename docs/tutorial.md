@@ -1098,7 +1098,7 @@ A single ANDES order yields only a marginal per-order signal from a strong absor
 
 ## Tutorial 9: Analyse real CRIRES+ data (WASP-127 b)
 
-Tutorials 1 to 8 simulate observations. This tutorial and the next analyse **real** data reduced from raw archive frames and run through the pipeline end to end. Here we use the single CRIRES+ K2148 transit of the hot Saturn WASP-127 b (ESO programme 108.22PH, 2022-03-24), for which Nortmann et al. (2025) report H₂O and CO with a resolved supersonic-jet signature. The CRIRES+ analysis recipe is the `Nortmann26` pipeline (Nortmann et al. 2025, 2026). See [The Nortmann26 pipeline](nortmann26_pipeline.md) for the method and [Reducing CRIRES+ data](crires_reduction.md) for the upstream reduction.
+Tutorials 1 to 8 simulate observations. This tutorial and the next analyse **real** data reduced from raw archive frames and run through the pipeline end to end. Here we use the single CRIRES+ K2148 transit of the hot Saturn WASP-127 b (ESO programme 108.22PH, 2022-03-24), for which Nortmann et al. (2025) report H₂O and CO with a resolved supersonic-jet signature. The CRIRES+ analysis recipe is the `Nortmann26` pipeline (Nortmann et al. 2025, 2026). The preparation is described below. See [Reducing CRIRES+ data](crires_reduction.md) for the upstream reduction.
 
 > **Approximate run time:** the analysis step is ~4 min on an Apple Mac Studio M2 Ultra (64 GB RAM), running `configs/wasp127b_crires_h2oco.json` (18 K2148 segments, division SYSREM with 9 iterations, real data, no retrieval). The petitRADTRANS template and the Kp-Vsys maps (Block 7) dominate. The one-off raw reduction ([`cr2res`](https://www.eso.org/sci/software/pipelines/cr2res/) + [`molecfit`](https://www.eso.org/sci/software/pipelines/molecfit/)) is separate and much longer (tens of minutes to a few hours, molecfit is the slow part). With `timing: true` each run writes a `timing_report_<date>.txt` with the exact per-block breakdown.
 
@@ -1179,6 +1179,158 @@ Cross-correlation of the combined H₂O + CO template with the WASP-127 b residu
 Kp-Vsys cross-correlation S/N map for WASP-127 b. The combined H₂O + CO signal peaks at K<sub>P</sub> ≈ 133 km s⁻¹ and v<sub>rest</sub> ≈ −7.5 km s⁻¹ at ~8.6σ. The blueshift is the jet signature. Following Nortmann et al. (2025), the map is normalised by the standard deviation over v ∈ [−75, −20] ∪ [+20, +75] km s⁻¹ across the whole K<sub>P</sub> range (the region outside the planetary signal), so the colour scale reads directly in σ. Produced by the run as `sn_map_<run>_SNR.pdf`.
 ```
 
+### Preparation details
+
+#### What the pipeline does
+
+Per wavelength segment (detector × echelle order), on the real-data time
+series:
+
+1. **Common-blaze normalisation** (Nortmann 2026, Sec. 3.1). Two steps: each
+   spectrum is divided by a second-order polynomial fit to its ratio with the
+   master (the summed out-of-transit spectrum). Then the master itself is
+   fitted with a second-order polynomial under iterative stellar-line masking
+   and divided out, bringing all spectra to a common blaze. NaN and >4σ
+   outlier pixels are flagged.
+2. **Column masking**. Columns with more than three flagged pixels are
+   masked entirely. Lighter flags are interpolated over time
+   (`nortmann_column_mask`).
+3. **Deepest-telluric mask**. Regions where the flux falls below 20% of the
+   continuum are masked before detrending (Nortmann 2026, Sec. 3.1).
+4. **Division SYSREM** (Gibson et al. 2020 convention, Nortmann 2026,
+   Sec. 3.2). SYSREM components are accumulated into a systematics model
+   M_N and the data are corrected by division, R = D / M_N, preserving the
+   planet signal shape. The per-iteration time basis U is stored for model
+   reprocessing. The paper uses 9 iterations for GJ 1214 b
+   (`pipeline.sysrem_iterations`).
+5. **Model filtering for retrievals** (`nortmann_model_filter`): the
+   Gibson et al. (2022) filter in the division form of Nortmann 2026
+   Appendix A.3 (Eqs. A.1 to A.3), so forward models suffer the same SYSREM
+   distortions as the data.
+
+The Kp-Vsys maps, in/out-of-trail statistics and significance metrics are the
+engine's standard CCF machinery. The map convention is
+`v_rest = offset from the expected planet trail`.
+
+#### Extra preparation steps bundled for CRIRES+
+
+`scripts/prepare_crires_night.py` performs, automatically, on every run:
+
+- **Frame quality cut**: exposures whose spatial PSF FWHM (pipeline
+  `ESO QC SLITFWHM` headers) or S/N are strong outliers for the night
+  (adaptive-optics losses) are excluded, data-driven.
+- **Cosmic-ray rejection** (Lesjak et al. 2025): per wavelength channel, a
+  robust (Tukey biweight) polynomial fit over time. >5σ outliers are replaced
+  by the fit value (`Robust_Outlier_Removal`).
+- **Effective spectral resolution** (Nortmann et al. 2024, App. A.2, Lesjak
+  et al. 2025): the stellar PSF FWHM is read from the cr2res headers. A PSF
+  narrower than the slit means the star underfills it and the true resolution
+  exceeds the nominal R = 100,000 ("super-resolution"),
+  R = 100000 × 3.5 px / FWHM px. When the PSF **overfills** the slit (poor
+  seeing) the resolution is slit-limited and clamped to the nominal value, with the resolution capped at that value. The measured per-segment R is stored in
+  `resolution_0.fits` and the engine convolves all templates to the measured median R.
+- **Telluric alignment check** (Nortmann et al. 2024, App. A.2): every
+  exposure is cross-correlated, in continuum-normalised absorption, against a
+  reference exposure over the telluric lines. The A/B offset and night drift
+  are corrected only if significant, otherwise the grids are kept (the
+  no-drift case of Lesjak 2025 and Nortmann 2026).
+
+#### Current implementation notes
+
+Read before publishing results based on this pipeline:
+
+- The runner passes the selected order's theoretical telluric transmission
+  through `PreparationInputs.telluric_transmission`. `nortmann_normalise()`
+  uses it for continuum-fit masking, and preparation excludes channels below
+  20% transmission. When that array is unavailable, the deep mask is estimated
+  from the out-of-transit master spectrum.
+- Detrending currently runs in the observer frame. The stellar rest frame
+  variant preferred by Nortmann 2026 (`nortmann_shift_to_stellar_frame`) is
+  available in `exoplore.pipelines.nortmann26` but not yet wired into the
+  engine branch. For a single short night the difference is small. For
+  multi-night stacks it matters.
+- The linear super-resolution anchor extrapolates. At PSF FWHM well below
+  the slit width it may overestimate R by several percent (Nortmann 2024
+  quote R ≈ 140,000 at ∼2 px). The effect on a matched filter is a few
+  percent of S/N at most.
+- Injection-recovery is supported (`observation.simulate_planet: true` with
+  `observation.scale_injection`/`pipeline.inject_scale_factor` and
+  `pipeline.kp_vrest_injection`): a scaled template is injected into the real
+  residuals and recovered through the full pipeline, so a non-detection can be
+  turned into an upper limit. The injected signal uses the real per-exposure
+  BERV, so it recovers at the expected planet position.
+
+#### Worked example: a public CRIRES+ K-band transit
+
+The transit of L 98-59 c observed with CRIRES+ in the K2148 setting on the
+night of 2022-03-23 (ESO programme 108.22PH) is public in the ESO archive and
+makes a complete end-to-end example.
+
+1. **Download** from the [ESO archive](http://archive.eso.org/eso/eso_archive_main.html):
+   query instrument CRIRES, night 2022-03-23 to 2022-03-24, target L 98-59
+   (programme 108.22PH). Request the raw science frames **with associated raw
+   calibrations** (CalSelector: darks, flats, uranium-neon and Fabry-Perot
+   wavelength frames, plus the static trace-wave, emission-line and photometric
+   flux tables). Place everything in one directory, e.g. `mynight/raw/`.
+2. **Install the ESO tools**: `esorex` with the `cr2res` and `molecfit`
+   recipes, from the [ESO pipelines page](https://www.eso.org/sci/software/pipelines/).
+   See [CRIRES+ reduction](crires_reduction.md). EXoPLORE only wraps these
+   tools.
+3. **Reduce**: `python scripts/reduce_crires_night.py mynight/raw all`
+   → `mynight/reduced/` with one extracted spectrum per nodding exposure and
+   `timeseries_manifest.txt`.
+4. **Prepare**:
+   `python scripts/prepare_crires_night.py mynight inputs/CRIRES_PLUS/L98-59c/reference_night`
+   which runs molecfit per nodding position if not cached (slow, once), then the
+   quality cut, cosmic-ray rejection, wavelength refinement and gating,
+   resolution measurement and drift check, and writes the `reference_night/`
+   files.
+5. **Configure a run**: planet parameters in `planet_params/L9859c.json`
+   (Demangeon et al. 2021). A minimal config uses
+
+   ```json
+   {
+     "planet":      {"name": "L9859c", "parameter_file": "planet_params/L9859c.json"},
+     "instrument":  {"name": "CRIRES+", "observatory": "paranal",
+                     "pixels_per_resolution_element": 3.0,
+                     "order_indices": [], "convolve_to_resolution": true},
+     "observation": {"event_type": "transit", "specific_event": true,
+                     "specific_T0_bjd": 2459662.7016, "use_real_data": true,
+                     "exposure_time_seconds": 240.0, "n_nights": 1,
+                     "simulate_planet": false, "noiseless": true},
+     "pipeline":    {"name": "Nortmann26", "sysrem_iterations": 9},
+     "paths":       {"inputs_dir": "inputs/CRIRES_PLUS/L98-59c/"}
+   }
+   ```
+
+   with the remaining blocks (atmosphere template species, cross_correlation)
+   as in [the config reference](config_reference.md).
+6. **Run**: `python scripts/run_exoplore.py myconfig.json --run`. The engine
+   ingests the reference night, detrends with division SYSREM, cross-correlates
+   the petitRADTRANS template convolved to the measured resolution, and writes
+   Kp-Vsys maps and matrices under `paths.output_root`.
+
+The reduced GJ 1214 b spectra of Nortmann et al. (2026) are also public
+(Zenodo record 19387252) and can be used to validate the analysis stage
+against a published detection.
+
+#### References
+
+- Nortmann, L., et al. 2026, A&A (arXiv:2604.15292): the reproduced pipeline
+  (normalisation, masks, division SYSREM, model filter).
+- Nortmann, L., et al. 2025, A&A 693, A213, WASP-127 b (arXiv:2404.12363):
+  super-resolution and wavelength methodology (App. A.2, A.3).
+- Lesjak, F., et al. 2025, A&A 693, A72: super-resolution usage, 5σ
+  time-series outlier rejection, deep-telluric masking.
+- Gibson, N. P., et al. 2020, MNRAS 493, 2215: division SYSREM convention.
+- Gibson, N. P., et al. 2022, MNRAS 512, 4618: model filtering.
+- Tamuz, O., Mazeh, T., & Zucker, S. 2005, MNRAS 356, 1466: SYSREM.
+- Dorn, R. J., et al. 2023, A&A 671, A24: CRIRES+ instrument, nominal
+  resolution and slit sampling.
+- Smette, A., et al. 2015, A&A 576, A77. Kausch, W., et al. 2015, A&A 576,
+  A78: molecfit.
+- Demangeon, O. D. S., et al. 2021, A&A 653, A41: L 98-59 system parameters.
+
 **Disk footprint:** with the default output settings a single-night CRIRES+ analysis writes ~80 MB (the per-segment CCF and matrix `.npz` products), plus a few MB of diagnostic PDFs. See [Outputs](outputs.md) to control which matrices are kept.
 
 ---
@@ -1243,6 +1395,63 @@ The `Cheverall26` pipeline also writes a **duration ("N_in") test**, a temporal 
 
 Duration ("N_in") test for the H₂S template on L 98-59 d. **Left:** cross-correlation S/N as a function of systemic velocity and N<sub>in</sub> (the number of most-central in-transit spectra co-added). **Right:** the S/N-versus-N<sub>in</sub> curve at the expected velocity (red) and at the map peak (orange). Both rise and peak at N<sub>in</sub> ≈ 13, the number of exposures spanning the transit duration T₁₄ (red dashed line). The build-up-then-peak-at-T₁₄ behaviour is what a transit-tied signal should show. Produced by the run as `duration_test_fig4_<run>.png`.
 ```
+
+### Preparation details
+
+#### What the pipeline does
+
+Per echelle order, on the real-data time series:
+
+1. **Rescaling and continuum normalisation.** Divide each spectrum by its
+   median, clip outliers over time and divide by the estimated continuum.
+   `pipeline.continuum_method` selects `maxima` (default), `cm2024` or `polyfit`.
+2. **Bad-pixel and low-throughput masking.** Channels flagged as outliers, and
+   the deepest telluric regions with insufficient continuum, are masked. Orders
+   that are essentially fully masked in deep telluric bands are dropped from the
+   co-add.
+3. **Detrending.** Temporal components suppress correlated structure.
+   `pipeline.detrend_method` selects SYSREM or PCA, and
+   `pipeline.sysrem_iterations` sets the component count. The example JSON
+   records its chosen settings. Order-by-order optimization can select the
+   count using the configured criterion and an injected model.
+4. **Matched-filter cross-correlation.** The detrended residuals are
+   cross-correlated with a petitRADTRANS template convolved to the IGRINS
+   resolution, over a velocity grid, with a data-driven per-channel weighting.
+5. **Kp-Vsys maps and significance.** The per-order CCFs are shifted to each
+   trial planet velocity and co-added. The S/N is read against the off-trail
+   scatter (the velocity band within `cross_correlation.snr_exclude_kms` of the
+   trail is excluded from the noise estimate).
+
+#### The noise convention
+
+The detection statistic follows Cheverall et al. (2026): a **data-driven
+per-channel noise**, the median absolute deviation of each wavelength channel
+over time. This is the
+standard of the IGRINS HRCCS literature (Line et al. 2021, Brogi et al. 2023,
+Smith et al. 2024) and is set together with the χ²-form of the likelihood by the
+pipeline name. The cross-correlation S/N is read against the scatter of the map
+away from the planet trail.
+
+#### Injection-recovery
+
+As for the CRIRES+ pipeline, a scaled template can be injected into the real
+residuals (`observation.simulate_planet: true` with
+`observation.scale_injection` and `pipeline.kp_vrest_injection`) and recovered
+through the full detrending, to calibrate how much signal the pipeline preserves
+and to turn a non-detection into an upper limit.
+
+#### References
+
+- Cheverall, C., & Madhusudhan, N. 2026 (arXiv:2603.02209): the IGRINS HRCCS
+  analysis of L 98-59 d reproduced by this pipeline.
+- Cheverall, C., & Madhusudhan, N. 2024 (arXiv:2403.18894): HRCCS feasibility
+  for low-velocity planets.
+- Line, M. R., et al. 2021, Nature 598, 580 (WASP-77Ab): the IGRINS
+  retrieval/likelihood framework.
+- Brogi, M., et al. 2023, AJ 165, 91 (WASP-18b): IGRINS HRCCS + retrievals.
+- Smith, P. C. B., et al. 2024, AJ 168, 293 (WASP-121b): IGRINS HRCCS.
+- Brogi, M., & Line, M. R. 2019, AJ 157, 114: the HRCCS likelihood mapping.
+- Tamuz, O., Mazeh, T., & Zucker, S. 2005, MNRAS 356, 1466: SYSREM.
 
 **Disk footprint:** a single IGRINS night writes a few tens of MB (per-order CCF and matrix products) plus the diagnostic PDFs.
 
