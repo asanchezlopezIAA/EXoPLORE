@@ -94,6 +94,14 @@ radii, internal temperature and instrumental resolving power used by these
 calculations. Masses and radii are in CGS units. The atmospheric configuration
 supplies the regional temperatures, species and chemistry choices.
 
+The VULCAN `chemistry` selection passes through `selected_chemistry()` in
+`atmosphere/chemistry.py`. The VULCAN backend calls `atmosphere/vulcan.py`,
+which prepares an external chemistry column and returns its gas mass fractions
+and molecular weight to pRT. Columns are cached and reused across spectral
+orders. `atmosphere/vulcan_initialisation.py` checks the native initial state
+before integration. [Atmospheric chemistry](chemistry.md) describes the inputs
+and pressure-radius conversion.
+
 ### Construct the spectral time series
 
 Follow `spec_to_mat_fraction()` into `core/observation.py`.

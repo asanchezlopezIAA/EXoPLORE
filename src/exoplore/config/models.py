@@ -33,6 +33,7 @@ from exoplore.config.helium_grid import HeliumGridConfig
 from exoplore.config.rm_clv import RMCLVConfig
 from exoplore.config.atomic_transmission import AtomicTransmissionConfig
 from exoplore.config.stellar_surface import StellarSurfaceConfig
+from exoplore.config.chemistry import ChemistryConfig
 
 
 # ---------------------------------------------------------------------------
@@ -307,6 +308,8 @@ class AtmosphereRegionConfig:
     """
     species: List[str] = field(default_factory=lambda: ["H2", "He", "H2O"])
     use_easychem: bool = True
+    # Explicit chemistry selects one backend for this atmospheric column.
+    chemistry: Optional[ChemistryConfig] = None
     metallicity_wrt_solar: float = 0.0
     carbon_to_oxygen_ratio: float = 0.55
     mass_fractions: List[float] = field(default_factory=list)
@@ -329,6 +332,18 @@ class AtmosphereRegionConfig:
         default_factory=lambda: [1750.0, 520.0]
     )
     wind_velocity_kms: float = 0.0
+
+    def __post_init__(self):
+        if isinstance(self.chemistry, dict):
+            self.chemistry = ChemistryConfig(**self.chemistry)
+        if self.chemistry is not None:
+            # Keep the public boolean consistent in saved resolved configurations.
+            self.use_easychem = self.chemistry.backend == "easychem"
+
+    @property
+    def chemistry_backend(self):
+        """Keep the legacy boolean selection when no chemistry block is supplied."""
+        return self.chemistry.backend if self.chemistry is not None else ("easychem" if self.use_easychem else "manual")
 
     @property
     def vmr(self):
@@ -400,6 +415,23 @@ class AtmosphereConfig:
         """Construct the optional helium backend only when explicitly supplied."""
         if isinstance(self.helium, dict):
             self.helium = HeliumPwindsConfig(**self.helium)
+
+    @property
+    def explicit_chemistry_label(self) -> Optional[str]:
+        """Describe the selected injected columns for the run summary."""
+        if not self.limb_asymmetries:
+            return self.planet_model.chemistry_backend if self.planet_model.chemistry is not None else None
+        # Match the columns actually used by this limb geometry.
+        if self.limb_divisions == 'quarters':
+            names = ('morning_day', 'morning_night', 'evening_day', 'evening_night')
+        else:
+            names = ('morning_day', 'evening_day')
+        regions = [(name, getattr(self, name)) for name in names]
+        if not any(region is not None and region.chemistry is not None for _, region in regions):
+            return None
+        labels = [f'{name}: {region.chemistry_backend}'
+                  for name, region in regions if region is not None]
+        return ', '.join(labels)
 
 
 # ---------------------------------------------------------------------------
@@ -1045,6 +1077,10 @@ class PathConfig:
     phoenix_flux_file: str = ""
     skycalc_dir: str = ""
     inputs_dir: str = ""
+    # Optional external chemistry installation and its per-column working cache.
+    vulcan_directory: str = ""
+    vulcan_python: str = ""
+    vulcan_cache_dir: str = ""
 
 
 @dataclass
@@ -1186,6 +1222,10 @@ class SimulationConfig:
         # Unrecognized JSON keys are skipped.
 
         def _region(sub: dict) -> AtmosphereRegionConfig:
+            if sub.get("chemistry") is not None and "use_easychem" in sub:
+                backend = sub["chemistry"].get("backend")
+                if sub["use_easychem"] != (backend == "easychem"):
+                    raise ValueError("chemistry.backend conflicts with explicit use_easychem")
             return AtmosphereRegionConfig(**{
                 k: v for k, v in sub.items()
                 if k in AtmosphereRegionConfig.__dataclass_fields__
@@ -1297,7 +1337,7 @@ class SimulationConfig:
             f"  Nights              : {cfg.observation.n_nights}",
             f"  Atmosphere          : 1D={not cfg.atmosphere.limb_asymmetries}",
             f"  Species (planet)    : {cfg.atmosphere.planet_model.species}",
-            f"  EasyChem            : {cfg.atmosphere.planet_model.use_easychem}",
+            f"  Chemistry           : {cfg.atmosphere.explicit_chemistry_label or cfg.atmosphere.planet_model.chemistry_backend}",
             f"  C/O                 : {cfg.atmosphere.planet_model.carbon_to_oxygen_ratio}",
             f"  Metallicity (log Z) : {cfg.atmosphere.planet_model.metallicity_wrt_solar}",
             f"  Pipeline            : {cfg.pipeline.name}",

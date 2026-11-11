@@ -321,3 +321,30 @@ def mass_frac_to_vmr(
         # observer-quoted VMRs back to pRT input mass fractions.
         result = vmr * mmw_species / mmw_atmosphere
     return result
+
+
+def selected_chemistry(config, pressures, temperatures, species, manual_values,
+                       mean_molecular_weight, metallicity, carbon_to_oxygen,
+                       model_inputs, paths, *, adjust_co_symmetrically=False, reference_pressure_bar=None):
+    """Return the selected column's mass fractions and molecular weight.
+
+    The pRT calculation consumes these arrays for each chemistry backend.
+    Pressure and temperature describe the same atmospheric layers.
+    """
+    if config.backend == "vulcan":
+        if paths is None:
+            raise ValueError("VULCAN chemistry requires the simulation paths")
+        from exoplore.atmosphere.vulcan import run_vulcan
+        result = run_vulcan(config.vulcan, pressures, temperatures, species, model_inputs, paths,
+                            reference_pressure_bar=reference_pressure_bar)
+        return result.mass_fractions, result.mean_molecular_weight
+    if config.backend == "easychem":
+        # Reuse the active equilibrium implementation and its opacity aliases.
+        from exoplore.atmosphere.prt import call_easyCHEM, easychem_molecule
+        names = [easychem_molecule(sp) for sp in species]
+        fractions, mu = call_easyCHEM(metallicity, carbon_to_oxygen, pressures,
+                                     temperatures, names, adjust_co_symmetrically)
+        return {sp: fractions[names[i]] for i, sp in enumerate(species)}, mu
+    if mean_molecular_weight is None:
+        raise ValueError("Manual chemistry requires mean_molecular_weight")
+    return manual_mass_fractions(species, manual_values, mean_molecular_weight, len(pressures))

@@ -20,6 +20,9 @@ from exoplore.config.models import (
     PathConfig,
     SimulationConfig,
 )
+from exoplore.config.chemistry import (
+    ChemistryConfig, VulcanConfig, EddyDiffusionConfig, ChemicalBoundaryConfig, CondensationConfig,
+)
 from exoplore.config.rm_clv import RMCLVConfig
 from exoplore.config.seidel22 import Seidel22Config
 from exoplore.config.atomic_transmission import AtomicTransmissionConfig
@@ -34,6 +37,8 @@ def load_simulation_config(path):
 
 
 __all__ = [
+    "ChemistryConfig", "VulcanConfig", "EddyDiffusionConfig",
+    "ChemicalBoundaryConfig", "CondensationConfig",
     "PlanetConfig",
     "InstrumentConfig",
     "ObservationConfig",

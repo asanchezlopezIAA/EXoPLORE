@@ -1,6 +1,6 @@
 # EXoPLORE Tutorial
 
-This tutorial walks through fourteen progressively more involved analyses. In particular, by the end the reader will know how to run the default HD 189733 b ANDES simulation, change the target planet, configure the atmospheric forward model, run a CARMENES NIR simulation, combine multiple nights, enable the Bayesian retrieval, assess retrieval pipeline bias, validate detection significances and retrieval uncertainties, analyse real CRIRES+ and IGRINS data reduced from archive frames (WASP-127 b and L 98-59 d), produce molecule detectability maps over a grid of atmospheric compositions, and prepare direct He I transmission spectra from CRIRES+ observations (WASP-121 b). Follow the tutorials in order on a first reading. Readers new to the technique may wish to read the [Concepts primer](concepts.md) first.
+This tutorial walks through fifteen progressively more involved analyses. In particular, by the end the reader will know how to run the default HD 189733 b ANDES simulation, change the target planet, configure the atmospheric forward model, run a CARMENES NIR simulation, combine multiple nights, enable the Bayesian retrieval, assess retrieval pipeline bias, validate detection significances and retrieval uncertainties, analyse real CRIRES+ and IGRINS data reduced from archive frames (WASP-127 b and L 98-59 d), produce molecule detectability maps over a grid of atmospheric compositions, and prepare direct He I transmission spectra from CRIRES+ observations (WASP-121 b). Follow the tutorials in order on a first reading. Readers new to the technique may wish to read the [Concepts primer](concepts.md) first.
 
 ---
 
@@ -2643,6 +2643,157 @@ For another experiment, change the component files and region positions in
 assumption. The generated `comparison_validation.json` and
 `line_measurements.json` record the numerical checks and measurements for
 the run being inspected.
+
+## Tutorial 15: Equilibrium and disequilibrium chemistry with VULCAN
+
+So far, we have mostly calculated atmospheric abundances in chemical equilibrium
+with EasyChem. Vertical mixing can transport gas faster than reactions restore
+its local equilibrium composition. Stellar UV photons also dissociate molecules
+in the upper atmosphere. We can calculate both processes with
+[VULCAN](https://doi.org/10.3847/1538-4357/ac29bc)
+([Tsai et al. 2017](https://doi.org/10.3847/1538-4365/228/2/20), 2021).
+
+Let us compare the resulting abundance profiles for one HD 189733 b column.
+We keep the same temperature profile and elemental abundances in every
+calculation. We first use EasyChem, then VULCAN with vertical mixing, and
+finally include photochemistry. The nine panels show H₂, H, H₂O, CO, CO₂,
+CH₄, NH₃, HCN and OH. The calculation includes the remaining gases in each
+chemical model when forming the volume mixing ratios.
+
+### Step 1: Set up the column and stellar irradiation
+
+Install VULCAN following the [chemistry guide](chemistry.md#install-vulcan-separately).
+Run the following from the EXoPLORE directory in its usual Python environment.
+Set `VULCAN_PYTHON` to the Python executable in the separate VULCAN environment.
+For example, obtain its path with `conda run -n vulcan which python`.
+
+```bash
+export VULCAN_PYTHON=/path/to/vulcan/environment/bin/python
+```
+
+We use the `morning_day` temperature prescription from the reference simulation
+JSON and the system parameters in `planet_params/HD189733b.json`. The column
+has 100 pressure levels between 10⁻⁸ and 100 bar. We extend the upper boundary
+from Tutorial 1's 10⁻⁶ bar to include the photochemically affected layers.
+The temperature varies from approximately 906 to 1208 K.
+
+For this comparison we supply the same H–He–C–N–O elemental inventory explicitly
+to both packages. Its C/O is 0.549. These abundances replace Tutorial 1's
+metallicity and C/O choices for this example. Condensation and ion chemistry
+are excluded. The eddy diffusion coefficient is constant at
+$K_{zz}=10^9$ cm² s⁻¹, with molecular diffusion and zero-flux upper and lower
+boundaries.
+
+```python
+# Load the ordinary simulation JSON and edit the column used for this comparison.
+from pathlib import Path
+import os
+from exoplore.config import SimulationConfig
+from exoplore.config.chemistry import ChemistryConfig, VulcanConfig
+
+config = SimulationConfig.from_json("configs/hd189733b_andes_transit_clean.json")
+column = config.atmosphere.morning_day
+column.species = ["H2", "He", "H2O", "CO", "CO2", "CH4", "NH3", "HCN", "OH"]
+column.pressure_min_bar = 1e-8
+column.use_easychem = False
+column.metallicity_wrt_solar = 0.0
+column.carbon_to_oxygen_ratio = 2.95e-4 / 5.37e-4
+
+# Point to the separately installed VULCAN checkout and its Python environment.
+vulcan = Path("../VULCAN").resolve()
+config.paths.vulcan_directory = str(vulcan)
+config.paths.vulcan_python = os.environ["VULCAN_PYTHON"]
+config.paths.output_root = "outputs/tutorial15/HD189733b"
+config.paths.vulcan_cache_dir = "outputs/tutorial15/HD189733b/vulcan"
+
+# The elemental abundances are number ratios relative to hydrogen nuclei.
+column.chemistry = ChemistryConfig("vulcan", VulcanConfig(
+    network_file="thermo/NCHO_photo_network.txt",
+    elemental_abundances={
+        "H": 1.0, "He": 0.0838, "C": 2.95e-4, "N": 7.08e-5, "O": 5.37e-4,
+    },
+    eddy_diffusion={"mode": "constant", "value_cm2_s": 1e9},
+    molecular_diffusion=True,
+    photochemistry=True,
+    stellar_flux_file=str(vulcan / "atm/stellar_flux/sflux-HD189_Moses11.txt"),
+    orbit_radius_au=0.031,
+    zenith_angle_deg=48.0,
+    diurnal_factor=1.0,
+    solver_options={"count_max": 40000},
+))
+
+# Save the edited ordinary config under the output directory.
+Path("outputs/tutorial15").mkdir(parents=True, exist_ok=True)
+config.to_json("outputs/tutorial15/hd189733b.json")
+```
+
+The UV file comes with VULCAN's HD 189733 b example. It contains the composite
+irradiation spectrum used by [Moses et al. (2011)](https://doi.org/10.1088/0004-637X/737/1/15),
+which uses ε Eridani observations as a stellar UV proxy and solar-based
+extensions. The table gives wavelength in nm and stellar-surface flux density
+in erg cm⁻² s⁻¹ nm⁻¹. VULCAN dilutes it using the stellar radius and orbital
+distance, then calculates photolysis rates through the column. The PHOENIX
+spectrum used to simulate observations has a separate role. This UV input is
+a literature benchmark for the chemical calculation, with the uncertainty
+inherent to using a proxy for the host star.
+
+### Step 2: Calculate and compare the profiles
+
+```bash
+python scripts/compare_chemistry_profiles.py outputs/tutorial15/hd189733b.json \
+    --region morning_day --output outputs/tutorial15/HD189733b
+```
+
+The script calculates the EasyChem gas-phase equilibrium reference and three
+VULCAN cases. The first VULCAN case has transport and UV switched off. It
+checks how closely its thermal chemistry agrees with EasyChem before we
+interpret departures as disequilibrium. The figure compares equilibrium,
+mixing, and mixing with photochemistry.
+
+The pressure–temperature grid and elemental inventory are identical in all
+four calculations. EasyChem's equilibrium reference includes its neutral
+gas species formed from H, He, C, N and O. Both packages retain all their
+selected gases in the VMR denominator, including He and N₂. The observing
+simulator's existing EasyChem calculation keeps its own configured species
+and chemistry choices.
+
+![HD 189733 b gas abundance profiles from EasyChem and VULCAN](figures/tutorial15_chemistry_hd189733b.png)
+
+Mixing maintains CH₄ and NH₃ above their local equilibrium abundances through
+much of the column. CO and CO₂ are depleted. Here the adopted deep temperature
+profile favours methane, and transport supplies that composition to the layers
+above. The direction and size of these departures depend on the pressure–temperature
+profile and $K_{zz}$. We have kept Tutorial 1's cool morning-side temperature
+prescription for this experiment. The UV spectrum follows the Moses et al.
+benchmark, while our temperature profile is the one configured in EXoPLORE.
+
+With UV irradiation, CH₄ and NH₃ are destroyed in the upper atmosphere. Atomic
+H becomes abundant and OH increases around the microbar level. An HCN-rich
+layer develops at intermediate pressures. For example, near 10⁻⁴ bar the HCN
+VMR is approximately $4.9\times10^{-5}$ with photochemistry, compared with
+$7.3\times10^{-10}$ with mixing alone. At the same pressure, the NH₃ VMR falls
+from approximately $5.0\times10^{-5}$ to $4.4\times10^{-8}$. These are the
+steady-state results for the specified temperature, composition and irradiation.
+
+The thermal VULCAN control agrees with EasyChem within 0.11% for the requested
+species where both VMRs exceed 10⁻¹². Equilibrium OH remains below that threshold
+throughout this column. This check helps us separate the chemical-model
+baseline from the transport and photochemical effects in the figure.
+
+The fresh calculation took approximately **10.6 min** on macOS 15.1/arm64,
+with one VULCAN process running at a time and one BLAS thread. EasyChem took
+0.053 s, the VULCAN thermal control 41 s, mixing 89 s, and mixing with
+photochemistry 504 s. Each VULCAN timing includes two integrations for the
+pressure–radius alignment. Loading the accepted cached columns took about
+1.1 s in total, excluding figure generation. Runtime depends on the column
+and the time needed to reach the solver's convergence criteria.
+
+Open `outputs/tutorial15/HD189733b/abundance_profiles.png` to inspect the
+figure. `comparison.npz` stores the pressure, temperature and abundance
+arrays. `comparison.json` records the inputs, elemental checks, cache keys
+and timings. Change the chemistry block in the saved simulation JSON to
+explore another column, and keep the elemental inventory and temperature
+fixed when comparing the effect of an individual process.
 
 ## Troubleshooting
 

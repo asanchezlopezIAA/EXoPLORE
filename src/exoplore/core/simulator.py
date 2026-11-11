@@ -238,6 +238,7 @@ class SimulationSummary:
     stellar_simulate: bool = False
     stellar_correct: bool = False
     stellar_coupling: str = "factorized"
+    chemistry_backend: Optional[str] = None
 
     def __post_init__(self):
         # Expose the configured planet name in the summary.
@@ -296,9 +297,13 @@ class SimulationSummary:
             return "\n".join(lines)
         lines += [
             f"  Species             : {self.species}",
-            f"  EasyChem            : {self.use_easychem}",
-            f"  C/O                 : {self.carbon_to_oxygen}",
-            f"  Metallicity (log Z) : {self.metallicity}",
+            (f"  Chemistry           : {self.chemistry_backend}" if self.chemistry_backend is not None
+             else f"  EasyChem            : {self.use_easychem}"),
+        ]
+        if self.chemistry_backend in (None, "easychem"):
+            lines += [f"  C/O                 : {self.carbon_to_oxygen}",
+                      f"  Metallicity (log Z) : {self.metallicity}"]
+        lines += [
             f"  CCF v_max (km/s)    : {self.velocity_max_kms}",
             f"  Retrieval           : {self.retrieval_enabled}",
             f"  Output root         : {self.output_root}",
@@ -343,11 +348,32 @@ class ExoploreSimulator:
         cfg = self.config
         from exoplore.observation.carmenes_noise import configured_carmenes_etc
         configured_carmenes_etc(cfg)
+        if cfg.retrieval.enabled:
+            trial = cfg.retrieval.atmosphere
+            if trial is not None and trial.chemistry is not None:
+                raise ValueError("Explicit retrieval chemistry requires a separately validated retrieval model. Use the existing retrieval settings.")
+            if cfg.atmosphere.limb_asymmetries and any(
+                region is not None and region.chemistry is not None
+                for region in (cfg.atmosphere.morning_day, cfg.atmosphere.morning_night,
+                               cfg.atmosphere.evening_day, cfg.atmosphere.evening_night)):
+                raise ValueError("Explicit limb chemistry with retrieval requires a separately validated regional retrieval model")
         if cfg.pipeline.name == 'Seidel22':
             from exoplore.pipelines.seidel22 import validate_run
             validate_run(cfg)
         from exoplore.core.spectroscopy_mode import spectroscopy_route
         route = spectroscopy_route(cfg)
+        explicit_regions = [region for region in (
+            cfg.atmosphere.planet_model, cfg.atmosphere.ccf_template,
+            cfg.atmosphere.morning_day, cfg.atmosphere.morning_night,
+            cfg.atmosphere.evening_day, cfg.atmosphere.evening_night)
+            if region is not None and region.chemistry is not None]
+        if explicit_regions and route != 'standard':
+            raise ValueError("Explicit chemistry is supported in the molecular observing route. Direct atomic and helium routes retain their own atmosphere models.")
+        for region in explicit_regions:
+            if region.chemistry_backend == 'vulcan':
+                if region.species[:2] != ['H2', 'He'] or region.chemistry.vulcan.background_gas != 'H2':
+                    raise ValueError("The molecular observing route uses H2/He Rayleigh and CIA opacity. VULCAN observing columns require H2, He first and background_gas=H2.")
+
         # Check the stellar-effect route before any specialized runner returns.
         # Stop early when the selected runner cannot use the requested stellar effect.
         from exoplore.stellar.observation import validate_route
@@ -430,6 +456,7 @@ class ExoploreSimulator:
             sysrem_iterations=cfg.pipeline.sysrem_iterations,
             species=cfg.atmosphere.planet_model.species,
             use_easychem=cfg.atmosphere.planet_model.use_easychem,
+            chemistry_backend=cfg.atmosphere.explicit_chemistry_label,
             carbon_to_oxygen=cfg.atmosphere.planet_model.carbon_to_oxygen_ratio,
             metallicity=cfg.atmosphere.planet_model.metallicity_wrt_solar,
             velocity_max_kms=cfg.cross_correlation.velocity_max_kms,
@@ -1461,6 +1488,7 @@ class ExoploreSimulator:
                         pm.two_point_temperatures_K, pm.kappa_ir,
                         pm.gamma_guillot, pm.equilibrium_temperature_K,
                         pm.metallicity_wrt_solar, pm.carbon_to_oxygen_ratio,
+                        chemistry=pm.chemistry, chemistry_paths=cfg.paths,
                         use_easyCHEM=pm.use_easychem,
                         P_cloud=pm.cloud_pressure_bar,
                         easychem_CtoO_ret=pm.use_easychem,
@@ -1559,7 +1587,7 @@ class ExoploreSimulator:
                             p_evening_day, None,
                             atmosphere_morning, None,
                             atmosphere_evening, None,
-                            mode="full", easychem_CtoO_ret=True,
+                            mode="full", easychem_CtoO_ret=True, chemistry_paths=cfg.paths,
                         )
 
                         if h == 0:
@@ -2333,6 +2361,7 @@ class ExoploreSimulator:
                     cc.two_point_temperatures_K, cc.kappa_ir,
                     cc.gamma_guillot, cc.equilibrium_temperature_K,
                     cc.metallicity_wrt_solar, cc.carbon_to_oxygen_ratio,
+                    chemistry=cc.chemistry, chemistry_paths=cfg.paths,
                     use_easyCHEM=cc.use_easychem,
                     easychem_CtoO_ret=cc.use_easychem,
                 )

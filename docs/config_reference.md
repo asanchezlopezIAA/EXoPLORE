@@ -364,10 +364,11 @@ All six atmosphere sub-blocks share the same structure:
 | Field | Unit | Description |
 |---|---|---|
 | `species` |, | List of chemical species to include. Must use petitRADTRANS opacity names. Always include `"H2"` and `"He"` as bulk gas. Common detectable species: `"H2O"`, `"CO"`, `"CH4"`, `"NH3"`, `"H2S"`, `"HCN"`, `"CO2"`, `"C2H2"`. Atomic species: `"Fe"`, `"Ca"`, `"Na"`, `"K"`. The list order must match `mass_fractions`. |
-| `use_easychem` |, | If `true`, compute equilibrium chemistry mass fractions using [EasyChem](https://easychem.readthedocs.io) (based on metallicity and C/O ratio). For all species **except H₂ and He**, the `mass_fractions` values in the JSON are overridden by EasyChem output. H₂ and He mass fractions are always taken from the JSON `mass_fractions` list and are not computed by EasyChem. If `false`, use the `mass_fractions` values directly for all species. |
+| `use_easychem` | boolean | Existing chemistry selection when `chemistry` is absent. `true` calls EasyChem for the requested species and mean molecular weight. `false` uses the manual mass fractions and specified mean molecular weight. An explicit `chemistry.backend` selects its corresponding route. |
+| `chemistry` | object or `null` | Optional chemistry object with `backend: "easychem"`, `"manual"` or `"vulcan"`. Missing means use the existing `use_easychem` selection. VULCAN uses the nested `vulcan` settings. See [Atmospheric chemistry](chemistry.md). |
 | `metallicity_wrt_solar` | dex | Atmospheric metallicity relative to solar. Only used when `use_easychem: true`. Typical range: -1 to +3. Solar = 0. |
 | `carbon_to_oxygen_ratio` |, | Atmospheric C/O ratio (solar ≈ 0.55). Only used when `use_easychem: true`. |
-| `mass_fractions` |, | Manual mass fractions for each species in `species` (same order). Must sum to exactly 1. Used when `use_easychem: false`, or for H2 and He even when EasyChem is active. |
+| `mass_fractions` | dimensionless | Manual mass fractions in the same order as `species`. Used by manual chemistry. Existing free-abundance retrievals also use the configured H₂/He background. EasyChem and VULCAN calculate their own gas composition profiles. |
 | `mean_molecular_weight` | amu | Mean molecular weight of the atmosphere in atomic mass units. Solar H/He dominated: ~2.33. Higher metallicity or heavy species: up to ~3 to 5. |
 | `reference_pressure_bar` | bar | Reference pressure level for the planet radius (where R = R_planet from the parameter file). Typically 0.01 bar. |
 | `cloud_pressure_bar` | bar or `null` | Pressure of a grey cloud deck. Everything below this pressure is opaque. `null` = cloud-free. |
@@ -836,6 +837,9 @@ complete retrieval modes.
 | `phoenix_flux_file` | Absolute path to the PHOENIX model spectrum FITS file for the target star. Filename format: `lte{Teff:05d}-{logg:.2f}-{met:.1f}.PHOENIX-ACES-AGSS-COND-2011-HiRes.fits`. Select the file matching `stellar_teff_K`, `stellar_logg`, and `stellar_metallicity` from the planet parameter file. |
 | `skycalc_dir` | Reserved path field. The current molecular reader and downloader locate per-exposure tellurics under `paths.inputs_dir` using the directory convention in the input guide. |
 | `inputs_dir` | Directory containing instrument-specific input files: pre-computed SNR tables, telluric reference spectra, wavelength grids (for instruments like CARMENES where the wavelength grid comes from a calibration file). |
+| `vulcan_directory` | Original VULCAN checkout, used when a region selects VULCAN chemistry. |
+| `vulcan_python` | Python executable in the separate VULCAN environment. |
+| `vulcan_cache_dir` | Chemistry working and cache directory. Empty uses `output_root/chemistry/vulcan`. See [Atmospheric chemistry](chemistry.md). |
 
 ---
 

@@ -38,6 +38,7 @@ current and next-generation ground-based spectrographs.
    :caption: Reference
 
    config_reference
+   chemistry
    outputs
    input_files
    stellar_intensities

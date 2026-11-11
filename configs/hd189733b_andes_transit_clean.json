@@ -6,6 +6,7 @@
     "instrument": "Choose the instrument and its order_indices. An empty order list selects all orders. Changing the instrument also requires its own wavelength and ETC inputs.",
     "observation": "Set the exposure time, readout and event selection here. observation.throughput_seed fixes the throughput variations. noise.noise_seed fixes the additive Gaussian noise. Independent component seeds control different random draws.",
     "atmosphere": "planet_model describes the atmosphere for a homogeneous planet. With limb_asymmetries enabled, edit the four regional models. Each region has its own chemistry, temperature and velocity. ccf_template describes the spectrum used to search the prepared data.",
+    "chemistry": "Each atmospheric region accepts chemistry: null to retain use_easychem, or an object with backend easychem, manual or vulcan. docs/chemistry.md gives the VULCAN settings, installation and limb example. VULCAN uses explicit elemental abundances and each region's reference_pressure_bar. Set paths.vulcan_directory and paths.vulcan_python before choosing it. Each distinct column keeps its native outputs and provenance under paths.vulcan_cache_dir, or output_root/chemistry/vulcan by default. EXoPLORE supplies pRT with gas mass fractions and gas-phase mean molecular weight.",
     "rm_clv": {
       "simulate, correct": "Both are false below. simulate includes the changing stellar spectrum during transit. correct applies an atmosphere-free stellar transit model during preparation.",
       "effects": "rm_clv includes stellar rotation and centre-to-limb line-profile changes. rm and clv let you inspect each effect separately.",
@@ -100,6 +101,7 @@
         "Fe",
         "Ca"
       ],
+      "chemistry": null,
       "use_easychem": true,
       "metallicity_wrt_solar": 0.53,
       "carbon_to_oxygen_ratio": 0.41,
@@ -143,6 +145,7 @@
         "He",
         "H2O"
       ],
+      "chemistry": null,
       "use_easychem": true,
       "metallicity_wrt_solar": 0.53,
       "carbon_to_oxygen_ratio": 0.41,
@@ -188,6 +191,7 @@
         "Fe",
         "Ca"
       ],
+      "chemistry": null,
       "use_easychem": true,
       "metallicity_wrt_solar": 0.53,
       "carbon_to_oxygen_ratio": 0.41,
@@ -238,6 +242,7 @@
         "Fe",
         "Ca"
       ],
+      "chemistry": null,
       "use_easychem": true,
       "metallicity_wrt_solar": 0.53,
       "carbon_to_oxygen_ratio": 0.41,
@@ -288,6 +293,7 @@
         "Fe",
         "Ca"
       ],
+      "chemistry": null,
       "use_easychem": true,
       "metallicity_wrt_solar": 0.53,
       "carbon_to_oxygen_ratio": 0.41,
@@ -338,6 +344,7 @@
         "Fe",
         "Ca"
       ],
+      "chemistry": null,
       "use_easychem": true,
       "metallicity_wrt_solar": 0.53,
       "carbon_to_oxygen_ratio": 0.41,
@@ -460,6 +467,9 @@
     "save_std_noise": false
   },
   "paths": {
+    "vulcan_directory": "",
+    "vulcan_python": "",
+    "vulcan_cache_dir": "",
     "output_root": "/path/to/output",
     "planet_parameter_dir": "planet_params",
     "prt_input_data": "/path/to/petitRADTRANS/input_data/",

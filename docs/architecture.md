@@ -83,11 +83,11 @@ Paths in this table are relative to `src/exoplore/`.
 
 | Package | Contents | Starting points |
 |---|---|---|
-| `config/` | Simulation settings and JSON loading | `models.py`, instrument and helium configuration modules |
+| `config/` | Simulation settings and JSON loading | `models.py`, `chemistry.py`, instrument and helium configuration modules |
 | `core/` | Experiment execution and workflow selection | `simulator.py`, `spectroscopy_mode.py`, `cli.py` |
 | `planets/` | Planetary-system parameters and derived quantities | `models.py`, `catalog.py` |
 | `instruments/` | Instrument information, wavelength grids and observing inputs | `base.py`, `wavegrid.py`, instrument readers |
-| `atmosphere/` | Radiative transfer, chemistry, temperature, ray transmissions and broadening | `prt.py`, `transmission.py`, `chemistry.py`, `temperature.py`, `winds.py`, helium solvers |
+| `atmosphere/` | Radiative transfer, chemistry, temperature, ray transmissions and broadening | `prt.py`, `transmission.py`, `chemistry.py`, `vulcan.py`, `temperature.py`, `winds.py`, helium solvers |
 | `stellar/` | Local stellar intensities, rotating disk integration and joint atmospheric transfer | `surface.py`, `observation.py`, `coupled.py` |
 | `observation/` | Exposure times, velocities, airmass and noise | `timing.py`, `velocity.py`, `airmass.py`, `noise.py`, `randomness.py` |
 | `pipelines/` | Spectral masks, preparation and model filtering | `prepare.py`, `masking.py`, preparation-method modules |

@@ -502,7 +502,7 @@ def call_pRT(model_inputs: RadiativeTransferInputs, pressures, prt_object, speci
              isothermal, iso_T_value, two_point_T, p_points, t_points,
              kappa, gamma, T_equil, metallicity, C_to_O,
              use_easyCHEM=False, P_cloud=None,
-             easychem_CtoO_ret=False, haze_fac=None):
+             easychem_CtoO_ret=False, haze_fac=None, chemistry=None, chemistry_paths=None):
     """Run petitRADTRANS for a single, symmetric atmosphere.
 
     Parameters
@@ -558,7 +558,7 @@ def call_pRT(model_inputs: RadiativeTransferInputs, pressures, prt_object, speci
                if model_inputs.gravity_cgs is not None
                else cst.G * model_inputs.planet_mass_g / model_inputs.planet_radius_cm ** 2)
 
-    if MMW is None and not use_easyCHEM:
+    if MMW is None and not use_easyCHEM and (chemistry is None or chemistry.backend == "manual"):
         raise ValueError("Mean molecular weight should be indicated for pRT!")
     if model_inputs.event_type == 'dayside' and model_inputs.stellar_teff_K is None:
         raise ValueError("T_star should be indicated for dayside simulations!")
@@ -581,7 +581,13 @@ def call_pRT(model_inputs: RadiativeTransferInputs, pressures, prt_object, speci
         }
         return mass_fracs, MMW_tot
 
-    if use_easyCHEM:
+    if chemistry is not None:
+        from exoplore.atmosphere.chemistry import selected_chemistry
+        mass_fracs, MMW_tot = selected_chemistry(
+            chemistry, pressures, t, species, vmr, MMW, metallicity, C_to_O,
+            model_inputs, chemistry_paths, adjust_co_symmetrically=easychem_CtoO_ret,
+            reference_pressure_bar=p0)
+    elif use_easyCHEM:
         # easyCHEM takes metallicity in dex, as stored in metallicity_wrt_solar.
         # Convert full opacity names (e.g. '1H2-32S__AYT2…') to chemical
         # names for easyCHEM, then label its returned fractions with the
@@ -647,7 +653,7 @@ def call_pRT_limbs(model_inputs: RadiativeTransferInputs, atmosphere,
                    prt_object_morning_day, prt_object_morning_night,
                    prt_object_evening_day, prt_object_evening_night,
                    mode="full", retrieval_atmosphere=None,
-                   easychem_CtoO_ret=False, haze_fac=None):
+                   easychem_CtoO_ret=False, haze_fac=None, chemistry_paths=None):
     """Calculate spectra for the requested morning/evening atmospheric regions.
 
     model_inputs supplies the physical system in explicit units. atmosphere
@@ -676,6 +682,8 @@ def call_pRT_limbs(model_inputs: RadiativeTransferInputs, atmosphere,
                 "You did not supply the VMR of all compounds. "
                 "len(vmr) != len(species)"
             )
+        # Manual limb spectra share the planet_model molecular weight.
+        # Each region's temperature array supplies its pressure-layer count.
         MMW_tot = atmosphere.planet_model.mean_molecular_weight * np.ones_like(temperatures)
         mass_fracs = {
             sp: vmr_list[cont] * np.ones_like(temperatures)
@@ -706,13 +714,13 @@ def call_pRT_limbs(model_inputs: RadiativeTransferInputs, atmosphere,
         vmr_evening_day = atmosphere.evening_day.vmr
         vmr_evening_night = atmosphere.evening_night.vmr
 
-        if atmosphere.morning_day.mean_molecular_weight is None and not atmosphere.morning_day.use_easychem:
+        if atmosphere.morning_day.mean_molecular_weight is None and atmosphere.morning_day.chemistry_backend == "manual":
             raise ValueError("Mean molecular weight should be indicated for pRT!")
-        if atmosphere.morning_night.mean_molecular_weight is None and not atmosphere.morning_night.use_easychem:
+        if atmosphere.morning_night.mean_molecular_weight is None and atmosphere.morning_night.chemistry_backend == "manual":
             raise ValueError("Mean molecular weight should be indicated for pRT!")
-        if atmosphere.evening_day.mean_molecular_weight is None and not atmosphere.evening_day.use_easychem:
+        if atmosphere.evening_day.mean_molecular_weight is None and atmosphere.evening_day.chemistry_backend == "manual":
             raise ValueError("Mean molecular weight should be indicated for pRT!")
-        if atmosphere.evening_night.mean_molecular_weight is None and not atmosphere.evening_night.use_easychem:
+        if atmosphere.evening_night.mean_molecular_weight is None and atmosphere.evening_night.chemistry_backend == "manual":
             raise ValueError("Mean molecular weight should be indicated for pRT!")
         if model_inputs.event_type == 'dayside' and model_inputs.stellar_teff_K is None:
             raise ValueError("T_star should be indicated for dayside simulations!")
@@ -726,7 +734,16 @@ def call_pRT_limbs(model_inputs: RadiativeTransferInputs, atmosphere,
             )
 
         if mode in ["full", "morning"]:
-            if atmosphere.morning_day.use_easychem:
+            if atmosphere.morning_day.chemistry_backend == "vulcan":
+                from exoplore.atmosphere.chemistry import selected_chemistry
+                region = atmosphere.morning_day
+                mass_fracs_morning_day, MMW_tot_morning_day = selected_chemistry(
+                    region.chemistry, pressures_morning_day, t_morning_day, region.species, region.vmr,
+                    region.mean_molecular_weight, region.metallicity_wrt_solar,
+                    region.carbon_to_oxygen_ratio, model_inputs, chemistry_paths,
+                    adjust_co_symmetrically=easychem_CtoO_ret,
+                    reference_pressure_bar=region.reference_pressure_bar)
+            elif atmosphere.morning_day.use_easychem:
                 mass_fracs_morning_day, MMW_tot_morning_day = call_easyCHEM(
                     atmosphere.morning_day.metallicity_wrt_solar,
                     atmosphere.morning_day.carbon_to_oxygen_ratio, pressures_morning_day,
@@ -735,7 +752,16 @@ def call_pRT_limbs(model_inputs: RadiativeTransferInputs, atmosphere,
             else:
                 mass_fracs_morning_day, MMW_tot_morning_day = _calc_mass_fracs(
                     vmr_morning_day, species_morning_day, t_morning_day)
-            if atmosphere.morning_night.use_easychem:
+            if atmosphere.morning_night.chemistry_backend == "vulcan":
+                from exoplore.atmosphere.chemistry import selected_chemistry
+                region = atmosphere.morning_night
+                mass_fracs_morning_night, MMW_tot_morning_night = selected_chemistry(
+                    region.chemistry, pressures_morning_night, t_morning_night, region.species, region.vmr,
+                    region.mean_molecular_weight, region.metallicity_wrt_solar,
+                    region.carbon_to_oxygen_ratio, model_inputs, chemistry_paths,
+                    adjust_co_symmetrically=easychem_CtoO_ret,
+                    reference_pressure_bar=region.reference_pressure_bar)
+            elif atmosphere.morning_night.use_easychem:
                 mass_fracs_morning_night, MMW_tot_morning_night = call_easyCHEM(
                     atmosphere.morning_night.metallicity_wrt_solar,
                     atmosphere.morning_night.carbon_to_oxygen_ratio, pressures_morning_night,
@@ -746,7 +772,16 @@ def call_pRT_limbs(model_inputs: RadiativeTransferInputs, atmosphere,
                     vmr_morning_night, species_morning_night, t_morning_night)
 
         if mode in ["full", "evening"]:
-            if atmosphere.evening_day.use_easychem:
+            if atmosphere.evening_day.chemistry_backend == "vulcan":
+                from exoplore.atmosphere.chemistry import selected_chemistry
+                region = atmosphere.evening_day
+                mass_fracs_evening_day, MMW_tot_evening_day = selected_chemistry(
+                    region.chemistry, pressures_evening_day, t_evening_day, region.species, region.vmr,
+                    region.mean_molecular_weight, region.metallicity_wrt_solar,
+                    region.carbon_to_oxygen_ratio, model_inputs, chemistry_paths,
+                    adjust_co_symmetrically=easychem_CtoO_ret,
+                    reference_pressure_bar=region.reference_pressure_bar)
+            elif atmosphere.evening_day.use_easychem:
                 mass_fracs_evening_day, MMW_tot_evening_day = call_easyCHEM(
                     atmosphere.evening_day.metallicity_wrt_solar,
                     atmosphere.evening_day.carbon_to_oxygen_ratio, pressures_evening_day,
@@ -755,7 +790,16 @@ def call_pRT_limbs(model_inputs: RadiativeTransferInputs, atmosphere,
             else:
                 mass_fracs_evening_day, MMW_tot_evening_day = _calc_mass_fracs(
                     vmr_evening_day, species_evening_day, t_evening_day)
-            if atmosphere.evening_night.use_easychem:
+            if atmosphere.evening_night.chemistry_backend == "vulcan":
+                from exoplore.atmosphere.chemistry import selected_chemistry
+                region = atmosphere.evening_night
+                mass_fracs_evening_night, MMW_tot_evening_night = selected_chemistry(
+                    region.chemistry, pressures_evening_night, t_evening_night, region.species, region.vmr,
+                    region.mean_molecular_weight, region.metallicity_wrt_solar,
+                    region.carbon_to_oxygen_ratio, model_inputs, chemistry_paths,
+                    adjust_co_symmetrically=easychem_CtoO_ret,
+                    reference_pressure_bar=region.reference_pressure_bar)
+            elif atmosphere.evening_night.use_easychem:
                 mass_fracs_evening_night, MMW_tot_evening_night = call_easyCHEM(
                     atmosphere.evening_night.metallicity_wrt_solar,
                     atmosphere.evening_night.carbon_to_oxygen_ratio, pressures_evening_night,
@@ -818,7 +862,16 @@ def call_pRT_limbs(model_inputs: RadiativeTransferInputs, atmosphere,
         del temperature_atmosphere
 
         if mode in ["full", "morning"]:
-            if atmosphere.morning_day.use_easychem:
+            if atmosphere.morning_day.chemistry_backend == "vulcan":
+                from exoplore.atmosphere.chemistry import selected_chemistry
+                region = atmosphere.morning_day
+                mass_fracs_morning, MMW_tot_morning = selected_chemistry(
+                    region.chemistry, pressures_morning_day, t_morning, region.species, region.vmr,
+                    region.mean_molecular_weight, region.metallicity_wrt_solar,
+                    region.carbon_to_oxygen_ratio, model_inputs, chemistry_paths,
+                    adjust_co_symmetrically=easychem_CtoO_ret,
+                    reference_pressure_bar=region.reference_pressure_bar)
+            elif atmosphere.morning_day.use_easychem:
                 mass_fracs_morning, MMW_tot_morning = call_easyCHEM(
                     atmosphere.morning_day.metallicity_wrt_solar,
                     atmosphere.morning_day.carbon_to_oxygen_ratio, pressures_morning_day,
@@ -829,7 +882,16 @@ def call_pRT_limbs(model_inputs: RadiativeTransferInputs, atmosphere,
                     vmr_morning, species_morning, t_morning)
 
         if mode in ["full", "evening"]:
-            if atmosphere.evening_day.use_easychem:
+            if atmosphere.evening_day.chemistry_backend == "vulcan":
+                from exoplore.atmosphere.chemistry import selected_chemistry
+                region = atmosphere.evening_day
+                mass_fracs_evening, MMW_tot_evening = selected_chemistry(
+                    region.chemistry, pressures_evening_day, t_evening, region.species, region.vmr,
+                    region.mean_molecular_weight, region.metallicity_wrt_solar,
+                    region.carbon_to_oxygen_ratio, model_inputs, chemistry_paths,
+                    adjust_co_symmetrically=easychem_CtoO_ret,
+                    reference_pressure_bar=region.reference_pressure_bar)
+            elif atmosphere.evening_day.use_easychem:
                 mass_fracs_evening, MMW_tot_evening = call_easyCHEM(
                     atmosphere.evening_day.metallicity_wrt_solar,
                     atmosphere.evening_day.carbon_to_oxygen_ratio, pressures_evening_day,
