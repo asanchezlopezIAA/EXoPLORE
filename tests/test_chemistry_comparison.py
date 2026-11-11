@@ -91,6 +91,13 @@ def test_equilibrium_uses_full_gas_denominator_and_explicit_atoms(tmp_path, monk
     np.testing.assert_allclose(calls[-1]['atomAbunds'], [1.,1/18])
     assert info['max_relative_element_error'] < 1e-14
     assert len(info['thermodata_sha256']) == 64
+    selected, _, gas = equilibrium_reference(
+        np.array([.1,1.]), np.array([1000.,1000.]), {'H':1., 'He':1/18},
+        composition, species=('H2',), return_gas=True)
+    np.testing.assert_allclose(selected, [[.9,.9]])
+    assert gas['species'].tolist() == ['H2','He']
+    np.testing.assert_allclose(gas['mole_fractions'].sum(axis=1), 1.)
+    np.testing.assert_allclose(gas['mole_fractions'] @ gas['molecular_masses'], 2.2)
 
 
 def figure_arrays():

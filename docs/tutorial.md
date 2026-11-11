@@ -2681,7 +2681,7 @@ For this comparison we supply the same H–He–C–N–O elemental inventory ex
 to both packages. Its C/O is 0.549. These abundances replace Tutorial 1's
 metallicity and C/O choices for this example. Condensation and ion chemistry
 are excluded. The eddy diffusion coefficient is constant at
-$K_{zz}=10^9$ cm² s⁻¹, with molecular diffusion and zero-flux upper and lower
+{math}`K_{zz}=10^9` cm² s⁻¹, with molecular diffusion and zero-flux upper and lower
 boundaries.
 
 ```python
@@ -2763,16 +2763,16 @@ Mixing maintains CH₄ and NH₃ above their local equilibrium abundances throug
 much of the column. CO and CO₂ are depleted. Here the adopted deep temperature
 profile favours methane, and transport supplies that composition to the layers
 above. The direction and size of these departures depend on the pressure–temperature
-profile and $K_{zz}$. We have kept Tutorial 1's cool morning-side temperature
+profile and {math}`K_{zz}`. We have kept Tutorial 1's cool morning-side temperature
 prescription for this experiment. The UV spectrum follows the Moses et al.
 benchmark, while our temperature profile is the one configured in EXoPLORE.
 
 With UV irradiation, CH₄ and NH₃ are destroyed in the upper atmosphere. Atomic
 H becomes abundant and OH increases around the microbar level. An HCN-rich
 layer develops at intermediate pressures. For example, near 10⁻⁴ bar the HCN
-VMR is approximately $4.9\times10^{-5}$ with photochemistry, compared with
-$7.3\times10^{-10}$ with mixing alone. At the same pressure, the NH₃ VMR falls
-from approximately $5.0\times10^{-5}$ to $4.4\times10^{-8}$. These are the
+VMR is approximately {math}`4.9\times10^{-5}` with photochemistry, compared with
+{math}`7.3\times10^{-10}` with mixing alone. At the same pressure, the NH₃ VMR falls
+from approximately {math}`5.0\times10^{-5}` to {math}`4.4\times10^{-8}`. These are the
 steady-state results for the specified temperature, composition and irradiation.
 
 The thermal VULCAN control agrees with EasyChem within 0.11% for the requested
@@ -2794,6 +2794,62 @@ arrays. `comparison.json` records the inputs, elemental checks, cache keys
 and timings. Change the chemistry block in the saved simulation JSON to
 explore another column, and keep the elemental inventory and temperature
 fixed when comparing the effect of an individual process.
+
+### Step 3: Compare the transit spectra
+
+Let us now pass these abundances to petitRADTRANS and calculate the transit
+depth, {math}`(R_p(\lambda)/R_\star)^2`. We use **R = 3500 for illustration**, so
+we can compare the molecular bands at lower resolution. The wavelength range
+is 0.6–5 µm.
+
+We keep the pressure–temperature profile, planetary mass, reference radius
+and reference pressure fixed. Each chemistry case supplies its gas mass
+fractions and its gas-phase mean molecular weight. Every gas in the chemical
+calculation contributes to that molecular weight, including atomic hydrogen.
+The seven line absorbers are H₂O, CO, CO₂, CH₄, NH₃, HCN and OH. We also
+include H₂ and He Rayleigh scattering and H₂–H₂ and H₂–He collision-induced
+absorption.
+
+Set `paths.prt_input_data` in `outputs/tutorial15/hd189733b.json` to the installed
+pRT input-data directory. The line-by-line tables for the seven molecules must
+be available there. See the [pRT opacity reference](https://petitradtrans.readthedocs.io/en/latest/content/available_opacities.html)
+for the tables and their source references.
+
+```bash
+python scripts/compare_chemistry_profiles.py outputs/tutorial15/hd189733b.json \
+    --region morning_day --output outputs/tutorial15/HD189733b \
+    --spectra --resolving-power 3500
+```
+
+The script reads the accepted chemistry columns from Step 2 and recalculates
+the matched EasyChem equilibrium solution. It checks that these abundances
+agree with the profiles already plotted. The spectra are calculated with
+native line-by-line opacities, then broadened with EXoPLORE's Gaussian
+convolution at R = 3500. Padded wavelength chunks limit memory use during
+the calculation. The output grid samples each Gaussian FWHM with three points.
+
+![HD 189733 b transit spectra at R = 3500 for illustration](figures/tutorial15_transmission_hd189733b.png)
+
+The upper panel shows the three transmission spectra. The lower panel gives
+the difference from equilibrium in ppm of stellar flux. With mixing alone,
+the largest increase is approximately 519 ppm near the CH₄ band at 3.3 µm.
+Including photochemistry reduces that band, consistent with methane removal
+in the upper atmosphere. The complete photochemical spectrum differs from
+equilibrium by up to approximately 311 ppm. Around the CO₂ and CO bands at
+4.3–4.7 µm, parts of the disequilibrium spectra have smaller transit depths,
+consistent with the depleted abundances in this column. The curves combine
+all seven molecular absorbers, the continuum and each case's molecular weight.
+
+The thermal VULCAN control differs from the EasyChem spectrum by at most
+0.017 ppm across this range. The fresh spectral calculation took approximately
+2.6 min for all four cases and 85 wavelength chunks. It reuses the completed
+VULCAN chemistry calculations from Step 2.
+
+The figure is saved as `transmission_spectra.png` in the same output directory.
+`transmission_spectra.npz` contains wavelength in µm and dimensionless transit
+depth for every case. `transmission_spectra.json` records the resolving power,
+opacity filenames, numerical checks and runtime. Completed wavelength chunks
+are cached, so repeating the command can redraw the comparison.
 
 ## Troubleshooting
 

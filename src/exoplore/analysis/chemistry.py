@@ -24,12 +24,14 @@ SPECIES = ('H2', 'H', 'H2O', 'CO', 'CO2', 'CH4', 'NH3', 'HCN', 'OH')
 
 
 def equilibrium_reference(pressures, temperatures, elemental_abundances, composition_file,
-                          species=SPECIES):
+                          species=SPECIES, *, return_gas=False):
     """Calculate EasyChem gas VMRs using the supplied element/H number ratios.
 
     Every selected neutral gas enters the VMR denominator. The plotted species
     retain their fractions of that complete gas mixture. EasyChem's usual
     observing calculation is independent of this comparison reference.
+    return_gas also supplies every neutral gas and its molecular mass for
+    the subsequent transmission-spectrum calculation.
     """
     import easychem.easychem as ec
 
@@ -72,8 +74,13 @@ def equilibrium_reference(pressures, temperatures, elemental_abundances, composi
     if error > 1e-3:
         raise ValueError(f'Equilibrium elemental ratios differ from the supplied inventory by {error:g}')
     selected = np.array([mole[:, canonical.index(name)] for name in species])
-    return selected, {'gas_species': canonical, 'max_relative_element_error': error,
-                      'thermodata_sha256': hashlib.sha256(Path(model.thermofpath).read_bytes()).hexdigest()}
+    info = {'gas_species': canonical, 'max_relative_element_error': error,
+            'thermodata_sha256': hashlib.sha256(Path(model.thermofpath).read_bytes()).hexdigest()}
+    if return_gas:
+        gas = {'species': np.array(canonical), 'mole_fractions': mole,
+               'molecular_masses': np.array([rows[name]['mass'] for name in canonical], float)}
+        return selected, info, gas
+    return selected, info
 
 
 def comparison_settings(settings):

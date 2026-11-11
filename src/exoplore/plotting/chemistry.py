@@ -42,3 +42,29 @@ def plot_chemistry_profiles(arrays, planet):
     fig.legend(handles,legend,loc='outside upper center',ncol=3,frameon=False,
                title=planet)
     return fig
+
+
+def plot_chemistry_transmission(arrays, planet, resolving_power=3500):
+    """Compare intrinsic transit depths and differences from equilibrium in ppm."""
+    fig, axes = plt.subplots(2, 1, figsize=(11, 7), sharex=True,
+        gridspec_kw={'height_ratios': [2, 1]}, layout='constrained')
+    methods = [('easychem', 'EasyChem equilibrium', 'black', '--'),
+               ('mixing', 'VULCAN + mixing', 'tab:blue', '-'),
+               ('photochemistry', 'VULCAN + mixing + UV', 'tab:orange', '-')]
+    wave = arrays['wavelength_um']
+    for name, label, color, style in methods:
+        axes[0].plot(wave, 100*arrays[name], label=label, color=color,
+                     ls=style, lw=1.2, alpha=.85)
+        if name != 'easychem':
+            axes[1].plot(wave, 1e6*(arrays[name]-arrays['easychem']), color=color,
+                         lw=1.2, alpha=.85)
+    axes[0].set_ylabel('Transit depth [%]')
+    axes[0].set_title(f'{planet}, R = {resolving_power:g} (for illustration)')
+    axes[0].legend(frameon=False, fontsize=9)
+    axes[1].axhline(0, color='0.4', lw=.8, ls=':')
+    axes[1].set_ylabel('Difference from\nequilibrium [ppm]')
+    axes[1].set_xlabel(r'Wavelength [$\mu$m]')
+    for ax in axes:
+        ax.set_xlim(wave.min(), wave.max())
+        ax.grid(alpha=.15)
+    return fig

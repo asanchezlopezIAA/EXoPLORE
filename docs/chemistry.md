@@ -12,7 +12,7 @@ petitRADTRANS then calculates the atmospheric spectrum with the selected
 opacity tables.
 
 [Tutorial 15](tutorial.md#tutorial-15-equilibrium-and-disequilibrium-chemistry-with-vulcan)
-compares gas abundance profiles with equilibrium, vertical mixing and photochemistry.
+compares gas abundance profiles and transit spectra with equilibrium, vertical mixing and photochemistry.
 
 ## Choose the chemistry
 
