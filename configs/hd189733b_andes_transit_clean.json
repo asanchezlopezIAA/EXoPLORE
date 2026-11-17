@@ -10,7 +10,8 @@
     "rm_clv": {
       "simulate, correct": "Both are false below. simulate includes the changing stellar spectrum during transit. correct applies an atmosphere-free stellar transit model during preparation.",
       "effects": "rm_clv includes stellar rotation and centre-to-limb line-profile changes. rm and clv let you inspect each effect separately.",
-      "coupling": "factorized multiplies separately calculated stellar and planetary spectra. spatial calculates absorption of the local stellar light through the planetary atmosphere. Spatial integration includes the transit occultation.",
+      "coupling": "factorized multiplies separately calculated stellar and planetary spectra and retains the BATMAN transit weighting. spatial calculates absorption of the local stellar light through the planetary atmosphere, including the opaque planet's occultation.",
+      "observation.signal_uses_light_curve": "Keep this true for spatial coupling. The spatial integration supplies the complete transit flux. The shared runner can still calculate a BATMAN curve upstream, but the final spatial flux receives no additional BATMAN multiplier. With factorized coupling, true applies the BATMAN transit weighting.",
       "model_file": "Supply local stellar intensities and their continuum in an NPZ bundle. Follow docs/stellar_intensities.md. A disk-integrated stellar spectrum alone lacks the required angular information.",
       "projected_obliquity_deg": "Set the projected spin-orbit angle for the system when enabling RM. null leaves the angle unspecified. The stellar rotation is v_rotsini_kms in the planet file.",
       "correction_method, correction_model_file": "matched uses the injected opaque-body model. factorized calculates a separate stellar correction and accepts an alternative intensity bundle. Check the supported choices for the selected runner.",

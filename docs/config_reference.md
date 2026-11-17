@@ -189,7 +189,7 @@ and are required by the observing calculations that use them.
 | `simulate_planet` | `true`, `false` | If `true`, inject the atmospheric signal into the simulated spectra. If `false`, simulate a star-only (null test). |
 | `external_planet_model` | `true`, `false` | If `true`, read the planet atmosphere spectrum from an external file. |
 | `external_planet_model_file` | path string | Path to the external planet model file. Only used if `external_planet_model: true`. |
-| `signal_uses_light_curve` | `true`, `false` | If `true`, modulate the planet signal with the BATMAN transit light curve (depth varies during ingress/egress). If `false`, use a constant depth. |
+| `signal_uses_light_curve` | `true`, `false` | In the standard planetary calculation and factorized RM+CLV, `true` applies the BATMAN transit weighting and `false` uses a constant depth during transit. Spatial RM+CLV requires `true`. Its spatial integration supplies the complete transit flux, with opaque occultation and atmospheric absorption already included. The final spatial flux receives no additional BATMAN multiplier. |
 | `scale_injection` | float > 0 | Multiplicative scale factor applied to the injected planet signal. 1.0 = true amplitude. 0.5 = half the signal. |
 | `significant_eccentricity` | `true`, `false` | If `true`, use a full eccentric orbit model for the planet velocity. Set to `false` for circular orbits (eccentricity = 0). |
 | `berv_kms` | float | Barycentric Earth Radial Velocity correction in km/s. If 0.0, the simulator computes the BERV from the observation time, coordinates, and observatory location. Set a fixed value to override. |
@@ -1193,8 +1193,12 @@ own effective transit radius. This adapter currently requires pRT 3.2.0,
 whose opacity conventions have been checked. A different version stops with
 an explanatory error. The numerical area check is repeated at runtime.
 
-The new mode includes the continuum transit in the integrated flux. The
-BATMAN factor is therefore excluded from the simulated flux in this mode.
+Keep `observation.signal_uses_light_curve: true` when using spatial coupling.
+The spatial integration calculates the opaque planet's occultation and the
+absorption through its atmosphere, supplying the complete transit flux.
+The shared runner can still calculate a BATMAN curve upstream, but the final
+spatial flux receives no additional BATMAN multiplier. Factorized coupling
+retains the BATMAN transit weighting.
 The existing analysis windows and CCF reference templates remain in use.
 An extended atmosphere can absorb light beyond the nominal continuum transit,
 so inspect the exposures selected for the out-of-transit reference.
