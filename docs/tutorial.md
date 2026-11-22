@@ -69,6 +69,13 @@ Open `configs/hd189733b_andes_transit_clean.json`. The key scientific choices ar
 "pipeline":  { "name": "Blain24" }
 ```
 
+For a shorter first run, set `instrument.order_indices: [33, 34, 35, 36]`.
+These four orders span approximately 1.283–1.341 µm in the ETC table. With the
+same atmosphere and seeds, this selection took 106 s on an Apple Mac Studio
+(M2 Ultra, 64 GB RAM) and recovered H₂O at map
+S/N = 14.62, Kp = 146 km/s and Vrest = −4 km/s. The figures below use all 76
+orders.
+
 The atmosphere block defines **two separate petitRADTRANS models**: the injected planet atmosphere (`planet_model` + limb sub-blocks) and the CCF template (`ccf_template`). Because `cc_with_true_model: false`, the simulator uses H₂O-only as the cross-correlation template while injecting the full 10-species atmosphere. This mimics the typical observational strategy: when searching for signal in real data, the exact injected chemistry is not known a priori, and therefore a simpler template is used to cross-correlate. Setting `cc_with_true_model: true` uses the full injected model as the template, generally yielding higher S/N but corresponding to an idealised scenario not achievable in practice.
 
 The `"pipeline": "Blain24"` entry selects the Blain24 preparation pipeline ([Blain, Sánchez-López & Mollière 2024](https://doi.org/10.3847/1538-3881/ad2c8b)). Blain24 first removes the instrumental throughput and blaze by dividing each exposure by a second-order polynomial fit over wavelength, and then removes the telluric absorption by fitting a second-order polynomial to the logarithm of the flux as a function of airmass (the log-transmittance of the Earth's atmosphere is, to first order, linear in airmass) and dividing by the resulting fit. Wavelength channels where the fitted telluric transmittance falls below 0.8 are masked, to exclude regions too strongly affected by telluric absorption.
@@ -719,6 +726,9 @@ The simulator constructs the per-night telluric path automatically as `{inputs_d
 python -u scripts/run_exoplore.py configs/hd189733b_andes_dn_run2.json --run 2>&1 | tee run_log.txt
 ```
 
+The supplied configuration selects order 35 for a single-order run. Set
+`instrument.order_indices: []` to reproduce the 76-order comparison below.
+
 > **Validated result:** Night 0 (airmass 1.5 to 2.1, PWV 2.5 mm, BERV +11.4 km/s) gives 57.6σ. Night 1 (airmass 1.5 to 3.0, PWV 3.5 mm, BERV +7.4 km/s) gives 45.4σ. Combined 76.3σ (76 orders, BL19 pipeline, H₂O template, `snr_noise_source: "signal_free_rows"`). Night 1 is lower because its higher airmass and PWV deepen the telluric absorption and mask more of the spectrum. The combination gains a factor 1.48 ≈ √2: the two nights' map floors are essentially uncorrelated (r ≈ 0.1), as the caution box above requires. Because the noise realisation is drawn independently per night, the exact values vary from run to run. The gain is the stable quantity. For a single-order test use `instrument.order_indices: [35]`.
 
 For a one-transit reference run (single night), use `configs/hd189733b_andes_dn_run1.json`.
@@ -1028,7 +1038,11 @@ python scripts/plot_corner_overlay.py \
   --output docs/figures/tutorial_retrieval_bias_corner_noisy.png
 ```
 
-The noisy Blain24_beta run gives β = 1.0334, with a 16–84 percentile interval [1.0322, 1.0347]. β multiplies the uncertainties used in the likelihood. Its value describes the residuals relative to those uncertainties under the adopted model. The [Concepts primer](concepts.md#5-from-cross-correlation-to-a-likelihood) gives the likelihood expressions.
+The noisy Blain24_beta run gives β = 0.9995, with a 16–84 percentile interval [0.9982, 1.0008]. β multiplies the uncertainties used in the likelihood. Its value describes the residuals relative to those uncertainties under the adopted model. The [Concepts primer](concepts.md#5-from-cross-correlation-to-a-likelihood) gives the likelihood expressions.
+
+The three runs favour Kp near 143 km/s, with 16–84 percentile intervals of
+approximately 141–145 km/s, compared with the injected 149.44 km/s. This common offset still needs explaining. Inspect the posterior intervals
+alongside the injected values when assessing orbital recovery.
 
 ---
 
@@ -1089,10 +1103,17 @@ python scripts/plot_significance_study.py \
 :width: 85%
 :align: center
 
-Distributions of the recovered significance, K<sub>P</sub>, and V<sub>rest</sub> over 200 noise realisations of the same injected HD 189733 b atmosphere (ANDES, single order), for the S/N (blue) and Welch (red) metrics at the oversampled (solid) and critical (dashed) velocity steps. The S/N distributions for the two steps coincide (the metric is insensitive to the sampling), while the Welch distribution shifts to higher significance at the oversampled step (median 6.8 against 4.4). Dotted lines mark the injected truth values. The recovered K<sub>P</sub> and V<sub>rest</sub> cluster at the injected values in the realisations where the planetary peak dominates the map, on top of a broad pedestal from realisations in which a noise spike elsewhere wins instead, as expected at this modest per-order significance.
+Distributions of the recovered significance, K<sub>P</sub>, and V<sub>rest</sub> over 200 noise realisations of the same injected HD 189733 b atmosphere (ANDES YJHK, order 35). Blue shows map S/N and red shows Welch significance. Solid curves use a velocity step of 1.3 km/s and dashed curves use 3.0 km/s. The median map S/N is 12.78 and 12.13, respectively. The median Welch significance is 23.12 and 10.76. Dotted lines mark the injected Kp and Vrest.
 ```
 
-A single ANDES order yields only a marginal per-order signal from a strong absorber such as H₂O under realistic noise (here a median S/N of about 4), and at this modest significance the recovered peak position varies appreciably from one noise realisation to the next, as the scatter in the figure shows. The distribution is broad: in the most favourable realisations (a few percent of the sample) the single-order S/N exceeds 5, reaching about 5.7 at best, while in less favourable ones it drops well below the median, so no single realisation should be read as characteristic. This single-order case is deliberately conservative: it isolates the sampling effect with the smallest usable signal and is not representative of a real analysis. Co-adding the full set of ANDES orders (and, where available, multiple nights) raises the combined significance well above this floor and tightens the recovered K<sub>P</sub> and V<sub>rest</sub> correspondingly. The purpose of this study is not to quote a headline single-order significance but to show how the two metrics respond to the velocity sampling, and why a Welch value must always be read together with the step at which it was computed.
+For this single-order atmosphere, the median map S/N is 12.78 at the oversampled step and 12.13 at the critical step. The corresponding median Welch significances are 23.12 and 10.76. Each distribution contains 200 independent noise realisations. The larger Welch value at the finer velocity step reflects the correlated sampling of the CCF. Report the velocity step alongside this statistic when comparing detections.
+
+Both configurations use five in-trail samples. Their centres span 5.2 km/s
+at the finer step and 12 km/s at the critical step, so the physical window
+width also changes in this comparison. A wider window includes more of the
+CCF wings and can dilute the in-trail signal. The critical-sampling Welch
+maxima also have a broader Kp distribution. This behaviour is discussed in
+[Sánchez-López & Millán (2025), Section 3.4](https://arxiv.org/abs/2501.09494).
 
 ---
 

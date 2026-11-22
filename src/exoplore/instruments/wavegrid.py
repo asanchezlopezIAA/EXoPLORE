@@ -768,6 +768,26 @@ def pixel_snr_one_order(
     return snr_pixel
 
 
+def pixel_snr_for_andes_order(wavelength_orders_um, order_id, tellurics,
+                             etc_snr, etc_midpoints_nm, *, px_per_resel):
+    """Calculate the ETC uncertainty scale for one physical ANDES order.
+
+    The wavelength table and ETC arrays retain the complete instrument order
+    axis. order_id identifies a row on that axis, independently of the order's
+    position in a selected list. Each night supplies its own telluric matrix.
+    The existing blaze, telluric scaling and resel conversion are applied by
+    pixel_snr_one_order.
+    """
+    # Select wavelength, ETC anchor and blaze midpoint with the same order ID.
+    wave = wavelength_orders_um[order_id]
+    midpoint_um = etc_midpoints_nm[order_id] * 1e-3
+    centre = int(np.argmin(np.abs(wave - midpoint_um)))
+    return pixel_snr_one_order(
+        wave, tellurics, etc_snr[order_id],
+        px_per_resel=px_per_resel, center_pix=centre,
+    )
+
+
 def make_log_wave_grid(lambda_min, lambda_max, R, oversample=2):
     """Build a logarithmically-spaced wavelength grid.
 

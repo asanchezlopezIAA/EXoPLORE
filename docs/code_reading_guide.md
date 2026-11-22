@@ -63,6 +63,7 @@ observing sequence.
 | `planets.load_planet()` | Loads system parameters for geometry and atmospheric calculations. |
 | `instruments.load_instrument()` | Supplies the instrument resolution and input locations. |
 | `instruments.wavegrid.get_WaveGrid()` | Supplies wavelength arrays and associated observing inputs. |
+| `instruments.wavegrid.pixel_snr_for_andes_order()` | Selects one physical order's wavelengths, ETC midpoint and S/N anchor, then applies the existing pixel-noise calculation to that night's telluric transmission. |
 | `io.stellar.LoadPhoenix()` | Reads, broadens and interpolates the stellar model onto the instrument grid. |
 | `observation.timing`, `observation.airmass` | Supply exposure times, event membership and observing conditions. |
 
@@ -285,3 +286,11 @@ annulus. Its polar quadrature resolves the thin annulus using the native
 atmospheric radii. Exposure averaging and instrumental convolution operate on
 the joint flux. The observing runner places this flux into the synthetic data
 before tellurics and noise.
+
+For spatial two-column atmospheres, `atmosphere/spatial_columns.py` calls the
+single-column pRT function separately for `morning_day` and `evening_day`.
+Each call exports its own ray table before the next column is calculated.
+`stellar/planet_columns.py` selects illuminated leading and trailing arcs,
+samples the stellar intensity behind each ray and applies the local planetary
+velocity. `stellar/coupled.py` then averages the complete observation over the
+exposure and applies the instrument response.

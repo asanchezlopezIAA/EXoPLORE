@@ -34,6 +34,21 @@ from typing import Optional, Sequence, Tuple
 import numpy as np
 
 
+def _finite_diagnostic(values, label):
+    """Check plotting coordinates while preserving the supplied statistic.
+
+    A Welch p-value can underflow to zero for a large combined sample,
+    giving an infinite sigma. The numerical study can still analyse its
+    individual realisations after this optional aggregate plot is skipped.
+    """
+    if np.isfinite(values).all():
+        return True
+    import warnings
+    warnings.warn(f"Skipped {label} diagnostic: supplied statistic contains nonfinite values.",
+                  RuntimeWarning, stacklevel=2)
+    return False
+
+
 def plot_kp_vsys_map(
     kp_grid: np.ndarray,
     vsys_grid: np.ndarray,
@@ -209,6 +224,8 @@ def plot_1D_CCF(
 
     """
 
+    if not _finite_diagnostic(ccf_tot_sn, "1D CCF"):
+        return
     import matplotlib.pyplot as plt
 
     plt.close('all')
@@ -547,6 +564,8 @@ def plot_Kp_Vrest(
     cc_values : bool
         If ``True``, use ``"CCVal"`` as the filename statistic label.
     """
+    if not _finite_diagnostic(ccf_tot_sn, "Kp–Vrest"):
+        return
     import matplotlib
     import matplotlib.pyplot as plt
     import matplotlib.cm as cm

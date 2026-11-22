@@ -45,7 +45,16 @@ def validate_route(config, route):
         if not choices.simulate:
             raise ValueError("Spatial RM/CLV currently requires simulate=true for a forward simulation")
         if config.atmosphere.limb_asymmetries:
-            raise ValueError("Spatial RM/CLV currently supports a 1D atmosphere. Set limb_asymmetries=false")
+            if route == "atomic_simulation":
+                raise ValueError("Spatial two-column transfer currently uses the standard atmospheric runner")
+            atmosphere = config.atmosphere
+            if atmosphere.limb_divisions != 'gradual':
+                raise ValueError('Spatial two-column geometry requires limb_divisions=gradual. '
+                                 'Its ray overlap replaces the empirical time weights')
+            if atmosphere.morning_day is None or atmosphere.evening_day is None:
+                raise ValueError('Spatial two-column transfer requires morning_day and evening_day')
+            if atmosphere.morning_day.reference_pressure_bar != atmosphere.evening_day.reference_pressure_bar:
+                raise ValueError('Spatial columns require a common reference_pressure_bar at the shared planetary radius')
         if config.observation.external_planet_model:
             raise ValueError("Spatial RM/CLV requires pRT atmospheric columns. Disable external_planet_model")
         if config.retrieval.enabled:

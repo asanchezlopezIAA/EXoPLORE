@@ -109,7 +109,11 @@ With `coupling: spatial`, `atmosphere/transmission.py` exports native ray
 transmissions from pRT and checks their integrated area. `stellar/coupled.py`
 weights those rays by the local stellar spectrum and integrates the joint
 flux. Block 4 uses that completed flux, which already includes the continuum
-transit. The existing CCF template and analysis windows remain available.
+transit. With `limb_asymmetries: true`, `atmosphere/spatial_columns.py` builds
+the leading and trailing ray tables from their existing regional inputs.
+`stellar/planet_columns.py` integrates each semicircle with its own atmospheric
+radii and projected velocities. The existing CCF template and analysis windows
+remain available.
 `pipelines/runner.py` supplies the preparation result structure consumed by
 the observing loop. For fixed-telluric preparation it carries forward the
 calculated flux/error pair together with the unchanged column selection.

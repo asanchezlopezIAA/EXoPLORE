@@ -78,7 +78,7 @@ def test_config_changes_after_preview_are_checked_before_execution(tmp_path):
     config = SimulationConfig(rm_clv=choices(stellar_bundle(tmp_path)))
     simulator = ExoploreSimulator(config)
     config.atmosphere.limb_asymmetries = True
-    with pytest.raises(ValueError, match='1D atmosphere'):
+    with pytest.raises(ValueError, match='morning_day and evening_day'):
         simulator.run()
 
 

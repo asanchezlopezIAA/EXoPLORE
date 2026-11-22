@@ -370,6 +370,8 @@ class AtmosphereConfig:
         Simulate morning and evening limb separately (Maguire+2024 style).
     limb_divisions:
         How to weight morning vs evening limb contributions over time.
+        Spatial coupling uses the illuminated semicircle geometry with
+        ``"gradual"`` selected. Its overlap determines the exposure weights.
         ``"gradual"``: smooth cubic transition, morning dominates ingress,
         equal mix at full transit, evening dominates egress (default, most
         realistic for typical hot Jupiters).
@@ -398,6 +400,10 @@ class AtmosphereConfig:
     """
     limb_asymmetries: bool = False
     limb_divisions: str = "gradual"
+    # Spatial two-column transfer uses physical leading/trailing semicircles.
+    # Rotation follows the synchronous, orbit-aligned assumption used by the
+    # existing limb kernels. Select off for geometry and velocity controls.
+    spatial_planet_rotation: str = "synchronous_aligned"
     cc_with_true_model: bool = False
     planet_model: AtmosphereRegionConfig = field(
         default_factory=AtmosphereRegionConfig
@@ -413,6 +419,8 @@ class AtmosphereConfig:
 
     def __post_init__(self) -> None:
         """Construct the optional helium backend only when explicitly supplied."""
+        if self.spatial_planet_rotation not in ('synchronous_aligned','off'):
+            raise ValueError('spatial_planet_rotation must be synchronous_aligned or off')
         if isinstance(self.helium, dict):
             self.helium = HeliumPwindsConfig(**self.helium)
 

@@ -75,6 +75,48 @@ class ChordTransmission:
         return np.sqrt(area_over_pi)
 
 
+@dataclass(frozen=True)
+class TwoColumnTransmission:
+    """Leading and trailing ray tables, each retaining its own physical radii.
+
+    The leading sector occupies positive planet-centred sky x (the direction
+    of motion in the existing circular transit geometry). Rotation assumes
+    an aligned spin axis. A zero angular speed selects the stationary control.
+    Wind offsets are constant projected velocities within each column.
+    """
+    morning: ChordTransmission
+    evening: ChordTransmission
+    angular_speed_s: float = 0.
+    spin_inclination_rad: float = np.pi/2
+    morning_wind_kms: float = 0.
+    evening_wind_kms: float = 0.
+
+    def __post_init__(self):
+        if not all(isinstance(c, ChordTransmission) for c in self.columns):
+            raise TypeError('Both planetary columns require ChordTransmission tables')
+        for name in ('angular_speed_s', 'spin_inclination_rad',
+                     'morning_wind_kms', 'evening_wind_kms'):
+            if not np.isfinite(getattr(self, name)):
+                raise ValueError(f'{name} must be finite')
+        if self.angular_speed_s < 0 or not 0 <= self.spin_inclination_rad <= np.pi:
+            raise ValueError('Require nonnegative rotation and spin inclination in [0, pi]')
+        maximum_rotation = self.angular_speed_s*self.top_radius_cm/1e5
+        if maximum_rotation+max(abs(self.morning_wind_kms),abs(self.evening_wind_kms)) >= 299792.458:
+            raise ValueError('Planetary velocities must be subluminal')
+
+    @property
+    def columns(self):
+        return (self.morning, self.evening)
+
+    @property
+    def base_radius_cm(self):
+        return min(c.impact_parameter_cm[-1] for c in self.columns)
+
+    @property
+    def top_radius_cm(self):
+        return max(c.impact_parameter_cm[0] for c in self.columns)
+
+
 def calculate_chord_transmission(radtrans, *, temperatures, mass_fractions,
                                  mean_molar_masses, reference_gravity,
                                  reference_pressure, planet_radius,

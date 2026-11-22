@@ -132,7 +132,7 @@ and are required by the observing calculations that use them.
 | `name` | See table below | Instrument name. Controls the wavelength grid, resolving power, and number of spectral orders. See [Supported instruments](#16-supported-instruments). |
 | `observatory` | `"paranal"`, `"lasilla"` | Observatory site for BERV computation and sky models. Set automatically by the instrument module. Override only if you need to force a different site. |
 | `pixels_per_resolution_element` | typically 2 to 4 | Number of detector pixels per resolution element, denoted m. Used when convolving model spectra to instrument resolution, and to convert the ETC SNR (given per resolution element) to a per-pixel SNR via SNR<sub>pixel</sub> = SNR<sub>resel</sub> / √m. ANDES: 2.5. CARMENES NIR: 3.3. CARMENES VIS: 3.3. |
-| `order_indices` | `[]` or list of ints | Spectral order indices to simulate. Empty list `[]` means all orders for the selected instrument band. Use `[0]` for single-order instruments. Example: `[0, 1, 5, 10]` simulates only those four orders (useful for fast testing). |
+| `order_indices` | `[]` or list of ints | Spectral order indices to simulate. Empty list `[]` means all orders for the selected instrument band. Use `[0]` for single-order instruments. Example: `[0, 1, 5, 10]` simulates those four physical orders. ANDES wavelength grids, ETC S/N anchors and blaze midpoints follow these IDs through a scattered or reordered selection. |
 | `split_detectors` | `true`, `false` | If `true`, treat each detector half as an independent order. Used for raw CARMENES data where each echelle order spans two detectors. |
 | `convolve_to_resolution` | `true`, `false` | If `true`, convolve the pRT model spectrum to the instrument resolution before injection. Should generally be `true`. |
 
@@ -330,6 +330,7 @@ For the `gradual`, `asymmetric` and `simplified_step` modes, the morning and eve
 |---|---|---|
 | `limb_asymmetries` | `true`, `false` | If `true`, use distinct morning and evening limb models. If `false`, use only `planet_model` for the whole limb. |
 | `limb_divisions` | `"gradual"`, `"asymmetric"`, `"simplified_step"` | How to weight morning vs evening limb contributions over the transit. `"gradual"` (**default**, recommended for most targets): smooth cubic transition, morning limb dominates ingress, equal 50/50 mix at full transit, evening limb dominates egress. `"asymmetric"` (use for an ultra-hot Jupiter like WASP-76 b): asymmetric, morning limb dominates the first quarter of full transit, cubic handover completes at mid-transit, evening limb dominates the second half and egress. Calibrated for planets with extreme day-to-night contrast and poor heat redistribution. `"simplified_step"`: hard step-function, pure morning during ingress, 50/50 during full transit, pure evening during egress. Use for reference tests and simplified scenarios where clean physical interpretation of morning vs evening contributions is needed. |
+| `spatial_planet_rotation` | `"synchronous_aligned"`, `"off"` | Planetary rotation in spatial two-column transfer. The synchronous option uses the orbital period and an orbit-aligned spin. Each atmospheric ray receives its projected local velocity. |
 | `cc_with_true_model` | `true`, `false` | If `true`, use the same model for CCF template as for injection (`planet_model`). If `false`, use the separate `ccf_template` block. |
 
 ### 13. Atmosphere model block reference
@@ -1213,16 +1214,53 @@ The model must use vacuum wavelengths and declare
 applied. Multiplication by the planetary transmission occurs before the
 instrument response.
 
-The current spatial calculation supports a spherical 1D hydrostatic
-atmosphere, a circular orbit and the configured bulk wind offset. Orbital
-planet and stellar reflex velocities are sampled across the exposure. BERV
-and bulk wind retain their exposure values. Set
-`atmosphere.limb_asymmetries: false`, `retrieval.enabled: false`,
+Spatial mode supports one spherical hydrostatic atmosphere or two columns
+selected by `atmosphere.limb_asymmetries: true`. The two-column route reads
+`morning_day` and `evening_day`, with `limb_divisions: "gradual"`. Each column
+keeps its own temperature, chemistry, mean molecular weight, pressure grid and
+hydrostatic radii. Both columns must use the same `reference_pressure_bar` at
+the catalog planet radius. The morning column covers positive planet-centred
+sky x, ahead of the planet along the transit chord. The evening column covers
+the opposite semicircle. Their illuminated areas are calculated at each
+exposure sample. This geometric overlap supplies the transit weighting.
+The `_night` blocks remain unused for this two-column geometry.
+
+`atmosphere.spatial_planet_rotation` defaults to `"synchronous_aligned"`.
+The angular speed is `2*pi/orbital_period`, with spin inclination equal to the
+orbital inclination. A ray's projected rotational velocity is
+`angular_speed * x_cm * sin(inclination)`, in matching velocity units.
+It approaches zero near the projected poles. Select `"off"` for a stationary
+rotation control. Each column's `wind_velocity_kms` supplies a constant
+line-of-sight offset, positive for recession. The spatial integrator applies
+these velocities to intrinsic ray transmissions. The factorized route retains
+its existing limb kernels and time weights.
+
+The orbit must be circular. Orbital planet and stellar reflex velocities are
+sampled across the exposure. BERV and column wind offsets retain their
+exposure values. Set `retrieval.enabled: false`,
 `observation.scale_injection: 1` and
 `observation.signal_uses_light_curve: true`. External effective-radius spectra
-cannot supply ray transmissions. Unsupported combinations stop before a run.
-Regional atmospheres, spatially varying atmospheric rotation and joint
-retrieval trial spectra require further implementation.
+cannot supply ray transmissions. The direct sodium builder currently accepts
+one planetary column. Unsupported combinations stop before a run.
+
+For a two-column spatial simulation, the relevant choices are:
+
+```json
+{
+  "rm_clv": {"simulate": true, "coupling": "spatial"},
+  "atmosphere": {
+    "limb_asymmetries": true,
+    "limb_divisions": "gradual",
+    "spatial_planet_rotation": "synchronous_aligned"
+  }
+}
+```
+
+Add the stellar intensity file and the existing `morning_day` and `evening_day`
+blocks from your simulation configuration. Each may select its own supported
+chemistry backend, including independent VULCAN columns. These chemistry
+calculations describe vertical columns. Latitude-dependent winds and transfer
+through successive columns along one ray require further implementation.
 
 Spatial mode uses `stellar_radial_velocity()` with the stellar orbital term
 `−K_star sin(2π phase)`, opposite to the planetary orbital term. Factorized
@@ -1246,7 +1284,7 @@ pressure in the planet configuration.
 
 This construction follows the local-intensity transport described by
 [Dethier & Bourrier (2023), equation 4](https://arxiv.org/abs/2304.13759).
-Its 1D hydrostatic atmospheric assumptions are those supplied by EXoPLORE's
+Each column uses the hydrostatic atmospheric assumptions supplied by EXoPLORE's
 pRT model.
 
 ## Direct synthetic sodium observations

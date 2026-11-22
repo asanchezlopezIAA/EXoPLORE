@@ -104,19 +104,23 @@ def Welch_ttest_map(
     sigma_values = np.zeros(
         (len(v_rest) - 2 * left_right, len(kp_range)), float
         )
-    v_rest_sigma = v_rest[left_right:-left_right]
-    full_range_pts = np.arange(len(v_rest_sigma))
+    # Each reported velocity uses the same centre in the original CCF array.
+    # Keep only centres whose entire in-trail window lies inside that array.
+    centre_indices = np.arange(left_right, len(v_rest) - left_right)
+    v_rest_sigma = v_rest[centre_indices]
+    full_range_pts = np.arange(len(v_rest))
 
     safety_window = int(snr_exclude_kms / velocity_step_kms)
     for kp in range(len(kp_range)):
         for v_idx in range(len(v_rest_sigma)):
+            centre_idx = centre_indices[v_idx]
             in_trail_pts = np.arange(
-                v_idx - left_right,
-                v_idx + left_right + 1,
+                centre_idx - left_right,
+                centre_idx + left_right + 1,
                 1
                 )
             start_exclude = max(0, np.min(in_trail_pts) - safety_window)
-            end_exclude = min(len(v_rest_sigma),
+            end_exclude = min(len(v_rest),
                               np.max(in_trail_pts) + safety_window + 1)
             out_trail_pts = np.setdiff1d(
                 full_range_pts,

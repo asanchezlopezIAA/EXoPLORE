@@ -68,7 +68,7 @@ from exoplore.ccf.models import NightStudyInputs
 from exoplore.instruments.wavegrid import (
     From1OrderTo1Detector,
     get_WaveGrid,
-    pixel_snr_one_order,
+    pixel_snr_for_andes_order,
 )
 from exoplore.io.stellar import LoadPhoenix, get_stellar_matrix
 from exoplore.core.observation import spec_to_mat_fraction
@@ -1251,9 +1251,9 @@ class ExoploreSimulator:
                     region_cfg.pressure_grid_size,
                 )
             p_morning_day   = _pgrid(cfg.atmosphere.morning_day)
-            p_morning_night = _pgrid(cfg.atmosphere.morning_night)
+            p_morning_night = (None if _spatial_rm_clv else _pgrid(cfg.atmosphere.morning_night))
             p_evening_day   = _pgrid(cfg.atmosphere.evening_day)
-            p_evening_night = _pgrid(cfg.atmosphere.evening_night)
+            p_evening_night = (None if _spatial_rm_clv else _pgrid(cfg.atmosphere.evening_night))
 
         # Store pressure grids for Block 8 (CCF template)
         self._state.update(dict(p=p, p_cc=p_cc))
@@ -1464,7 +1464,15 @@ class ExoploreSimulator:
             _atmospheric_chords = None
             if cfg.observation.simulate_planet:
 
-                if not cfg.atmosphere.limb_asymmetries:
+                if _spatial_rm_clv and cfg.atmosphere.limb_asymmetries:
+                    # Reuse the configured limb regions, retaining their native
+                    # ray transmissions until local stellar illumination is known.
+                    from exoplore.atmosphere.spatial_columns import build_spatial_columns
+                    _atmospheric_chords, wave_pRT, syn_spec = build_spatial_columns(
+                        rt_inputs, cfg.atmosphere, (p_morning_day, p_evening_day),
+                        wave_ins, planet, cfg.paths)
+                    syn_star = None
+                elif not cfg.atmosphere.limb_asymmetries:
                     # ---- 1D case ----
                     from petitRADTRANS.radtrans import Radtrans
                     atmosphere = Radtrans(
@@ -1726,7 +1734,7 @@ class ExoploreSimulator:
                 "syn_star": syn_star,
             }
             # Limb-specific results (only if applicable)
-            if cfg.atmosphere.limb_asymmetries and cfg.observation.simulate_planet:
+            if cfg.atmosphere.limb_asymmetries and cfg.observation.simulate_planet and not _spatial_rm_clv:
                 _order_result["sf_morning"]  = _sf_morning
                 _order_result["sf_evening"]  = _sf_evening
                 _order_result["ingress_idx"] = _ingress_idx
@@ -1974,7 +1982,17 @@ class ExoploreSimulator:
             else:
                 _v_inject = v_planet
 
-            if not cfg.atmosphere.limb_asymmetries:
+            if _spatial_rm_clv and cfg.atmosphere.limb_asymmetries:
+                # The spatial observation below supplies the complete transit.
+                # Retain an unweighted rest-frame reference for diagnostics.
+                velocities = v_planet if cfg.observation.different_nights else _v_inject
+                def column_reference(velocity):
+                    return np.array([np.interp(wave_ins, wave_pRT*(1+v/299792.458), syn_spec)
+                                     for v in velocity])
+                spec_mat_shift = ([column_reference(v) for v in velocities]
+                                  if cfg.observation.different_nights else column_reference(velocities))
+                spec_mat = None
+            elif not cfg.atmosphere.limb_asymmetries:
                 if not cfg.observation.different_nights:
                     spec_mat, spec_mat_shift = \
                         spec_to_mat_fraction(
@@ -2147,60 +2165,19 @@ class ExoploreSimulator:
                         "ANDES", "ANDES_YJHK", "ANDES_YJH",
                         "ANDES_K", "ANDES_RIZ", "ANDES_UBV",
                     ):
-                        if not _is_andes_yjhk:
-                            from astropy.io import fits as _fits_b5
-                            _center_pix = np.where(
-                                wave_ins == find_nearest(
-                                    wave_ins,
-                                    _fits_b5.open(inst.wave_file)[2].data[
-                                        order_selection[h]
-                                    ] * 1e-3,
-                                )
-                            )[0][0]
-                            snr = pixel_snr_one_order(
-                                wave_star[h], tell_trans, snr_og[h],
-                                px_per_resel=cfg.instrument.pixels_per_resolution_element,
-                                center_pix=_center_pix,
-                            )
-                        else:
-                            _order_idx_b5 = order_selection[h]
-                            _lambda_mid   = wave_mid_og[_order_idx_b5] * 1e-3
-                            _center_pix   = int(
-                                np.argmin(np.abs(wave_star[h] - _lambda_mid))
-                            )
-                            snr = pixel_snr_one_order(
-                                wave_star[h], tell_trans,
-                                snr_og[_order_idx_b5],
-                                px_per_resel=cfg.instrument.pixels_per_resolution_element,
-                                center_pix=_center_pix,
-                            )
+                        # The physical order ID selects all ETC inputs together.
+                        # h only records this order's position in the requested list.
+                        snr = pixel_snr_for_andes_order(
+                            wave_star, order_selection[h], tell_trans,
+                            snr_og, wave_mid_og,
+                            px_per_resel=cfg.instrument.pixels_per_resolution_element,
+                        )
 
                 else:   # Different_nights
                     _tell_ref_list  = []
                     _tell_trans_list = []
                     _spec_mat_aux   = spec_mat.copy()
                     spec_mat = []
-
-                    # ANDES: pre-compute order index and blaze-centre pixel
-                    # once, they are wavelength-grid properties, identical
-                    # for all nights.
-                    if _is_andes_any:
-                        _order_idx_dn = order_selection[h]
-                        if _is_andes_yjhk:
-                            _lambda_mid_dn = wave_mid_og[_order_idx_dn] * 1e-3
-                            _cpix_dn = int(
-                                np.argmin(np.abs(wave_star[h] - _lambda_mid_dn))
-                            )
-                        else:
-                            from astropy.io import fits as _fits_dn
-                            _cpix_dn = np.where(
-                                wave_ins == find_nearest(
-                                    wave_ins,
-                                    _fits_dn.open(inst.wave_file)[2].data[
-                                        _order_idx_dn
-                                    ] * 1e-3,
-                                )
-                            )[0][0]
 
                     for _nn in range(cfg.observation.n_nights):
                         # Per-night SkyCalc directory when use_full_skycalc
@@ -2253,13 +2230,10 @@ class ExoploreSimulator:
                         # ANDES: compute per-pixel SNR from ETC + per-night
                         # telluric transmittance, then store for this night.
                         if _is_andes_any:
-                            _snr_nn = pixel_snr_one_order(
-                                wave_star[h], _tt,
-                                snr_og[_order_idx_dn],
-                                px_per_resel=(
-                                    cfg.instrument.pixels_per_resolution_element
-                                ),
-                                center_pix=_cpix_dn,
+                            _snr_nn = pixel_snr_for_andes_order(
+                                wave_star, order_selection[h], _tt,
+                                snr_og, wave_mid_og,
+                                px_per_resel=cfg.instrument.pixels_per_resolution_element,
                             )
                             snr.append(_snr_nn)
                             sig.append(np.zeros_like(_snr_nn))
@@ -2677,10 +2651,23 @@ class ExoploreSimulator:
                                 atmosphere_base_radius_cm=_model_current.base_radius_cm,
                                 atmosphere_top_radius_cm=_model_current.top_radius_cm,
                                 planet_velocity_kms=_v_inject[b] if _dn else _v_inject,
-                                prt_version=(_atmospheric_chords.prt_version
-                                             if _atmospheric_chords is not None else ""),
-                                atmospheric_radial_points=(len(_atmospheric_chords.impact_parameter_cm)
+                                prt_version=([c.prt_version for c in _atmospheric_chords.columns]
+                                    if hasattr(_atmospheric_chords, "columns") else
+                                    _atmospheric_chords.prt_version
+                                    if _atmospheric_chords is not None else ""),
+                                atmospheric_radial_points=([len(c.impact_parameter_cm) for c in _atmospheric_chords.columns]
+                                    if hasattr(_atmospheric_chords, "columns") else
+                                    len(_atmospheric_chords.impact_parameter_cm)
                                     if _atmospheric_chords is not None else 0)))
+                            if hasattr(_atmospheric_chords, "columns"):
+                                _spatial_products.update(
+                                    planetary_column_names=np.array(["morning", "evening"]),
+                                    morning_impact_parameter_cm=_atmospheric_chords.morning.impact_parameter_cm,
+                                    evening_impact_parameter_cm=_atmospheric_chords.evening.impact_parameter_cm,
+                                    planetary_angular_speed_s=_atmospheric_chords.angular_speed_s,
+                                    planetary_spin_inclination_rad=_atmospheric_chords.spin_inclination_rad,
+                                    planetary_wind_kms=np.array([_atmospheric_chords.morning_wind_kms,
+                                                               _atmospheric_chords.evening_wind_kms]))
                         np.savez_compressed(
                             Path(dirs['root']) / f"rm_clv_order_{order_selection[h]}_night_{b}.npz",
                             wavelength_um=wave_ins, phase=phase,

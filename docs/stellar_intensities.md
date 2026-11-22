@@ -137,7 +137,9 @@ with positive radial velocity indicating recession. The planetary orbital
 term has the opposite sign, {math}`+K_p\sin(2\pi\phi)`.
 Increase the quadrature and temporal sampling to check convergence for your
 star, planet size and exposure time. The current spatial route supports a
-circular transit with a spherical 1D planetary atmosphere and pRT 3.2.0.
+circular transit with one hydrostatic planetary column or two leading/trailing
+columns and pRT 3.2.0. The [configuration reference](config_reference.md)
+describes the two-column geometry and local planetary velocities.
 
 The spatial calculation evaluates local stellar spectra along every illuminated
 atmospheric ray. Runtime increases with wavelength coverage, pressure layers,

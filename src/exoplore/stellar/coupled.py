@@ -1,4 +1,4 @@
-"""Transport local stellar light through a spherical planetary atmosphere.
+"""Transport local stellar light through one or two planetary atmosphere columns.
 
 Atmospheric rays use the native hydrostatic pRT radii. Polar quadrature around
 the planet resolves the thin absorbing annulus, including its overlap with
@@ -22,7 +22,7 @@ from numba import njit
 from numpy.polynomial.legendre import leggauss
 from scipy.ndimage import gaussian_filter1d
 
-from exoplore.atmosphere.transmission import ChordTransmission
+from exoplore.atmosphere.transmission import ChordTransmission, TwoColumnTransmission
 from .observation import TransitStellarModel
 from .surface import C_KMS
 
@@ -308,7 +308,7 @@ class SpatialTransitModel(TransitStellarModel):
         return (1-transmission).T
 
     def evaluate(self, wave_um, phase, stellar_velocity_kms, exposure_seconds, *,
-                 chords: ChordTransmission | None, planet_velocity_kms,
+                 chords: ChordTransmission | TwoColumnTransmission | None, planet_velocity_kms,
                  return_intrinsic: bool = False, times_bjd=None):
         """Compute complete fluxes, averaging exposure samples before convolution.
 
@@ -317,8 +317,9 @@ class SpatialTransitModel(TransitStellarModel):
         atmosphere remain distinct. The latter sets the occulting body here.
         """
         # Require the validated pRT ray product when atmospheric absorption is requested.
-        if chords is not None and not isinstance(chords, ChordTransmission):
-            raise TypeError("chords must be a ChordTransmission or None for the opaque control")
+        two_columns = isinstance(chords, TwoColumnTransmission)
+        if chords is not None and not isinstance(chords, (ChordTransmission, TwoColumnTransmission)):
+            raise TypeError("Supply atmospheric chord tables or None for the opaque control")
         # Read the observed wavelengths and exposure midpoint phases.
         wave = np.asarray(wave_um, dtype=float)
         phase = np.asarray(phase, dtype=float)
@@ -356,7 +357,8 @@ class SpatialTransitModel(TransitStellarModel):
             step = min(step, self.field.log_wavelength_step)
         # Also retain the atmospheric spectral sampling when it is finer.
         if chords is not None:
-            step = min(step, float(np.min(np.diff(np.log(chords.wavelength_um)))))
+            columns = chords.columns if two_columns else (chords,)
+            step = min(step, *(float(np.min(np.diff(np.log(c.wavelength_um)))) for c in columns))
         # Include convolution margins beyond the observing interval.
         padding = 8*self.sigma_log_wave+2*step
         low, high = np.log(wave[0])-padding, np.log(wave[-1])+padding
@@ -398,13 +400,15 @@ class SpatialTransitModel(TransitStellarModel):
             continuum_disk[section] = star_weights @ continua
         # Use the deepest pRT radius as the opaque bottom. The atmosphere-free control
         # uses the catalog planet radius when no ray table is supplied.
-        base_cm = self.planet.R_pl if chords is None else chords.impact_parameter_cm[-1]
+        base_cm = (chords.base_radius_cm if two_columns else
+                   self.planet.R_pl if chords is None else chords.impact_parameter_cm[-1])
         # The outermost pRT impact parameter sets the atmosphere's extent.
-        top_cm = base_cm if chords is None else chords.impact_parameter_cm[0]
+        top_cm = (chords.top_radius_cm if two_columns else
+                  base_cm if chords is None else chords.impact_parameter_cm[0])
         # Express the opaque radius in stellar-radius sky coordinates.
         base = base_cm/self.planet.R_star
         # Convert every native pRT impact parameter to stellar-radius coordinates.
-        atmosphere_radii = (np.array([]) if chords is None else
+        atmosphere_radii = (np.array([]) if chords is None or two_columns else
                             chords.impact_parameter_cm/self.planet.R_star)
         # Allocate exposure-by-wavelength arrays for unocculted, opaque and atmospheric fluxes.
         shape = (len(phase), len(fine))
@@ -460,7 +464,15 @@ class SpatialTransitModel(TransitStellarModel):
                     blocked, blocked_continuum = np.zeros(len(full)), np.zeros(len(full))
                     atmosphere_blocked = np.zeros(len(full))
                     # Integrate the stellar light available behind the planet and its atmosphere.
-                    if rays is not None:
+                    if overlap and two_columns:
+                        # Each planetary sector is integrated before its local
+                        # illumination and velocity information is averaged.
+                        from .planet_columns import column_blocking
+                        blocked, blocked_continuum, atmosphere_blocked = column_blocking(
+                            self,chords,star_rest,observed_wave,x,y,
+                            None if times is None else times[exposure,sample],
+                            planet_subvelocity[exposure,sample])
+                    elif rays is not None:
                         # Angularly integrate the local stellar spectrum at every body and atmospheric radius.
                         ring_flux, ring_continuum = self._angular_flux(star_rest, rays, len(radii))
                         # Sum the opaque-body ring areas to obtain the blocked stellar line flux.
