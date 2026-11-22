@@ -12,7 +12,7 @@ import sys
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-from matplotlib.patches import Circle
+from matplotlib.patches import Circle, Wedge
 import numpy as np
 from PIL import Image
 
@@ -178,7 +178,19 @@ def animate_case(root, config, name, destination, frames=32, fps=3):
                         origin='lower', extent=(-1, 1, -1, 1))
     disk.add_patch(Circle((0, 0), 1, fill=False, color='black', lw=.8))
     disk.plot(px, py, ':', color='.3')
-    body = Circle((px[0], py[0]), planet.R_pl/planet.R_star, color='black')
+    radius = planet.R_pl/planet.R_star
+    annulus = None
+    if current.rm_clv.coupling == 'spatial':
+        # The enlarged, translucent ring locates transmitted atmospheric rays.
+        # Its inner edge meets the drawn catalog-radius disk. Spectra retain
+        # the actual pRT radii and transmissions of the completed observation.
+        annulus = Wedge((px[0], py[0]), 1.35*radius, 0, 360,
+                        width=.35*radius, facecolor='#e68a00',
+                        edgecolor='#ba6b00', alpha=.38, lw=1, zorder=4)
+        disk.add_patch(annulus)
+        disk.text(.5, .015, 'Atmospheric annulus: width enlarged',
+                  transform=disk.transAxes, ha='center', fontsize=8)
+    body = Circle((px[0], py[0]), radius, color='black', zorder=5)
     disk.add_patch(body)
     disk.set(aspect='equal', xlim=(-1.3, 1.3), ylim=(-1.15, 1.15),
              title=LABELS[name], xlabel='x / stellar radius', ylabel='y / stellar radius')
@@ -230,6 +242,8 @@ def animate_case(root, config, name, destination, frames=32, fps=3):
     def update(frame):
         image.set_data(rotation_surface_image(surface, x, y, times[frame], centre/1000))
         body.center = (px[frame], py[frame])
+        if annulus is not None:
+            annulus.set_center(body.center)
         for line in cursors:
             line.set_ydata([group_hours[frame], group_hours[frame]])
         model_line.set_ydata(model_profiles[frame])
@@ -248,7 +262,8 @@ def animate_case(root, config, name, destination, frames=32, fps=3):
                 sha256=file_hash(destination),
                 matrix_exposures=len(hours), matrix_colour_limit_percent=limit,
                 colour_limit_percentile=98,
-                observation='saved noisy observation shared by both corrections')
+                observation='saved noisy observation shared by both corrections',
+                illustrative_annulus_outer_radius_factor=(1.35 if annulus is not None else None))
 
 
 def main():

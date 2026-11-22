@@ -2548,6 +2548,8 @@ Read the six panels from left to right:
 - **Top left:** the rotating stellar surface and planet. Blue and red mark
   approaching and receding stellar regions. The planet is drawn at its catalog
   radius and the mean phase of the exposure group.
+  The translucent amber annulus marks the atmospheric rays transmitting local
+  stellar light. Its width is enlarged for visibility.
 - **Top centre:** the residual matrix before stellar correction. Telluric
   correction and continuum normalization have already been applied, followed
   by division by the out-of-transit reference. Stellar RM+CLV and planetary
