@@ -2538,31 +2538,60 @@ python scripts/animate_stellar_activity_tutorial.py \
 ```
 
 Each animation has 32 frames. A frame averages 12 or 13 consecutive exposures,
-covering about 7.1–7.7 minutes. These temporal averages are used for the display.
-The line measurements retain the full preparation described above.
+covering about 7.1–7.7 minutes. The matrices retain all 388 exposures and the
+original simulated noise. The horizontal black line selects the exposures
+shown in the moving profiles below. Both stellar corrections use the same
+observation and telluric fits.
+
+Read the six panels from left to right:
+
+- **Top left:** the rotating stellar surface and planet. Blue and red mark
+  approaching and receding stellar regions. The planet is drawn at its catalog
+  radius and the mean phase of the exposure group.
+- **Top centre:** the residual matrix before stellar correction. Telluric
+  correction and continuum normalization have already been applied, followed
+  by division by the out-of-transit reference. Stellar RM+CLV and planetary
+  absorption both contribute. The dashed diagonal follows the planet.
+- **Top right:** the same observation after correction assuming a quiet star.
+  Comparing the two matrices shows what that correction removes and leaves.
+- **Bottom left:** the current noisy residual profile before stellar correction
+  (brown), with the matching opaque-planet stellar model (dashed black).
+  The stellar distortion can produce a positive bump beside a negative valley.
+  The observation also contains planetary sodium absorption.
+- **Bottom centre:** the same exposure group after matching heterogeneous
+  correction (blue) and quiet-star correction (orange). These spectra remain
+  in the stellar frame. The dashed marker follows the moving planetary line.
+  Separation between the curves comes from the assumed stellar correction.
+- **Bottom right:** the full-transit Na D2 profile in the planet frame, under
+  those two corrections. This panel stays fixed during playback. The dashed
+  black curve is the matched preparation of the noiseless observation.
+
+In the residual panels, zero means the normalized spectrum matches its
+out-of-transit reference. Blue means less flux, or apparent absorption, and red
+means excess flux. These colours describe the residual, while the colours on
+the stellar disk describe rotation. The two matrices share a colour scale,
+fixed throughout each animation. Its limits enclose 98% of the absolute
+residuals, with stronger values reaching the colour limits. Masked pixels are
+white. The line panels also keep fixed axes.
 
 ```{figure} figures/tutorial14_unocculted_spot.gif
 :width: 100%
 :align: center
 
-Unocculted spot. Left: the projected surface and moving planet, marked at its
-catalog radius and the mean phase of the exposure bin. The active region
-advances with stellar rotation across the blue/red velocity field.
-Top right: the intrinsic star-plus-planet line, divided by
-its own stored continuum, for the quiet and active observations. Middle
-right: the fractional change between those normalized line profiles.
-Bottom right: the prepared transmission under matched and quiet-star
-corrections, with the quiet observation in grey. The dashed vertical marker
-follows the planet's relative velocity. All axes remain fixed during playback.
+Unocculted spot. The region rotates outside the transit chord. The blue and
+orange corrected profiles remain close because its effect on the recovered
+Na D2 line is small in this experiment. Their noise wiggles track each other
+because they come from the same observation.
 ```
 
 ```{figure} figures/tutorial14_crossed_spot.gif
 :width: 100%
 :align: center
 
-Spot crossing. The middle panel resolves the small change that is difficult
-to see where the full stellar profiles overlap. The lower panel follows the
-residual left by the quiet-star correction during the crossing.
+Spot crossing. Follow the planet across the cool region and the horizontal
+cursor through the residual matrices. The quiet-star correction leaves excess
+flux during the encounter. In the full-transit planet-frame profile, it weakens
+and distorts the recovered sodium absorption.
 ```
 
 ```{figure} figures/tutorial14_crossed_facula.gif
@@ -2571,8 +2600,8 @@ residual left by the quiet-star correction during the crossing.
 
 Facular crossing. Occulting the brighter local D2 core changes the stellar
 line. The quiet-star correction leaves a strong absorption residual during
-the encounter. The matched correction follows the supplied heterogeneous
-surface.
+the encounter and a deeper, asymmetric full-transit profile. The matched
+correction uses the supplied heterogeneous surface.
 ```
 
 ```{figure} figures/tutorial14_Na_D2_profiles.png
