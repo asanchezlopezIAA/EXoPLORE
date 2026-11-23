@@ -76,3 +76,36 @@ def test_noise_model_is_explicit_and_old_default_is_preserved():
     assert NoiseConfig().andes_etc_noise_model=='legacy'
     assert NoiseConfig(andes_etc_noise_model='photon').andes_etc_noise_model=='photon'
     with pytest.raises(ValueError):NoiseConfig(andes_etc_noise_model='unknown')
+
+
+@pytest.mark.parametrize('atomic_block', ['omitted', None, {'enabled': False}])
+def test_molecular_config_accepts_inactive_atomic_transmission(atomic_block):
+    """Existing CCF JSON files may omit the optional sodium settings."""
+    import json
+    from pathlib import Path
+    from exoplore.config.models import SimulationConfig
+    from exoplore.core.simulator import ExoploreSimulator
+    from exoplore.core.spectroscopy_mode import spectroscopy_route
+
+    raw = json.loads(Path('configs/hd189733b_andes_retrieval_blain24_noisy.json').read_text())
+    raw['noise']['andes_etc_noise_model'] = 'photon'
+    raw.pop('atomic_transmission', None)
+    if atomic_block != 'omitted':
+        raw['atomic_transmission'] = atomic_block
+    cfg = SimulationConfig.from_dict(raw)
+    simulator = ExoploreSimulator(cfg)
+    assert spectroscopy_route(simulator.config) == 'standard'
+
+
+def test_molecular_photon_noise_rejects_enabled_atomic_transmission():
+    import json
+    from pathlib import Path
+    from exoplore.config.models import SimulationConfig
+    from exoplore.core.simulator import ExoploreSimulator
+
+    raw = json.loads(Path('configs/hd189733b_andes_retrieval_blain24_noisy.json').read_text())
+    raw['noise']['andes_etc_noise_model'] = 'photon'
+    sodium = json.loads(Path('configs/hd189733b_andes_sodium_rm_clv.json').read_text())
+    raw['atomic_transmission'] = sodium['atomic_transmission']
+    with pytest.raises(ValueError, match='synthetic molecular transit'):
+        ExoploreSimulator(SimulationConfig.from_dict(raw))

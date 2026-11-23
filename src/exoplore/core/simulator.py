@@ -349,7 +349,8 @@ class ExoploreSimulator:
         if cfg.noise.andes_etc_noise_model == 'photon':
             if (cfg.instrument.name not in ('ANDES','ANDES_YJHK','ANDES_YJH','ANDES_K','ANDES_RIZ','ANDES_UBV')
                     or cfg.observation.event_type != 'transit'
-                    or cfg.observation.use_real_data or cfg.atomic_transmission.enabled
+                    or cfg.observation.use_real_data
+                    or (cfg.atomic_transmission is not None and cfg.atomic_transmission.enabled)
                     or cfg.atmosphere.helium is not None
                     or cfg.noise.noise_choice != 'SNR' or cfg.noise.fixed_snr is not None
                     or cfg.noise.use_mean_snr):
