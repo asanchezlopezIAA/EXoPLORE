@@ -5,6 +5,8 @@
     "planet": "Open planet.parameter_file to change the orbit, stellar properties or planet size. Velocities in that file use km/s. Check the ephemeris when supplying exposure times.",
     "instrument": "Choose the instrument and its order_indices. An empty order list selects all orders. Changing the instrument also requires its own wavelength and ETC inputs.",
     "observation": "Set the exposure time, readout and event selection here. observation.throughput_seed fixes the throughput variations. noise.noise_seed fixes the additive Gaussian noise. Independent component seeds control different random draws.",
+    "tellurics": "use_full_skycalc=true reads tell_spec_N.fits for each exposure, including its own PWV and airmass. skycalc_source=external uses your files. skycalc_directory selects their folder (multiple nights use night_N beneath it). Generate --plan-only first to export exposure_plan.csv with the exposure times, airmasses and expected filenames. For downloads with constant_pwv=false, provide pwv_time_series with hours_from_observation_start and pwv_mm arrays. A few time points describe the night. EXoPLORE interpolates PWV to the exposure times, downloads the neighbouring SkyCalc nodes and interpolates transmission. inputs/skycalc_cache preserves downloaded models for reuse. Mode 1 uses the supplied reference spectrum with airmass scaling.",
+    "noise": "noise.andes_etc_noise_model selects legacy or photon for the molecular ANDES transit. Photon mode assigns each central ETC resel S/N to the local unocculted stellar model and central telluric transmission, converts to pixels and distributes the photon response with the blaze. Stellar lines, transit, tellurics and throughput determine the expected counts. The ETC stellar and telluric spectra are unavailable, so the central assignment is a modelling assumption. The default legacy selection retains the published reference for comparison.",
     "atmosphere": "planet_model describes the atmosphere for a homogeneous planet. With limb_asymmetries enabled, edit the four regional models. Each region has its own chemistry, temperature and velocity. ccf_template describes the spectrum used to search the prepared data.",
     "chemistry": "Each atmospheric region accepts chemistry: null to retain use_easychem, or an object with backend easychem, manual or vulcan. docs/chemistry.md gives the VULCAN settings, installation and limb example. VULCAN uses explicit elemental abundances and each region's reference_pressure_bar. Set paths.vulcan_directory and paths.vulcan_python before choosing it. Each distinct column keeps its native outputs and provenance under paths.vulcan_cache_dir, or output_root/chemistry/vulcan by default. EXoPLORE supplies pRT with gas mass fractions and gas-phase mean molecular weight.",
     "rm_clv": {
@@ -83,7 +85,8 @@
     "fixed_snr": null,
     "use_mean_snr": false,
     "snr_correction": 0.0,
-    "noise_seed": 12345
+    "noise_seed": 12345,
+    "andes_etc_noise_model": "legacy"
   },
   "atmosphere": {
     "limb_asymmetries": true,
@@ -397,6 +400,9 @@
       1.4,
       1.7
     ],
+    "skycalc_source": "download",
+    "skycalc_directory": null,
+    "pwv_time_series": null,
     "constant_pwv": true,
     "pwv_mm": 10.0,
     "reference_airmass": 1.0,

@@ -228,7 +228,34 @@ Additional observation controls:
 | `use_mean_snr` | `true`, `false` | If `true`, replace the time- and wavelength-varying SNR cube with its mean value. Produces more uniform noise. |
 | `snr_correction` | float | Additive offset applied to the SNR at all wavelengths and times. 0.0 = no correction. Positive values increase SNR. |
 | `noise_seed` | int or `null` | Integer seed for the Gaussian noise random number generator. Using the same seed reproduces identical noise realisations across runs, essential for reproducibility. Set to `null` to draw a different random noise realisation every run. Default: `12345`. |
+| `andes_etc_noise_model` | `"legacy"`, `"photon"` | ANDES molecular-transit uncertainty prescription. Default `"legacy"` retains reciprocal-S/N uncertainties. `"photon"` calibrates the expected photons from the central ETC resel and returns sigma in the simulated flux units. |
 | `carmenes_etc_file` | path or `null` | CARMENES ETC response bundle. Selects maximum-per-order anchors with the ANDES analytic blaze and relative exposure-dependent telluric scaling. Default `null` retains the existing S/N-file route. Requires synthetic CARMENES, `noise_choice: "SNR"`, `fixed_snr: null` and `use_mean_snr: false`. |
+
+### ANDES central-resel photon anchor
+
+For a synthetic molecular transit, set `noise.andes_etc_noise_model: "photon"`.
+The default `"legacy"` retains the existing reciprocal-S/N uncertainties for
+comparison. Photon mode requires `noise_choice: "SNR"`, `fixed_snr: null` and
+`use_mean_snr: false`.
+
+The central ETC S/N is divided by the square root of the number of pixels per
+resolution element. That pixel S/N is assigned to the unocculted stellar flux
+behind the exposure's central telluric transmission, at unit throughput. The
+analytic blaze then distributes the effective photon response across the order.
+The noiseless expected flux determines the photon variance, including stellar
+lines, planetary transmission, tellurics and throughput. Uncertainties are
+returned in the same relative units as the simulated observation. A route that
+stores a stellar-divided spectrum also divides the photon uncertainty by that
+stellar spectrum. `noise_scaling_factor` multiplies sigma and `snr_correction`
+is added to sigma afterward.
+
+This assumes photon-dominated noise and calibrates each exposure from the
+central ETC value. The stellar and telluric spectra used inside the ETC are
+unavailable. Assigning its central S/N to our supplied spectra is therefore
+an explicit modelling assumption. The input spectrum and its uncertainty can
+use arbitrary shared flux units. Multiplying the entire stellar and observed
+flux scale by a constant multiplies sigma by the same constant and preserves
+S/N. Direct sodium and helium keep their own noise settings.
 
 ### CARMENES ETC maximum anchors
 
@@ -449,7 +476,7 @@ T(X) = T_ref ^ (X / X_ref)
 
 where `T_ref` is the reference transmission at airmass `X_ref` and `X` is the airmass at each exposure. This captures the dominant effect, telluric lines deepening as the target moves towards the horizon. PWV is implicitly fixed at the value used when generating the reference file. Requires only one FITS file per instrument/target, and is consequently the appropriate choice for most simulations.
 
-**Mode 2, Full per-exposure telluric evolution** (`include_tellurics: true`, `use_full_skycalc: true`): loads a separate telluric transmission spectrum for each exposure (`tell_spec_{n}.fits`), each computed at its individual airmass **and** PWV. Both quantities vary per exposure, making this the most physically accurate treatment. In particular, this mode is recommended when the telluric evolution during the night is consequential, long transits, high-airmass targets, variable atmospheric conditions. Generate the per-exposure spectra with `scripts/generate_skycalc_inputs.py` (see [docs/input_files.md](input_files.md#4-telluric-reference-spectra)), or supply them from another source, provided they are named `tell_spec_{n}.fits` and placed in the correct directory, the simulator reads whatever FITS files it finds there.
+**Mode 2, Full per-exposure telluric evolution** (`include_tellurics: true`, `use_full_skycalc: true`): loads `tell_spec_N.fits` for each exposure. The files carry the chosen airmass and PWV, including any temporal PWV variation. Generate them with `scripts/generate_skycalc_inputs.py`, or select `skycalc_source: "external"` and supply your own models. Start with `--plan-only` to obtain the exposure count, times, airmasses and filenames. The {ref}`input guide <skycalc-exposure-plan>` describes external inputs, PWV time points and cached downloads.
 
 **Mode 3, No tellurics** (`include_tellurics: false`): telluric multiplication is skipped entirely, producing a clean absence of atmospheric contamination. The masking and SNR columns are still computed from the noise model, but far fewer pixels are flagged. This allows us to isolate the pure planetary signal, test the pipeline with no atmospheric baseline, or verify the CCF template matching under ideal conditions.
 
@@ -459,12 +486,15 @@ where `T_ref` is the reference transmission at airmass `X_ref` and `X` is the ai
 |---|---|---|
 | `include_tellurics` | `true`, `false` | Master switch. `true` = apply tellurics (Mode 1 or 2 depending on `use_full_skycalc`). `false` = no tellurics at all (Mode 3). |
 | `use_full_skycalc` | `true`, `false` | `false` (default) = Mode 1: airmass-scaling from a single reference file. `true` = Mode 2: load per-exposure telluric FITS files (`tell_spec_{n}.fits`), each with individual airmass and PWV. Generate with `python scripts/generate_skycalc_inputs.py` or supply from any source. See [docs/input_files.md](input_files.md#4-telluric-reference-spectra). |
+| `skycalc_source` | `"download"`, `"external"` | Select the input-generation workflow. The simulator reads prepared FITS files in both cases. External mode requires `use_full_skycalc: true`. |
+| `skycalc_directory` | path or `null` | Folder holding `tell_spec_N.fits`. Separate nights use `night_N/` beneath this folder. `null` retains the standard input-directory layout. |
+| `pwv_time_series` | object or `null` | `hours_from_observation_start` and `pwv_mm` arrays. Times must increase and cover every exposure. Linear interpolation gives PWV at each simulation sample. Each night uses its own elapsed time origin. |
 | `use_accurate_airmass` | `true`, `false` | If `true`, compute the airmass from the observation time, target coordinates, and observatory location. If `false`, use the values in `airmass_limits` directly. |
 | `airmass_evolution` | `"up_and_down"`, `"up"`, `"down"`, `"constant"` | Shape of the airmass time series when `use_accurate_airmass: false`. `"up_and_down"`: airmass decreases to a minimum at transit midpoint then increases (target transits the meridian). `"up"`: monotonically increasing. `"down"`: monotonically decreasing. `"constant"`: flat at the mean of `airmass_limits`. |
 | `airmass_limits` | `[min, max]` | Minimum and maximum airmass during the observation. Used to construct the airmass time series when `use_accurate_airmass: false`. |
-| `constant_pwv` | `true`, `false` | Controls PWV handling for both Mode 2 and Mode 3. `true`: all exposures use the same `pwv_mm` value (saved to `Fixed_PWV/pwv_values.fits`). `false`: PWV varies randomly around `pwv_mm` within the [SkyCalc](https://skycalc-ipy.readthedocs.io) grid (saved to `Variable_PWV/pwv_values.fits`). **In Mode 1 (airmass scaling), PWV does not affect the computed telluric spectra**, its value is recorded in the FITS file and used when generating per-exposure files for Mode 2. |
-| `pwv_mm` | mm | Precipitable water vapour in mm. Reference value used when `constant_pwv: true` (all exposures), or as the centre of the random draw when `constant_pwv: false`. Typical range: 1 to 30 mm. Dry site (Paranal): 2 to 10 mm. Must be a value on the SkyCalc PWV grid: `[0.05, 0.1, 0.25, 0.5, 1.0, 1.5, 2.5, 3.5, 5.0, 7.5, 10.0, 20.0, 30.0]`. |
-| `pwv_mm_per_night` | list of mm or `null` | Per-night PWV values for `different_nights: true` simulations. When set, night `n` uses `pwv_mm_per_night[n]`. Length must equal `n_nights`. Used by the simulator when loading per-night SkyCalc files (Mode 2) and by `scripts/generate_skycalc_inputs.py --night N` when generating those files. Example: `[2.5, 3.5]` for a two-night run with different atmospheric conditions. `null` (default) uses `pwv_mm` for all nights. |
+| `constant_pwv` | `true`, `false` | For full-mode downloads, `true` uses constant `pwv_mm`. `false` reads `pwv_time_series`. External spectra carry their own PWV. This flag also selects the default `Fixed_PWV` or `Variable_PWV` folder. |
+| `pwv_mm` | mm | PWV for constant downloads and the shared reference spectrum. The per-exposure downloader accepts 0.05–30 mm and interpolates transmission between neighbouring SkyCalc nodes when needed. |
+| `pwv_mm_per_night` | list of mm or `null` | Constant PWV overrides for separate nights. Entry `n` supplies `pwv_mm` for `--night N`. Length must equal `n_nights`. Variable full-mode downloads use `pwv_time_series`. |
 | `reference_airmass` | float | The airmass at which `reference_telluric_file` was computed. Typically 1.0. Used in the Beer-Lambert scaling formula `T(X) = T_ref^(X / X_ref)` for Mode 1. |
 | `reference_telluric_file` | path | Path to the FITS file containing the reference telluric transmission spectrum (columns `lam` in nm and `trans` as fractional transmission). Required for Mode 1. If left empty, auto-constructed as `{inputs_dir}tellurics/tell_ref_airmass_{reference_airmass:.1f}.fits`. The standard convention is to place this file in a `tellurics/` subdirectory inside `inputs_dir`, both the bundled ANDES and CARMENES inputs follow this layout. See [docs/input_files.md](input_files.md#4-telluric-reference-spectra). |
 | `mask_threshold` | float 0 to 1 | Fractional transmission below which a pixel is flagged as a deep telluric and masked. 0.2 means pixels with < 20% transmission are masked. |

@@ -125,7 +125,8 @@ def Load_Telluric_Transmittances(snr, telluric_variation,
     from astropy.io import fits
     from exoplore.atmosphere.prt import convolve
 
-    if snr.ndim == 1 or not telluric_variation or not Full_Skycalc:
+    tell_ref = None
+    if not telluric_variation or not Full_Skycalc:
         with fits.open(tell_ref_file) as file:
             wvl_ref = file[1].data['lam'] * 1e-3
             tell_ref = file[1].data['trans']
@@ -137,6 +138,20 @@ def Load_Telluric_Transmittances(snr, telluric_variation,
 
     if telluric_variation:
         if Full_Skycalc:
+            # Check the full file list before allocating the spectral matrix.
+            from pathlib import Path
+            missing = [str(Path(filepath) / f"tell_spec_{n}.fits")
+                       for n in range(len(syn_jd))
+                       if not (Path(filepath) / f"tell_spec_{n}.fits").is_file()]
+            if missing:
+                raise FileNotFoundError(f"Missing {len(missing)} per-exposure SkyCalc files. First missing file: {missing[0]}")
+            date_file = Path(filepath) / "exposure_jd.fits"
+            if date_file.exists():
+                with fits.open(date_file) as hdul:
+                    planned_dates = hdul[0].data
+                if planned_dates.shape != np.shape(syn_jd) or not np.allclose(
+                        planned_dates, syn_jd, rtol=0., atol=1e-9):
+                    raise ValueError("SkyCalc exposure_jd.fits differs from the simulation dates. Regenerate the exposure plan.")
             if snr.ndim != 1:
                 tell_ref = None
             for n in range(len(syn_jd)):

@@ -239,6 +239,10 @@ class NoiseConfig:
         Integer seed for the Gaussian noise RNG.  Use the same value to
         reproduce identical noise realisations. Set ``null`` for a random
         seed (different noise every run).  Default: 12345.
+    andes_etc_noise_model:
+        ``legacy`` retains the reciprocal-S/N uncertainties. ``photon`` uses
+        the central ETC resel, stellar spectrum and expected observation to
+        derive photon uncertainties in the observation's relative flux units.
     carmenes_etc_file:
         Optional CARMENES ETC response bundle. Use each order's maximum as
         the anchor for native pixel sampling, blaze and relative tellurics.
@@ -252,6 +256,13 @@ class NoiseConfig:
     # CARMENES ETC maxima anchor the blaze and exposure-dependent telluric S/N.
     # The input bundle records the channel, exposure duration and airmass grid.
     carmenes_etc_file: Optional[str] = None
+    # Photon mode anchors the central ETC resel to the unocculted stellar flux.
+    # The legacy setting preserves existing uncertainty arrays for comparison.
+    andes_etc_noise_model: str = "legacy"
+
+    def __post_init__(self):
+        if self.andes_etc_noise_model not in ("legacy", "photon"):
+            raise ValueError('andes_etc_noise_model must be legacy or photon')
 
 
 # ---------------------------------------------------------------------------
@@ -471,8 +482,17 @@ class TelluricConfig:
         Simple airmass model: ``"up"``, ``"down"``, or ``"up_and_down"``.
     airmass_limits:
         [min, max] airmass for the simple geometric model.
+    skycalc_source:
+        Download workflow or externally supplied per-exposure spectra.
+        The simulator reads prepared files in both cases.
+    skycalc_directory:
+        Optional per-exposure input folder. Separate nights use night_N below it.
+    pwv_time_series:
+        hours_from_observation_start and pwv_mm arrays describing the chosen
+        PWV evolution. The downloader interpolates to the observing samples.
     constant_pwv:
-        Fix PWV over the night.
+        Use constant PWV for downloads and select the Fixed_PWV input folder.
+        False selects Variable_PWV and requires time points for downloads.
     pwv_mm:
         PWV in mm (used when ``constant_pwv=True``).  Used for all nights
         unless ``pwv_mm_per_night`` is set.
@@ -500,6 +520,10 @@ class TelluricConfig:
     airmass_evolution: str = "up_and_down"
     airmass_limits: List[float] = field(default_factory=lambda: [1.4, 1.7])
     airmass_limits_per_night: Optional[List[List[float]]] = None
+    # Full mode reads one file per exposure. External mode uses prepared files.
+    skycalc_source: str = "download"
+    skycalc_directory: Optional[str] = None
+    pwv_time_series: Optional[Dict[str, List[float]]] = None
     constant_pwv: bool = True
     pwv_mm: float = 10.0
     pwv_mm_per_night: Optional[List[float]] = None
@@ -512,6 +536,15 @@ class TelluricConfig:
     def __post_init__(self) -> None:
         # Download settings belong to terrestrial absorption inputs, not to
         # the instrument's resolution/convolution or wavelength-grid definition.
+        if self.skycalc_source not in ("download", "external"):
+            raise ValueError("tellurics.skycalc_source must be download or external.")
+        if self.skycalc_source == "external" and not self.use_full_skycalc:
+            raise ValueError("External SkyCalc inputs require use_full_skycalc=true.")
+        if self.pwv_time_series is not None:
+            from exoplore.observation.skycalc_inputs import exposure_pwv
+            if self.constant_pwv:
+                raise ValueError("Set constant_pwv=false when supplying pwv_time_series.")
+            exposure_pwv([], self.pwv_time_series)
         limits = self.skycalc_wavelength_limits_um
         if limits is None:
             return

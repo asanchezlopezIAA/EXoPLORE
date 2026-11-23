@@ -82,6 +82,9 @@ from astropy.io import fits
 # simulator. Add src so the script can also run from a source checkout.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from exoplore.config.models import TelluricConfig
+from exoplore.observation.skycalc_inputs import (
+    SkyCalcCache, exposure_pwv, pwv_bracket, skycalc_directory, configured_exposure_dates,
+)
 
 # ---------------------------------------------------------------------------
 # SkyCalc query
@@ -156,25 +159,7 @@ def _save_hdul(hdul: fits.HDUList, out_path: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# PWV generation
-# ---------------------------------------------------------------------------
-
-def _gen_pwv(n_spectra: int, ref_pwv: float) -> np.ndarray:
-    """Assign per-exposure PWV values from the discrete SkyCalc grid.
-
-    The grid accepted by SkyCalc is:
-    0.5, 1.0, 1.5, 2.5, 3.5, 5.0, 7.5, 10.0, 20.0 mm.
-    Each exposure gets ref_pwv, one step above, or one step below.
-    """
-    grid = np.array([0.5, 1.0, 1.5, 2.5, 3.5, 5.0, 7.5, 10.0, 20.0])
-    idx = int(np.argmin(np.abs(grid - ref_pwv)))
-    choices = grid[max(0, idx - 1):min(len(grid), idx + 2)]
-    rng = np.random.default_rng(42)
-    return rng.choice(choices, size=n_spectra)
-
-
-# ---------------------------------------------------------------------------
-# Airmass computation, uses the same function as the simulator
+# Exposure airmass
 # ---------------------------------------------------------------------------
 
 def _build_airmass(cfg: dict, n_spectra: int = None) -> np.ndarray:
@@ -262,7 +247,7 @@ def _transit_duration_hours(p: dict) -> float:
 
 
 def _build_airmass_astro(cfg: dict, search_from: str = None,
-                         skip_transits: int = 0) -> np.ndarray:
+                         skip_transits: int = 0, return_dates: bool = False) -> np.ndarray:
     """Compute real per-exposure airmass from sky geometry via astroplan.
 
     Two behaviours depending on ``observation.specific_event``:
@@ -471,7 +456,7 @@ def _build_airmass_astro(cfg: dict, search_from: str = None,
     if below:
         print(f"  [astro] WARNING: {below}/{n_spectra} exposures below horizon")
 
-    return airmass
+    return (airmass, jd_array) if return_dates else airmass
 
 
 # ---------------------------------------------------------------------------
@@ -479,8 +464,9 @@ def _build_airmass_astro(cfg: dict, search_from: str = None,
 # ---------------------------------------------------------------------------
 
 def generate(config_path: str, overwrite: bool = False,
-             mode: str = "astro", search_from: str = None,
-             night_idx: int = None, ref_only: bool = False) -> None:
+             mode: str = "config", search_from: str = None,
+             night_idx: int = None, ref_only: bool = False,
+             plan_only: bool = False) -> None:
     """Generate SkyCalc telluric FITS files for one EXoPLORE config.
 
     Parameters
@@ -490,12 +476,10 @@ def generate(config_path: str, overwrite: bool = False,
     overwrite : bool
         Overwrite existing output files (default: skip existing).
     mode : str
-        ``"astro"`` (**default**), real airmass from sky geometry via
-        astroplan.  Finds the next observable transit automatically. No
-        date input required.  Recommended for all simulations because the
-        telluric spectra are generated at the correct per-exposure airmass
-        for the actual sky geometry.  Requires ``ra_deg`` and ``dec_deg``
-        in the planet parameter file.
+        ``"config"`` (default) uses the simulator's observing dates and
+        airmass choices. ``"astro"`` plans a future observable transit
+        using target coordinates and the observatory. Downloaded date
+        records are checked against the simulation when they are loaded.
 
         ``"synthetic"``, parabolic airmass from ``tellurics.airmass_limits``
         (same model the simulator uses internally in Block 2).  Fast fallback
@@ -539,43 +523,9 @@ def generate(config_path: str, overwrite: bool = False,
         limits = inst_cfg["wavelength_limits_um"]
     wave_limits = TelluricConfig(skycalc_wavelength_limits_um=limits).skycalc_wavelength_limits_um
 
+    tell_cfg = TelluricConfig(**tell)
     inputs_dir   = paths.get("inputs_dir", "inputs/")
     flag_event   = obs.get("flag_event", "full_event")
-    # Number of exposures the simulator will build: from the transit duration
-    # + pre/post baseline and the exposure cadence (mirrors get_event). The old
-    # default of 1 silently produced a single SkyCalc file for synthetic modes.
-    n_spectra    = obs.get("n_spectra")
-    if n_spectra:
-        n_spectra = int(n_spectra)
-    else:
-        import sys as _sy7, os as _os7, json as _jn7
-        _sy7.path.insert(0, _os7.path.join(_os7.path.dirname(__file__),
-                                           "..", "src"))
-        _pfile = cfg.get("planet", {}).get("parameter_file", "")
-        try:
-            # load_planet computes transit_duration_hours exactly as the
-            # simulator does, so the file count matches the simulator's
-            # n_spectra (the raw _transit_duration_hours fallback is ~3 short).
-            from exoplore.planets import load_planet as _lp7
-            _durh = _lp7(_pfile).transit_duration_hours
-        except Exception:
-            try:
-                with open(_pfile) as _pf7:
-                    _durh = _transit_duration_hours(_jn7.load(_pf7))
-            except Exception:
-                _durh = 2.0
-        _exp_pn = obs.get("exposure_time_seconds_per_night")
-        if _exp_pn and night_idx is not None and night_idx < len(_exp_pn):
-            _exp = float(_exp_pn[night_idx])
-        else:
-            _exp = float(obs.get("exposure_time_seconds", 198.0) or 198.0)
-        _cad = _exp + float(obs.get("readout_time_seconds", 0.0) or 0.0) \
-             + float(obs.get("overhead_time_seconds", 0.0) or 0.0)
-        _pre = float(obs.get("pre_event_hours", 0.0) or 0.0) or _durh / 2.0
-        _post = float(obs.get("post_event_hours", 0.0) or 0.0) or _durh / 2.0
-        _step = _cad / 86400.0
-        _tot = (_durh + _pre + _post) / 24.0
-        n_spectra = len(np.arange(0, _tot + _step, _step))
     constant_pwv = tell.get("constant_pwv", True)
     ref_airmass  = tell.get("reference_airmass", 1.0)
     am_limits    = tell.get("airmass_limits", [1.4, 1.7])
@@ -598,27 +548,42 @@ def generate(config_path: str, overwrite: bool = False,
     wmin_nm = wmin_um * 1000.0
     wmax_nm = wmax_um * 1000.0
 
-    # Output directory: per-night when night_idx is set and use_full_skycalc
-    pwv_subdir = "Fixed_PWV" if constant_pwv else "Variable_PWV"
-    if night_idx is not None:
-        out_dir = os.path.join(inputs_dir,
-                               f"Skycalc_{flag_event}",
-                               f"night_{night_idx}", pwv_subdir)
-    else:
-        out_dir = os.path.join(inputs_dir,
-                               f"Skycalc_{flag_event}", pwv_subdir)
+    # A reference-only request needs no exposure calendar.
+    if ref_only and not plan_only and tell_cfg.skycalc_source != "external":
+        ref_path = os.path.join(inputs_dir, "tellurics", f"tell_ref_airmass_{ref_airmass:.1f}.fits")
+        if os.path.exists(ref_path) and not overwrite:
+            return
+        hdul = _query_skycalc(ref_airmass, pwv_mm, observatory, wmin_nm, wmax_nm)
+        if hdul is None:
+            raise RuntimeError("SkyCalc returned no reference spectrum. No file was written.")
+        with hdul:
+            _save_hdul(hdul, ref_path)
+        return
+
+    out_dir = str(skycalc_directory(tell_cfg, inputs_dir, flag_event, night_idx))
     os.makedirs(out_dir, exist_ok=True)
+
+    # Plan the same samples used by the molecular runner before querying ESO.
+    from exoplore.config.models import ObservationConfig
+    from exoplore.planets import load_planet
+    planet = load_planet(cfg["planet"]["parameter_file"])
+    observation = ObservationConfig(**obs)
+    jd_array = configured_exposure_dates(observation, planet, inputs_dir,
+                                         night_idx, tell_cfg, observatory)
+    n_spectra = len(jd_array)
 
     # Airmass array
     _specific = cfg.get("observation", {}).get("specific_event", False)
-    _am_fits = os.path.join(inputs_dir, "reference_night", "airmass_0.fits")
+    _night_number = night_idx if night_idx is not None else 0
+    _am_fits = os.path.join(inputs_dir, "reference_night", f"airmass_{_night_number}.fits")
     if _specific and os.path.exists(_am_fits):
         # Observed night: the real per-exposure airmass is already known
         # (the simulator itself reads it from airmass_0.fits), so use it
         # directly. This branch reads the observing arrays from the input files. No astroplan
         # is needed in this case.
         from astropy.io import fits as _fits_am
-        airmass = _fits_am.open(_am_fits)[0].data.astype(float)
+        with _fits_am.open(_am_fits) as hdul:
+            airmass = hdul[0].data.astype(float)
         print(f"\n  Mode: specific_event (real airmass from airmass_0.fits, "
               f"{airmass.min():.2f} to {airmass.max():.2f})")
     elif _specific:
@@ -627,68 +592,126 @@ def generate(config_path: str, overwrite: bool = False,
         # astroplan using the target coordinates and observatory location.
         print("\n  Mode: specific_event (no airmass_0.fits; computing airmass "
               "from target + real BJDs via astroplan)")
-        airmass = _build_airmass_astro(cfg, search_from,
-                                       skip_transits=night_idx or 0)
+        airmass, jd_array = _build_airmass_astro(cfg, search_from,
+                                       skip_transits=night_idx or 0, return_dates=True)
+    elif mode == "config":
+        from exoplore.observation.airmass import synthetic_airmass
+        if (observation.different_nights and tell_cfg.use_accurate_airmass
+                and planet.ra_deg is not None and planet.dec_deg is not None):
+            from exoplore.observation.ephemeris import accurate_airmass
+            airmass = accurate_airmass(jd_array, planet.ra_deg, planet.dec_deg, observatory)
+        else:
+            night_limits = tell_cfg.airmass_limits_per_night
+            limits = night_limits[night_idx] if night_limits and night_idx is not None else am_limits
+            airmass = synthetic_airmass(jd_array, limits[0], limits[1], tell_cfg.airmass_evolution)
     elif mode == "astro":
         print(f"\n  Mode: astro (real sky geometry via astroplan)")
         # For night N, skip the first N observable transits so each night
         # gets its own distinct transit epoch.
-        airmass = _build_airmass_astro(cfg, search_from,
-                                       skip_transits=night_idx or 0)
+        airmass, jd_array = _build_airmass_astro(cfg, search_from,
+                                       skip_transits=night_idx or 0, return_dates=True)
     elif am_limits[0] == am_limits[1]:
         airmass = np.full(n_spectra, am_limits[0])
         print(f"\n  Mode: synthetic (fixed airmass {am_limits[0]:.1f})")
     else:
         print(f"\n  Mode: synthetic (parabolic airmass model)")
-        airmass = _build_airmass(cfg, n_spectra)
+        if jd_array is not None:
+            from exoplore.observation.airmass import synthetic_airmass
+            airmass = synthetic_airmass(jd_array, am_limits[0], am_limits[1],
+                                        tell.get("airmass_evolution", "up_and_down"))
+        else:
+            airmass = _build_airmass(cfg, n_spectra)
 
-    # PWV array (always constant within a night)
-    pwv_arr = np.full(len(airmass), pwv_mm)
     n_spectra = len(airmass)
+    if len(jd_array) != n_spectra:
+        raise ValueError("Exposure dates and airmass have different lengths.")
+    # Times follow the simulator's exposure samples. A small rounding removes
+    # JD subtraction noise at the endpoints of user-supplied time intervals.
+    hours = np.round((jd_array - jd_array[0])*24., 8)
+    event_midpoint = planet.transit_epoch_bjd + planet.orbital_period_days * round(
+        (float(np.median(jd_array))-planet.transit_epoch_bjd)/planet.orbital_period_days)
+    phases = (jd_array-event_midpoint)/planet.orbital_period_days
+    if tell_cfg.constant_pwv:
+        pwv_arr = np.full(n_spectra, pwv_mm)
+    elif tell_cfg.pwv_time_series is not None:
+        pwv_arr = exposure_pwv(hours, tell_cfg.pwv_time_series)
+    elif plan_only or tell_cfg.skycalc_source == "external":
+        pwv_arr = np.full(n_spectra, np.nan)
+    else:
+        raise ValueError("Variable PWV downloads require tellurics.pwv_time_series. Export --plan-only to prepare external models.")
 
     night_label = f" night {night_idx}" if night_idx is not None else ""
     print(f"\nGenerating {n_spectra} tell_spec files{night_label}")
     print(f"  Observatory : {observatory}")
     print(f"  λ range     : {wmin_nm:.0f} to {wmax_nm:.0f} nm")
-    print(f"  PWV         : {pwv_mm} mm (constant)")
+    print(f"  PWV         : {pwv_mm} mm" if tell_cfg.constant_pwv else "  PWV         : per exposure")
     print(f"  Output      : {out_dir}\n")
 
-    # SkyCalc maximum supported airmass is 3.0.  Clip and warn.
-    _SKYCALC_AM_MAX = 3.0
-    _n_clipped = int((airmass > _SKYCALC_AM_MAX).sum())
-    if _n_clipped:
-        print(f"  WARNING: {_n_clipped}/{n_spectra} exposures have airmass > "
-              f"{_SKYCALC_AM_MAX} (SkyCalc limit).  Clipping to {_SKYCALC_AM_MAX}.")
-        airmass = np.clip(airmass, 1.0, _SKYCALC_AM_MAX)
+    # Preserve the computed airmass in the table alongside the service value.
+    # Existing downloads round to 0.1 and clip to the SkyCalc interval.
+    query_airmass = np.round(np.clip(airmass, 1., 3.), 1)
+    import csv
+    with open(os.path.join(out_dir, "exposure_plan.csv"), "w", newline="") as stream:
+        writer = csv.writer(stream)
+        writer.writerow(["night", "exposure", "jd", "phase", "hours_from_observation_start",
+                         "exposure_seconds", "airmass", "skycalc_airmass", "pwv_mm",
+                         "pwv_lower_mm", "pwv_upper_mm", "upper_weight", "filename"])
+        exp_pn = obs.get("exposure_time_seconds_per_night")
+        exp_seconds = (exp_pn[night_idx] if exp_pn and night_idx is not None
+                       else obs.get("exposure_time_seconds", 198.))
+        for n, (jd, am, query_am, pwv) in enumerate(zip(jd_array, airmass, query_airmass, pwv_arr)):
+            bracket = pwv_bracket(pwv) if np.isfinite(pwv) else ("", "", "")
+            writer.writerow([night_idx if night_idx is not None else 0, n, jd, phases[n], hours[n],
+                             exp_seconds, am, query_am, pwv if np.isfinite(pwv) else "",
+                             *bracket, f"tell_spec_{n}.fits"])
+    Path(out_dir, "skycalc_request.json").write_text(json.dumps({
+        "observatory": observatory, "wmin_nm": wmin_nm, "wmax_nm": wmax_nm,
+        "wres": 150000., "vacair": "vac", "wgrid_mode": "fixed_spectral_resolution",
+        "lsf_type": "none", "source": tell_cfg.skycalc_source,
+        "note": "Exposure dates use the simulator sampling convention. PWV interpolation applies to trans only."
+    }, indent=2) + "\n")
+    print(f"  Exposure plan: {out_dir}/exposure_plan.csv")
+    if plan_only or tell_cfg.skycalc_source == "external":
+        print("  Planning complete. No SkyCalc queries sent.")
+        return
+    cache = SkyCalcCache(Path(inputs_dir) / "skycalc_cache", _query_skycalc, {
+        "recipe": "exoplore-skycalc-v1",
+        "arguments": dict(observatory=observatory, wmin_nm=wmin_nm,
+                          wmax_nm=wmax_nm, wres=150000.)})
 
     # --- Per-exposure files (skipped when --ref-only) ---
     if ref_only:
         print("  --ref-only: skipping per-exposure files, generating reference only.")
     for n in range(n_spectra if not ref_only else 0):
         out_path = os.path.join(out_dir, f"tell_spec_{n}.fits")
-        if os.path.exists(out_path) and not overwrite:
-            print(f"  [{n+1:3d}/{n_spectra}] tell_spec_{n}.fits, exists, skip")
-            continue
-        am  = round(float(airmass[n]), 1)
+        am = float(query_airmass[n])
         pwv = float(pwv_arr[n])
+        signature = dict(cache.settings, airmass=am, pwv=pwv)
+        signature_path = Path(out_path).with_suffix(".json")
+        if os.path.exists(out_path) and not overwrite:
+            if signature_path.exists() and json.loads(signature_path.read_text()) == signature:
+                print(f"  [{n+1:3d}/{n_spectra}] tell_spec_{n}.fits, matching request, skip")
+                continue
+            raise ValueError(f"{out_path} has no matching request record. Use --overwrite after checking the exposure plan.")
         print(f"  [{n+1:3d}/{n_spectra}] tell_spec_{n}.fits  "
               f"(airmass={am:.1f}, pwv={pwv:.1f} mm) ...", end=" ", flush=True)
         t0   = time.time()
-        hdul = _query_skycalc(am, pwv, observatory, wmin_nm, wmax_nm)
-        if hdul is None:
-            print(f"FAILED (SkyCalc returned no data), skipping")
-            continue
+        hdul = cache.transmission(am, pwv)
+        # Record the request next to each final exposure product. Existing
+        # products are reusable only when this signature still matches.
         _save_hdul(hdul, out_path)
         hdul.close()
+        signature_path.write_text(json.dumps(signature, sort_keys=True) + "\n")
         print(f"{time.time()-t0:.1f}s")
 
+    fits.PrimaryHDU(jd_array).writeto(os.path.join(out_dir, "exposure_jd.fits"), overwrite=True)
+    fits.PrimaryHDU(pwv_arr).writeto(os.path.join(out_dir, "pwv_values.fits"), overwrite=True)
     # --- Per-night airmass array, as queried (rounded/clipped) ---
     # Saved next to the tell_spec files so the simulator can use the exact
     # airmass the telluric spectra were generated with (pipelines that
     # regress against airmass then see a consistent regressor).
     _am_path = os.path.join(out_dir, "airmass.fits")
-    fits.PrimaryHDU(np.round(np.clip(airmass, 1.0, _SKYCALC_AM_MAX), 1)
-                    ).writeto(_am_path, overwrite=True)
+    fits.PrimaryHDU(query_airmass).writeto(_am_path, overwrite=True)
     print(f"  airmass.fits written ({len(airmass)} exposures)")
 
     # --- Reference airmass file (shared, written only for night 0 or single) ---
@@ -703,8 +726,7 @@ def generate(config_path: str, overwrite: bool = False,
             print(f"\n  Generating reference: airmass={ref_airmass:.1f}, "
                   f"pwv={pwv_mm:.1f} mm ...", end=" ", flush=True)
             t0   = time.time()
-            hdul = _query_skycalc(ref_airmass, pwv_mm, observatory,
-                                   wmin_nm, wmax_nm)
+            hdul = cache.transmission(round(float(ref_airmass), 1), pwv_mm)
             if hdul is None:
                 raise RuntimeError(
                     f"SkyCalc returned no reference spectrum for {wmin_nm:g}–{wmax_nm:g} nm. "
@@ -724,7 +746,11 @@ if __name__ == "__main__":
         epilog="""
 Modes
 -----
-  astro (default)
+  config (default)
+      Match the simulator's exposure dates and configured airmass treatment.
+      --plan-only writes the exposure table without sending SkyCalc queries.
+
+  astro
       Real airmass from true sky geometry via astroplan (Dash et al.,
       arXiv:2602.22830, 2026).  Automatically finds the next observable
       transit from the site, no date input required.  Requires ra_deg
@@ -746,12 +772,12 @@ Per-night usage (different_nights=true)
 
 Examples
 --------
-  # Single night, astro mode (default):
+  # Single night, configured observing samples:
   python scripts/generate_skycalc_inputs.py configs/hd189733b_andes_transit.json
 
   # Single night, search from a specific date:
   python scripts/generate_skycalc_inputs.py configs/hd189733b_andes_transit.json \\
-      --search-from 2030-01-01
+      --mode astro --search-from 2030-01-01
 
   # Two different nights:
   python scripts/generate_skycalc_inputs.py configs/hd189733b_andes_dn.json --night 0
@@ -763,8 +789,8 @@ Examples
         help="Overwrite existing output files (default: skip existing)"
     )
     parser.add_argument(
-        "--mode", choices=["synthetic", "astro"], default="astro",
-        help="Airmass mode (default: astro, real sky geometry via astroplan)"
+        "--mode", choices=["config", "synthetic", "astro"], default="config",
+        help="Airmass mode (default: config, match the simulator dates and airmass)"
     )
     parser.add_argument(
         "--search-from", metavar="YYYY-MM-DD", default=None,
@@ -784,7 +810,10 @@ Examples
              "Useful when tellurics.use_full_skycalc is false and only "
              "the Mode 1 reference file is needed."
     )
+    parser.add_argument("--plan-only", action="store_true",
+                        help="Export exposure dates, airmasses and expected filenames without downloading models.")
     args = parser.parse_args()
     generate(args.config, overwrite=args.overwrite,
              mode=args.mode, search_from=args.search_from,
-             night_idx=args.night, ref_only=getattr(args, 'ref_only', False))
+             night_idx=args.night, ref_only=getattr(args, 'ref_only', False),
+             plan_only=args.plan_only)

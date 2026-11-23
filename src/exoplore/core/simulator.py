@@ -346,6 +346,14 @@ class ExoploreSimulator:
 
     def _validate(self) -> None:
         cfg = self.config
+        if cfg.noise.andes_etc_noise_model == 'photon':
+            if (cfg.instrument.name not in ('ANDES','ANDES_YJHK','ANDES_YJH','ANDES_K','ANDES_RIZ','ANDES_UBV')
+                    or cfg.observation.event_type != 'transit'
+                    or cfg.observation.use_real_data or cfg.atomic_transmission.enabled
+                    or cfg.atmosphere.helium is not None
+                    or cfg.noise.noise_choice != 'SNR' or cfg.noise.fixed_snr is not None
+                    or cfg.noise.use_mean_snr):
+                raise ValueError('ANDES photon noise requires a synthetic molecular transit with its ETC S/N')
         from exoplore.observation.carmenes_noise import configured_carmenes_etc
         configured_carmenes_etc(cfg)
         if cfg.retrieval.enabled:
@@ -903,9 +911,9 @@ class ExoploreSimulator:
                         and _n < len(cfg.tellurics.airmass_limits_per_night))
                     else cfg.tellurics.airmass_limits
                 )
-                _amf_n = (f"{cfg.paths.inputs_dir}"
-                          f"Skycalc_{cfg.observation.flag_event}/"
-                          f"night_{_n}/Fixed_PWV/airmass.fits")
+                from exoplore.observation.skycalc_inputs import skycalc_directory
+                _amf_n = str(skycalc_directory(cfg.tellurics, cfg.paths.inputs_dir,
+                            cfg.observation.flag_event, _n) / "airmass.fits")
                 if not cfg.tellurics.include_tellurics:
                     _new_airmass.append(None)
                 elif (cfg.tellurics.use_full_skycalc
@@ -1010,9 +1018,10 @@ class ExoploreSimulator:
                 if cfg.tellurics.use_full_skycalc:
                     from astropy.io import fits as _fits_am
                     for n in range(cfg.observation.n_nights):
-                        _amf = (f"{cfg.paths.inputs_dir}"
-                                f"Skycalc_{cfg.observation.flag_event}/"
-                                f"night_{n}/Fixed_PWV/airmass.fits")
+                        from exoplore.observation.skycalc_inputs import skycalc_directory
+                        _amf = str(skycalc_directory(
+                            cfg.tellurics, cfg.paths.inputs_dir,
+                            cfg.observation.flag_event, n) / "airmass.fits")
                         if os.path.exists(_amf):
                             _arr = _fits_am.open(_amf)[0].data.astype(float)
                             if len(_arr) != len(syn_jd[n]):
@@ -2138,16 +2147,13 @@ class ExoploreSimulator:
                 # Synthetic observations use the configured transmission files.
                 # Observed-data runs read their measured spectra. include_tellurics
                 # selects the preparation's telluric_variation setting.
-                _pwv_subdir = ("Fixed_PWV" if cfg.tellurics.constant_pwv
-                               else "Variable_PWV")
-                _filepath_tel = (
-                    f"{cfg.paths.inputs_dir}"
-                    f"Skycalc_{cfg.observation.flag_event}/"
-                    f"{_pwv_subdir}/"
-                )
+                from exoplore.observation.skycalc_inputs import skycalc_directory
+                _filepath_tel = str(skycalc_directory(
+                    cfg.tellurics, cfg.paths.inputs_dir,
+                    cfg.observation.flag_event)) + os.sep
 
                 if not cfg.observation.different_nights:
-                    _pwv_values = PWV_handling(
+                    _pwv_values = None if cfg.tellurics.use_full_skycalc else PWV_handling(
                         cfg.tellurics.constant_pwv, cfg.tellurics.pwv_mm,
                         n_spectra,
                         f"{_filepath_tel}pwv_values.fits",
@@ -2188,11 +2194,9 @@ class ExoploreSimulator:
                         # For Mode 1 (airmass scaling, use_full_skycalc=False)
                         # a single reference file is shared across all nights.
                         if cfg.tellurics.use_full_skycalc:
-                            _filepath_tel_nn = (
-                                f"{cfg.paths.inputs_dir}"
-                                f"Skycalc_{cfg.observation.flag_event}/"
-                                f"night_{_nn}/{_pwv_subdir}/"
-                            )
+                            _filepath_tel_nn = str(skycalc_directory(
+                                cfg.tellurics, cfg.paths.inputs_dir,
+                                cfg.observation.flag_event, _nn)) + os.sep
                         else:
                             _filepath_tel_nn = _filepath_tel
 
@@ -2202,7 +2206,7 @@ class ExoploreSimulator:
                             if cfg.tellurics.pwv_mm_per_night is not None
                             else cfg.tellurics.pwv_mm
                         )
-                        _pwv_values = PWV_handling(
+                        _pwv_values = None if cfg.tellurics.use_full_skycalc else PWV_handling(
                             cfg.tellurics.constant_pwv, _pwv_nn,
                             int(n_spectra[_nn]),
                             f"{_filepath_tel_nn}pwv_values.fits",
@@ -2477,6 +2481,29 @@ class ExoploreSimulator:
                     _std_noise_b5[b, :] = _nf / snr + _sc
                 else:
                     _std_noise_b5[b, :] = sig
+
+                if cfg.noise.andes_etc_noise_model == 'photon':
+                    from exoplore.observation.andes_photon_noise import andes_photon_noise
+                    # Reconstruct photons on the actual observation scale. The homogeneous
+                    # factorized route stores a stellar-divided spectrum, while the limb
+                    # and stellar-surface routes retain the stellar spectral factor.
+                    _photon_tell = (None if tell_trans is None else
+                                    tell_trans[b] if _dn else tell_trans)
+                    if _photon_tell is None:
+                        _photon_tell = np.ones_like(_spec_tp)
+                    _photon = andes_photon_noise(
+                        wave_star, order_selection[h], _spec_tp, mat_star,
+                        _photon_tell, snr_og, wave_mid_og,
+                        pixels_per_resel=cfg.instrument.pixels_per_resolution_element,
+                        stellar_divided=(not cfg.atmosphere.limb_asymmetries
+                                         and not cfg.rm_clv.simulate
+                                         and not _spatial_rm_clv))
+                    if _dn:
+                        snr[b] = _photon.snr
+                        _std_noise_b5[b, :n_spectra, :] = _nf*_photon.sigma + _sc
+                    else:
+                        snr = _photon.snr
+                        _std_noise_b5[b, :] = _nf*_photon.sigma + _sc
 
                 # 5d.4, telluric scaling of noise + Gaussian noise draw
                 # Seed selection belongs to the observation layer. The draw and

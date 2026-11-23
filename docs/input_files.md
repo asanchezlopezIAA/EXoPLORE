@@ -298,116 +298,129 @@ is downloaded.  Two modes are available, selected with `--mode`:
 
 ---
 
-**`--mode astro` (default)**
+**`--mode config` (default)**
 
-Computes airmass from true sky geometry using
-[astroplan](https://astroplan.readthedocs.io) ([Morris et al. 2018](https://doi.org/10.3847/1538-3881/aaa47e)), querying
-the planet's RA/Dec against the observatory site and the actual observation
-timestamps.  This approach mirrors the methodology of the Ratri simulator
-(Dash et al. (arXiv:2602.22830, 2026)), which uses [astroplan](https://astroplan.readthedocs.io)
-to plan and date synthetic observations from the ELT site and derives the
-per-exposure airmass from the target coordinates and observing site.
-
-The behaviour differs depending on `observation.specific_event`:
-
-**`specific_event: true`, you have a real observed night:**
-
-> Use the **measured airmass in `reference_night/airmass_0.fits`**.
-> The simulator reads the reference-night arrays directly
-> (`syn_jd = JD_og` in `get_event`, airmass loaded from `airmass_0.fits`).
->
-> If `airmass_0.fits` is unavailable, `--mode astro` is a fallback: it loads
-> the real timestamps from `reference_night/julian_date_0.fits` (the same
-> JDs the simulator will use) and queries astroplan at each one.  Agreement
-> with real CARMENES airmass: < 2 % (RMSE 0.014), limited by proper motion
-> not being applied to the target coordinates.  At SkyCalc rounding precision
-> (0.1 airmass) this error is negligible.
+Uses the molecular simulator's observing samples. A single synthetic night
+uses the existing parabolic airmass model. Separate synthetic nights follow
+`use_accurate_airmass`, including observable transit epochs when coordinates
+are available. A measured night uses its reference JD and airmass files.
 
 ```bash
-python scripts/generate_skycalc_inputs.py configs/hd189733b_carmenes_transit.json \
-    --mode astro
+python scripts/generate_skycalc_inputs.py configs/my_config.json --plan-only
 ```
-
-**`specific_event: false`, fully synthetic simulation:**
-
-> The script uses astroplan's `EclipsingSystem` to search the transit
-> ephemeris for the **next observable transit from the site** (target above
-> 30°, Sun below astronomical twilight) and builds the exposure JD grid with
-> `observation_julian_dates()`, the same function the simulator uses in
-> Block 2 with your config's `exposure_time_seconds`, `readout_time_seconds`,
-> and `pre_event_hours`.  This guarantees that the SkyCalc airmass sequence
-> matches the simulator's synthetic JD grid exactly.
->
-> No date input is required.  Use `--search-from YYYY-MM-DD` to start the
-> search from a specific date (e.g. for ELT-era planning).
->
-> This is analogous to how Dash et al. (arXiv:2602.22830, 2026) plan their ELT/ANDES
-> simulations: they select real future dates at which the target is observable
-> from Cerro Armazones and derive the airmass sequence from the actual sky
-> geometry.
-
-```bash
-# Next observable transit from today:
-python scripts/generate_skycalc_inputs.py configs/hd189733b_andes_transit_clean.json \
-    --mode astro
-
-# Plan for ELT era:
-python scripts/generate_skycalc_inputs.py configs/hd189733b_andes_transit_clean.json \
-    --mode astro --search-from 2030-01-01
-```
-
-**Required fields in planet parameter file for `--mode astro`:**
-- `ra_deg`, `dec_deg`, sky coordinates (J2000)
-- `transit_epoch_bjd`, `orbital_period_days`, ephemeris
-- `transit_duration_hours`, optional. Computed from orbital elements if absent
-
----
 
 **`--mode synthetic`**
 
-Computes airmass from the same parabolic model the simulator uses in Block 2
-(`synthetic_airmass`, driven by `tellurics.airmass_limits` and
-`tellurics.airmass_evolution`).  The airmass array exactly matches what the
-simulator will use during the run, no inconsistency between the telluric
-files and the simulation geometry.
+Uses the parabolic airmass model with `airmass_limits` and
+`airmass_evolution`. Use `--mode config` for separate nights with astronomical
+airmasses so the generated inputs follow the simulator's choices.
 
-Use when sky coordinates are unavailable or for reproducible test runs
-independent of actual sky geometry.
+**`--mode astro`**
+
+Plans a future observable transit using astroplan, the planet's coordinates
+and the observatory. `--search-from YYYY-MM-DD` sets the search date. This
+explicit planning mode can produce dates different from the configured
+simulation. The loader checks `exposure_jd.fits` and stops if the dates differ.
+For inputs to an existing simulation, use the default `--mode config`.
+
+The exposure table contains both the calculated airmass and the value sent to
+SkyCalc. Downloads retain the existing rounding to 0.1 and clipping to 1–3.
+Inspect those columns when planning high-airmass observations.
+
+(skycalc-exposure-plan)=
+
+#### Plan the exposures first
+
+We can export the observing samples before downloading spectra:
 
 ```bash
-python scripts/generate_skycalc_inputs.py configs/my_config.json --mode synthetic
+python scripts/generate_skycalc_inputs.py configs/my_config.json --plan-only
 ```
 
----
+The default `--mode config` follows the molecular simulator's observing dates
+and airmass choices. `exposure_plan.csv` lists the night, exposure index, JD,
+elapsed hours, exposure duration, airmass and expected `tell_spec_N.fits` name.
+It also records the airmass rounded to 0.1 and clipped to 1–3 for SkyCalc.
+`skycalc_request.json` gives the wavelength interval in nm, vacuum wavelength
+convention and input resolving power. Planning sends no SkyCalc requests.
 
-#### Things to consider when choosing a mode
-
-| Situation | Recommended approach |
-|---|---|
-| Fully synthetic simulation (ANDES or CARMENES, no real night) | `--mode astro` (default) |
-| Reproducing a known real night (`specific_event: true`) | Use `airmass_0.fits` directly. `--mode astro` as fallback |
-| Planning future observations from site geometry | `--mode astro [--search-from DATE]` |
-| Coordinates unavailable or quick tests | `--mode synthetic` |
-
-**Note on SkyCalc airmass rounding:** SkyCalc rounds airmass to one decimal
-place per query.  The difference between `--mode synthetic` (airmass 1.432)
-and `--mode astro` (airmass 1.445) results in the same SkyCalc call (both
-round to 1.4).  For most targets the practical difference between modes is
-zero at the SkyCalc precision level.
+These times follow EXoPLORE's existing exposure sampling convention. Separate
+nights require `--night N`. When a per-night cadence is configured, the table
+uses that night's exposure time and the runner's corresponding time grid.
 
 #### Using your own telluric spectra
 
-You can bypass SkyCalc entirely and supply spectra from any tool (MOLECFIT, Tapas, a custom atmospheric model, etc.). Compute one telluric transmission spectrum per synthetic exposure and save each as a FITS table with columns `lam` (nm) and `trans` (0 to 1) named `tell_spec_{n}.fits` for `n = 0, 1, ..., N-1`. Place them under `Fixed_PWV/` or `Variable_PWV/` as appropriate and set `use_full_skycalc: true`. The simulator will load them without any modification.
+Set the following fields in the master JSON's `tellurics` block:
 
-#### Variable PWV (`constant_pwv: false`)
-
-When `constant_pwv: false`, `PWV_handling` draws a per-exposure PWV sequence that varies randomly around `pwv_mm` within the SkyCalc discrete grid:
-
+```json
+{
+  "include_tellurics": true,
+  "use_full_skycalc": true,
+  "skycalc_source": "external",
+  "skycalc_directory": "inputs/my_skycalc",
+  "constant_pwv": false
+}
 ```
-[0.05, 0.1, 0.25, 0.5, 1.0, 1.5, 2.5, 3.5, 5.0, 7.5, 10.0, 20.0, 30.0]  mm
+
+Run `--plan-only` and generate the spectra for the listed exposures using your
+chosen PWV history. Save a FITS table with columns `lam` (nm, vacuum) and
+`trans` (fractional transmission) for each exposure. The files must share a
+wavelength grid and cover the selected instrument orders. Separate nights
+use `inputs/my_skycalc/night_N/`. Supply `airmass.fits` for each separate night
+when the preparation should use the airmasses of your generated models.
+
+The simulator checks the expected file list and wavelength coverage, then
+interpolates and convolves each transmission onto the observing grid. Each
+exposure's transmission also enters the ANDES per-pixel S/N calculation.
+The PWV is set by the supplied spectra.
+
+#### Downloading a variable-PWV night
+
+A few time points describe the chosen evolution. Add these fields to the
+`tellurics` block, keeping the other observing settings:
+
+```json
+{
+  "include_tellurics": true,
+  "use_full_skycalc": true,
+  "skycalc_source": "download",
+  "constant_pwv": false,
+  "pwv_time_series": {
+    "hours_from_observation_start": [0.0, 2.0, 5.0, 8.0],
+    "pwv_mm": [2.5, 3.5, 5.0, 3.5]
+  }
+}
 ```
 
-Each exposure is assigned the reference value or one grid step above/below it, mimicking realistic intra-night PWV fluctuation. Files go to `Variable_PWV/`.
+First inspect the exposure plan, then run the same command without
+`--plan-only`. Extend the time points if the final exposure falls after the
+last supplied time. EXoPLORE interpolates PWV linearly in time and requires
+coverage of every exposure.
+
+[ESO SkyCalc](https://eso.org/observing/etc/doc/skycalc/helpskycalccli.html)
+provides PWV nodes at 0.05, 0.1, 0.25, 0.5, 1, 1.5, 2.5, 3.5, 5, 7.5, 10,
+20 and 30 mm. At an intermediate PWV, EXoPLORE downloads the two surrounding
+nodes at the exposure's SkyCalc airmass and interpolates their `trans` columns
+linearly. At a grid node it uses the downloaded model directly. This is an
+approximation between the model transmissions. Saturated lines can respond
+nonlinearly to PWV. A held-out test at 3.5 mm, using the wider 2.5–5 mm bracket,
+gave a maximum absolute transmission error of 0.032 and RMS 0.019 over
+1379–1381 nm at airmass 1.2. This test measures interpolation error in that
+interval. It does not establish an accuracy bound for other wavelengths.
+
+Downloaded models remain in `inputs_dir/skycalc_cache/`. Each cache key includes
+airmass, PWV, observatory, wavelength interval, resolving power and query recipe.
+Repeated exposures and later runs reuse matching downloads. Final exposure
+files have request records alongside them. A changed request requires
+`--overwrite`, which rebuilds those products from the cache where possible.
+
+The plan records both PWV neighbours and their interpolation weight. FITS
+headers retain the same information. Only `lam` and `trans` are consumed by
+EXoPLORE. Other SkyCalc table columns in an interpolated product retain the
+lower node's values and should not be used as interpolated sky radiance.
+`pwv_values.fits` stores the requested per-exposure PWV, and `exposure_jd.fits`
+lets the loader check that downloaded models match the simulation dates.
+
 
 ---
 
